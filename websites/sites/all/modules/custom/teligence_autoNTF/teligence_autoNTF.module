@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * DRUPAL HOOKS
+ */
+
+/**
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function teligence_autoNTF_preprocess(&$vars, $hook) 
+{	
+	switch($hook){
+		
+		case 'block': 
+			//$vars['block']->content = str_replace('__NTF__', $vars['node']->field_ntf[0]['view'], $vars['block']->content);
+			
+		break;
+		
+		case 'page':
+			//$vars['content_bottom'] = ($user->uid == 1 ? '<pre>'.check_plain(print_r($vars, true)).'</pre>': $vars['content_bottom']);
+
+			if ($vars['node']->type == "landing_page") {
+				if(!strstr(request_uri(),'/edit')){
+					$vars['content'] = str_replace('__NTF__', $vars['node']->field_ntf[0]['view'], $vars['content']);
+					$vars['content_bottom'] = str_replace('__NTF__', $vars['node']->field_ntf[0]['view'], $vars['content_bottom']);
+				}
+			}
+		break;
+	}	
+}
+
+
+/**
+ * HELPER FUNCTIONS
+ */

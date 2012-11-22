@@ -1,0 +1,56 @@
+<?php
+
+/*
+ * Implementation of hook_schema()
+ */
+function teligence_ctc_embed_schema()
+{
+	$schema['teligence_ctc_embed_forms'] = array(
+      'fields' => array(
+          'form_id' => array(
+            'description' => 'The unique id of the embed form',
+            'type' => 'serial',
+	        'unsigned' => TRUE,
+	        'not null' => TRUE),
+          'name' => array(
+            'type' => 'varchar',
+            'length' => '100',
+            'not null' => TRUE,
+            'default' => ''),
+          'step1' => array(
+            'type' => 'varchar',
+            'length' => '255',
+            'not null' => TRUE,
+            'default' => ''),
+          'step2_success' => array(
+            'type' => 'varchar',
+            'length' => '255',
+            'not null' => TRUE,
+            'default' => ''),
+          'step2_failure' => array(
+            'type' => 'varchar',
+            'length' => '255',
+            'not null' => TRUE,
+            'default' => ''),
+      ),
+      'primary key' => array('form_id'),
+    );
+    
+    return $schema;
+}
+
+/*
+ * Implementation of hook_install()
+ */
+function teligence_ctc_embed_install() 
+{
+	drupal_install_schema('teligence_ctc_embed');
+}
+
+/*
+ * Implementation of hook_uninstall()
+ */
+function teligence_ctc_embed_uninstall()
+{
+	drupal_uninstall_schema('teligence_ctc_embed');
+}

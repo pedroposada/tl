@@ -1,0 +1,58 @@
+$content['type']  = array (
+  'name' => 'Blog entry',
+  'type' => 'blog',
+  'description' => 'Regular blog entry',
+  'title_label' => 'Title',
+  'body_label' => 'Body',
+  'min_word_count' => '0',
+  'help' => '',
+  'node_options' => 
+  array (
+    'status' => true,
+    'promote' => true,
+    'sticky' => false,
+    'revision' => false,
+  ),
+  'language_content_type' => '0',
+  'upload' => '1',
+  'old_type' => 'blog',
+  'orig_type' => '',
+  'module' => 'node',
+  'custom' => '1',
+  'modified' => '1',
+  'locked' => '0',
+  'page_title' => 
+  array (
+    'show_field' => 
+    array (
+      'show_field' => false,
+    ),
+    'pattern' => '',
+  ),
+  'nodewords_edit_metatags' => 1,
+  'nodewords_metatags_generation_method' => '0',
+  'nodewords_metatags_generation_source' => '2',
+  'nodewords_use_alt_attribute' => 1,
+  'nodewords_filter_modules_output' => 
+  array (
+    'imagebrowser' => false,
+    'img_assist' => false,
+  ),
+  'nodewords_filter_regexp' => '',
+  'comment' => '2',
+  'comment_default_mode' => '4',
+  'comment_default_order' => '1',
+  'comment_default_per_page' => '50',
+  'comment_controls' => '3',
+  'comment_anonymous' => '0',
+  'comment_subject_field' => '0',
+  'comment_preview' => '1',
+  'comment_form_location' => '1',
+  'ant' => '0',
+  'ant_pattern' => '',
+  'ant_php' => 0,
+  'i18n_newnode_current' => 0,
+  'i18n_required_node' => 0,
+  'i18n_lock_node' => 0,
+  'i18n_node' => 1,
+);

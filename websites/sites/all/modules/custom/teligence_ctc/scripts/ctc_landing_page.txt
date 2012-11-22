@@ -1,0 +1,134 @@
+$content['type']  = array (
+  'name' => 'CTC Landing Page',
+  'type' => 'ctc_landing_page',
+  'description' => '',
+  'title_label' => 'Title',
+  'body_label' => 'Body',
+  'min_word_count' => '0',
+  'help' => '',
+  'node_options' => 
+  array (
+    'status' => true,
+    'promote' => false,
+    'sticky' => false,
+    'revision' => false,
+  ),
+  'language_content_type' => '1',
+  'upload' => '0',
+  'old_type' => 'ctc_landing_page',
+  'orig_type' => '',
+  'module' => 'node',
+  'custom' => '1',
+  'modified' => '1',
+  'locked' => '0',
+  'nodewords_edit_metatags' => 1,
+  'comment' => '0',
+  'comment_default_mode' => '4',
+  'comment_default_order' => '1',
+  'comment_default_per_page' => '50',
+  'comment_controls' => '3',
+  'comment_anonymous' => 0,
+  'comment_subject_field' => '1',
+  'comment_preview' => '1',
+  'comment_form_location' => '0',
+  'page_title' => 
+  array (
+    'show_field' => 
+    array (
+      0 => 1,
+      'show_field' => false,
+    ),
+    'pattern' => '',
+  ),
+  'ant' => '0',
+  'ant_pattern' => '',
+  'ant_php' => 0,
+);
+$content['fields']  = array (
+  0 => 
+  array (
+    'label' => 'Brand Code',
+    'field_name' => 'field_brand_code',
+    'type' => 'text',
+    'widget_type' => 'optionwidgets_select',
+    'change' => 'Change basic information',
+    'weight' => '31',
+    'description' => 'Specify the default Prompt (i.e. \'PromptSet\' value) to play to callers.',
+    'default_value' => 
+    array (
+      0 => 
+      array (
+        'value' => '',
+      ),
+    ),
+    'default_value_php' => '',
+    'default_value_widget' => NULL,
+    'group' => false,
+    'required' => 1,
+    'multiple' => '0',
+    'text_processing' => '0',
+    'max_length' => '',
+    'allowed_values' => 'LLK|Livelinks
+RDL|Redhotdateline
+IML|Interactivemale
+IMLS|Interactivemale ES
+LBL|Lavenderline
+VBL|Vibeline
+FON|Fonochat EN
+FOE|Fonochat SP',
+    'allowed_values_php' => '',
+    'op' => 'Guardar configuraciones del campo',
+    'module' => 'text',
+    'widget_module' => 'optionwidgets',
+    'columns' => 
+    array (
+      'value' => 
+      array (
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => false,
+        'sortable' => true,
+        'views' => true,
+      ),
+    ),
+    'display_settings' => 
+    array (
+      'weight' => '31',
+      'parent' => '',
+      'label' => 
+      array (
+        'format' => 'above',
+      ),
+      'teaser' => 
+      array (
+        'format' => 'default',
+        'exclude' => 1,
+      ),
+      'full' => 
+      array (
+        'format' => 'default',
+        'exclude' => 1,
+      ),
+      4 => 
+      array (
+        'format' => 'default',
+        'exclude' => 0,
+      ),
+      'token' => 
+      array (
+        'format' => 'default',
+        'exclude' => 0,
+      ),
+    ),
+  ),
+);
+$content['extra']  = array (
+  'title' => '34',
+  'body_field' => '33',
+  'revision_information' => '37',
+  'comment_settings' => '39',
+  'language' => '32',
+  'menu' => '35',
+  'path' => '38',
+  'nodewords' => '36',
+);

@@ -1,0 +1,71 @@
+<?php
+
+/**
+ * Implementation of hook_schema()
+ */
+function teligence_loc_schema() 
+{
+  $schema['teligence_localization'] = array(
+    'description' => 'The base table for node to theme flavor.', 
+    'fields' => array(
+      // 'flid' => array(
+        // 'description' => 'The primary identifier.', 
+        // 'type' => 'serial', 
+        // 'unsigned' => TRUE, 
+        // 'not null' => TRUE,
+      // ), 
+      'nid' => array(
+        'description' => 'The node identifier.', 
+        'type' => 'int', 
+        'unsigned' => TRUE, 
+        'not null' => TRUE, 
+        'default' => 0,
+      ), 
+      'flavor_prefix' => array(
+        'description' => 'The actual prefix of the flavor used in file names and styles', 
+        'type' => 'varchar', 
+        'length' => 32, 
+        'not null' => TRUE, 
+        'default' => '',
+      ), 
+      // 'description' => array(
+        // 'description' => 'Long description of the prefix', 
+        // 'type' => 'varchar', 
+        // 'length' => 255, 
+        // 'not null' => TRUE, 
+        // 'default' => '',
+      // ),
+    ), 
+    'unique keys' => array(
+      'nid' => array('nid'),
+    ), 
+    'primary key' => array('nid'),
+  );
+  
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install
+ */
+function teligence_loc_install() 
+{
+	if(!db_table_exists('teligence_loc'))
+	{
+		drupal_install_schema('teligence_loc');
+	}
+}
+
+/**
+ * Implementation of hook_uninstall
+ */
+function teligence_loc_uninstall() 
+{
+  drupal_uninstall_schema('teligence_loc');
+  
+  $result = db_query('SELECT name FROM {variable} WHERE name LIKE "teligence_loc%"');
+  while($varname = db_fetch_array($result))
+  {
+  	variable_del($varname);
+  }
+}

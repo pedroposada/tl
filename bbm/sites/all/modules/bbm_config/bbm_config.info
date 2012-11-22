@@ -1,0 +1,6 @@
+name = BBM Configuration Screens
+description = Collection of screens for BBM Rules Configurations.
+package = BBM
+core = 6.x
+dependencies[] = menu
+dependencies[] = bbm_agent

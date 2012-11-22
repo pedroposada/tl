@@ -1,0 +1,3631 @@
+<?php
+
+// include the database connection
+include_once('inc/mssql.inc');
+include_once('inc/soap.inc');
+
+/**********************
+ *** DRUPAL HOOKS *****
+ **********************/
+
+
+/*
+ * implementation of hook_perm()
+ */
+function bbm_agent_perm(){
+
+	return array(
+				'access login screen',
+				'access logout',
+				'access web UI admin screen',
+				'access new password screen',
+				'access monitoring screen',
+				'access auditing screen',
+				'access agents screen',
+				'access dashboard screen',
+			);
+}
+
+/*
+ * Implementation of hook_user
+ */
+function bbm_agent_user($op, &$edit, &$account, $category)
+{
+	switch($op)
+	{
+		case "logout":
+		// drupal_set_message('<pre>'.print_r($_SESSION, true).'</pre>');
+		if( time() > strtotime('+' . variable_get('bbm_agent_user_session_duration', 30) . ' minutes', $_SESSION['AgentSession']) && variable_get('bbm_agent_user_session_duration', 30) )
+		{
+			drupal_set_message('Your session has expired.');
+		}	
+		break;
+	}
+}
+
+/*
+ * Implementation of hook_menu()
+ */
+function bbm_agent_menu(){
+
+	$items = array();
+
+	$items['admin/settings/bbm'] = array(
+		'title' => 'BBM Web UI',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_agent_settings_form'),
+		'access arguments' => array('access web UI admin screen'),
+	);
+
+	$items['admin/settings/bbm/settings'] = array(
+		'title' => 'BBM Web Settings',
+		'type' => MENU_DEFAULT_LOCAL_TASK
+	);
+
+	$items['admin/settings/bbm/dbtest'] = array(
+		'title' => 'Test DB Connection',
+		'page callback'=> 'bbm_agent_test_db_connection',
+		'access arguments' => array('access web UI admin screen'),
+		'type' => MENU_LOCAL_TASK
+	);
+
+	/***************************/
+
+	$items['bbm/login'] = array(
+		'title' => 'Login',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_agent_login_form'),
+		'access arguments' => array('access login screen'),
+		'menu_name'=>'menu-bbm-login',
+	);
+
+	$items['bbm/logout'] = array(
+		'title' => 'Logout',
+		'page callback' => 'user_logout',
+		'access arguments' => array('access logout'),
+		'menu_name'=>'menu-bbm-login',
+		'weight'=>100,
+		'file path' => drupal_get_path('module', 'user'),
+		'file' => 'user.pages.inc',
+	);
+
+	$items['bbm/reset-password'] = array(
+		'title' => 'Reset Your Password',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_agent_reset_password_form'),
+		'access arguments' => array('access login screen'),
+		'menu_name'=>'menu-bbm-login',
+		'weight' => 100,
+	);
+
+	$items['bbm/monitoring'] = array(
+		'title' => 'Monitoring',
+		'page callback'=>'drupal_get_form',
+		//'page callback' => 'drupal_execute',
+		'page arguments'=> array ('bbm_agent_monitoring_form'),
+		'access arguments' => array('access monitoring screen'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 0,
+	);
+
+	$items['bbm/auditing'] = array(
+		'title' => 'Auditing',
+		'page callback' => 'drupal_get_form',
+		//'page callback' => 'bbm_agent_auditing_page',
+		'page arguments'=> array('bbm_agent_auditing_form'),
+		'access arguments' => array('access auditing screen'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 1,
+	);
+
+	$items['bbm/agents'] = array(
+		'title' => 'User Administration',
+		'page callback' => 'drupal_get_form',
+		'page arguments'=> array('bbm_agent_agents_form'),
+		'access arguments' => array('access agents screen'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 2,
+	);
+	
+	$items['bbm/dashboard'] = array(
+		'title' => 'Dashboard',
+		'page callback' => 'drupal_get_form',
+		'page arguments'=> array('bbm_agent_dashboard_form'),
+		'access arguments' => array('access dashboard screen'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 3,
+	);
+	$items['bbm/dashboard/result-summary'] = array(
+//		'title' => 'Dashboard',
+		'page callback' => 'bbm_agent_result_summary_ajax_loader',
+//		'page arguments'=> array('bbm_agent_dashboard_form'),
+		'access arguments' => array('access dashboard screen'),
+//		'menu_name'=>'menu-bbm-tabs',
+//		'weight' => 3,
+	);
+	
+	$items['bbm/performance'] = array(
+		'title' => 'Performance Ticker',
+		'page callback' => 'drupal_get_form',
+		'page arguments'=> array('bbm_agent_performance_form'),
+		'access arguments' => array('access dashboard screen'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 4,
+	);
+
+	$items['bbm/blank'] = array(
+		'page callback'=>'bbm_agent_blank',
+		'type'=>MENU_CALLBACK,
+		'access callback' => true,
+	);
+
+	$items['bbm/add-notes'] = array(
+		'page callback'=>'bbm_agent_add_notes_form_page',
+		'type'=>MENU_CALLBACK,
+		'access arguments' => array('access monitoring screen'),
+	);
+	$items['bbm/view-notes'] = array(
+		'page callback'=>'bbm_agent_view_notes_form_page',
+		'type'=>MENU_CALLBACK,
+		'access arguments' => array('access monitoring screen'),
+	);
+	$items['bbm/audio-handler/%'] = array(
+		'page callback'=>'bbm_agent_audio_handler',
+		'page arguments'=> array(2),
+		'type'=>MENU_CALLBACK,
+		'access arguments' => array('access monitoring screen'),
+	);
+	$items['bbm/add-notes-save'] = array(
+		'page callback'=>'bbm_agent_add_notes_callback',
+		'type'=>MENU_CALLBACK,
+		'access arguments' => array('access monitoring screen'),
+	);
+
+	$items['bbm/new-password'] = array(
+		'title' => 'Create New Password',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_agent_new_password_form'),
+		'access arguments' => array('access new password screen'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 100,
+	);
+
+	return $items;
+}
+
+/**
+ * Implementation of hook_theme()
+ */
+function bbm_agent_theme($existing, $type, $theme, $path)
+{
+	return array (
+	    'bbm_agent_forms'=> array (
+	    	'arguments'=> array ('form'=>null),
+    		'template' => 'bbm_agent-forms',
+			),
+	    'bbm_agent_audio_player'=> array(
+	    	'arguments'=> array ('form'=>null),
+	    	'template'=>'bbm_agent-audio-player'
+	    	),
+	    'bbm_agent_recording_stats' => array(
+	    	'arguments'=> array ('form'=>null),
+	    	),
+	    'bbm_agent_agents_list' => array(
+	    	'arguments'=> array ('form'=>null),
+	    	),
+	    'bbm_agent_auditor_recording_list' => array(
+	    	'arguments'=> array('form'=>null), 
+	    	),
+	    'bbm_agent_recording_auditor_columns' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_work_queue_status' => array(
+	    	'arguments'=> array('form'=>null)
+	    	),
+	    'bbm_agent_add_notes_page' => array(
+	    	'arguments'=> array('form'=>null),
+	    	'template' => 'bbm_agent-add-notes-page'
+	    	),
+	    'bbm_agent_performance' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_recording_type_status' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_agent_summary_status' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_result_summary' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_auditor_multiple_paging' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_language_selection_boxes' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_agents_user_preferences_form' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    'bbm_agent_bottom_button_group' => array(
+	    	'arguments'=> array('form'=>null),
+	    	),
+	    );
+}
+
+/*
+ * Implementation of hook_theme_registry_alter()
+ */
+
+function bbm_agent_theme_registry_alter(&$theme_registry)
+{
+  if (!empty($theme_registry['radio'])) 
+  {
+    $theme_registry['radio']['function'] = 'bbm_agent_radio';
+  }
+}
+
+
+
+/*
+ * Implementation of hook_mail()
+ */
+function bbm_agent_mail($key, & $message, $params)
+{
+
+	// make all emails HTML
+	$message['headers']['Content-Type'] = 'text/html; charset=UTF-8; format=flowed';
+
+	switch($key)
+	{
+
+		case 'temp_password':
+			$message['subject'] = t('Action required: reset password');
+			$message['body'] = variable_get('bbm_agent_temp_pass_message', '');
+			foreach($params['tokens'] as $key => $value)
+			{
+				$message['body'] = str_replace($key, $value, $message['body'] );
+			}
+			break;
+
+		default:
+			break;
+	}
+
+	$message['body'] = nl2br ( $message['body'] );
+
+}
+
+/*
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function bbm_agent_preprocess_page(&$vars){
+
+	if(strstr(request_uri(), '/bbm/') || request_uri() == '/' || strstr(request_uri(), '/bbm-rules/'))
+	{
+		$vars['css']['all']['theme'][drupal_get_path('module', 'bbm_agent') . '/bbm_agent-style.css'] = 1;
+		$vars['styles'] = drupal_get_css($vars['css']);
+		unset($vars['breadcrumb']);
+		unset($vars['title']);
+		unset($_SESSION['lastworkqueueid']);
+	}
+
+	if(strstr(request_uri(), '/bbm/auditing'))
+	{
+		$vars['css']['all']['module'][drupal_get_path('module', 'bbm_agent') . '/js/timepicker.css'] = 1;
+		$vars['styles'] = drupal_get_css($vars['css']);
+
+		$scripts = drupal_add_js();
+		if(isset($scripts['module'][drupal_get_path('module', 'bbm_agent') . '/js/jquery-1.3.2.min.js']))
+		{
+			unset($scripts['core']['misc/jquery.js']); //= array('cache' => 1, 'preprocess' => 1);
+		}
+		$vars['scripts'] = drupal_get_js('header', $scripts);
+	}
+}
+
+/*
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function bbm_agent_preprocess_bbm_agent_forms(&$vars){
+
+	$vars['menu_user'] = array();
+
+	if(!empty($_SESSION['userlongname']))
+	{
+		$vars['userlongname'] = 'Logged in as ' . $_SESSION['userlongname'];
+		$vars['menu_user'][] = array('title' => $vars['userlongname'], 'attributes' => array('class' => 'user-name'));
+	}
+	
+	if(is_numeric($_SESSION['bbm_agent_counter']) && strstr(request_uri(), '/bbm/monitoring'))
+	{
+		// agent monitoring counter display number in top right corner between agent name and logout link
+		$vars['menu_user'][] = array('title' => 'Recordings processed: <b>'.$_SESSION['bbm_agent_counter'].'</b>', 'attributes' => array('class' => 'user-name'), 'html' => true);
+	}
+	//$vars['menu_user'][] = array('title' => '<pre>'.print_r(menu_set_active_trail(), true).'<pre>', 'html' => true);
+
+	$vars['menu_user']  += menu_navigation_links('menu-bbm-login');
+	$vars['menu_tabs'] = menu_navigation_links('menu-bbm-tabs');
+	$vars['content'] = drupal_render($vars['form']);
+	//$vars['content'] .= '<pre>'.print_r(menu_set_active_trail(), true).'</pre>';
+	
+}
+
+/*
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function bbm_agent_preprocess_bbm_agent_audio_player(&$vars){
+
+	if(!empty($_GET['soundfilepath']))
+	{
+		//$vars['flashvar1'] = 'soundfilepath=' . $_GET['soundfilepath'];
+	}
+	elseif(!empty($vars['form']['#value']))
+	{
+		$vars['flashvar1'] = 'soundfilepath=/bbm/audio-handler/' . $vars['form']['#value'];
+	}
+	else
+	{
+		//$vars['flashvar1'] = 'soundfilepath=/' . drupal_get_path("module", "bbm_agent") . '/audioplayer/test.mp3';
+	}
+
+	//$vars['form'] = '<pre>' . print_r($vars['form'], true) . '</pre>';
+	$vars['audio_player_src'] = "/" . drupal_get_path("module", "bbm_agent") . "/audioplayer/playback controller";	
+	$vars['form'] = drupal_render($vars['form']);
+}
+
+/*
+ * preprocess template bbm_agent_add_notes_page
+ */
+function bbm_agent_preprocess_bbm_agent_add_notes_page(&$vars)
+{
+	$vars['form'] = drupal_render($vars['form']);
+}
+
+/*
+ * Implementation of hook_form_alter()
+ */
+function bbm_agent_form_alter(&$form, $form_state, $form_id){
+
+	if($form_id == 'bbm_agent_auditing_form')
+	{
+		//$form['messageid']['searchid']['#value'] = t('Search');
+		//$form['details']['searchdetails']['#value'] = t('Search');
+	}
+
+	if($form_id == 'bbm_agent_monitoring_form')
+	{
+		//drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+		//bbm_agent_monitoring_pre_render($form, $form_state);
+		// query that loads recording and user stats
+	}
+
+}
+
+/*
+ * Implementation of hook_init()
+ */
+function bbm_agent_init()
+{
+	if(empty($_SESSION['AgentID']))
+	{
+		//user_logout();
+	}
+	
+	if(user_access('access monitoring screen') && !user_access('administer nodes'))
+	{
+		if(strstr(request_uri(), '/user') || strstr(request_uri(), '/admin'))
+		{
+			drupal_set_message('Bad request');
+			drupal_goto('bbm/monitoring');
+		}
+	}
+}
+
+/***********************************************************
+ ******************* HELPER FUNCTIONS **********************
+ ***********************************************************/
+
+/*
+ * overriding theme_radio in module
+ */
+function bbm_agent_radio($element)
+{
+	_form_set_class($element, array('form-radio'));
+  $output = '<input type="radio" ';
+  $output .= 'id="' . ($_GET['q'] == 'bbm/monitoring' ? str_replace("-/-", "-", $element['#id']) : $element['#id']) . '" ';
+  $output .= 'name="' . $element['#name'] . '" ';
+  $output .= 'value="' . $element['#return_value'] . '" ';
+  
+  $output .= (check_plain($element['#value']) == $element['#return_value']) ? ' checked="checked" ' : ' ';
+  $output .= drupal_attributes($element['#attributes']) . ' />';
+  if (!is_null($element['#title'])) 
+  {
+	  /*
+	   * insert alt value to monitoring screen radios for key short cuts combinations, display short cuts on roll over.
+	   */
+	  if(in_array($element['#parents'][0], array('gender', 'language', 'attributes')) && $_GET['q'] == 'bbm/monitoring')
+	  {
+	  	$shortkeys = array(
+	  		'genderM' => 'CTRL + ALT + M',
+	  		'genderF' => 'CTRL + ALT + F',
+	  		'genderB' => 'CTRL + ALT + A',
+	  		'genderU' => 'CTRL + ALT + O',
+	  		'language0' => 'CTRL + ALT + T',
+	  		'language1' => 'CTRL + ALT + N',
+	  		'language2' => 'CTRL + ALT + H',
+	  		'attributes16' => 'CTRL + ALT + E',
+	  		'attributes1' => 'CTRL + ALT + S',
+	  		'attributes12' => 'CTRL + ALT + D',
+	  		'attributes14' => 'CTRL + ALT + I',
+	  		'attributes13' => 'CTRL + ALT + P',
+	  		'attributes10' => 'CTRL + ALT + L',
+	  		'attributes15' => 'CTRL + ALT + R',
+	  		'attributes17' => 'CTRL + ALT + G',
+	  		'attributes9' => 'CTRL + ALT + U',
+	  	);
+	  	$title = 'title="' . $shortkeys[$element['#parents'][0].$element['#return_value']] . '" ';
+	  }
+	$output = '<label '.$title.' class="option" for="' . $element['#id'] . '">' . $output . ' ' . $element['#title'] . '</label>';
+  }
+
+  unset($element['#title']);
+  return theme('form_element', $element, $output);
+}
+
+
+/*
+ * pre render bbm_agent_performance_form_prerender
+ */
+function bbm_agent_performance_form_prerender($form)
+{
+	$form['group']['work_queue_status']['#value'] = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentPerformance');
+	
+	return $form;
+}
+
+/*
+ * peformance ticker
+ */
+function bbm_agent_performance_form($form_state)
+{
+	$form['#theme'] = 'bbm_agent_forms';
+	$form['#pre_render'] = array('bbm_agent_performance_form_prerender');
+	
+	$form['button_group'] = array(
+		'#type' => 'fieldset',
+	);
+	$form['button_group']['refresh'] = array(
+		'#type' => 'submit',
+		'#value' => t('Refresh'),
+	);
+	$form['group'] = array(
+		'#type' => 'fieldset',
+	);
+	$form['group']['work_queue_status'] = array(
+		'#title' => t('Agent Performance'),
+		'#theme' => 'bbm_agent_performance',
+	);
+	
+	return $form;
+}
+
+/*
+ * bbm_agent_dashboard_pre_render pre render all mssql queries
+ */
+function bbm_agent_dashboard_pre_render($form)
+{
+	$js = "$(document).ready(function(){
+		$.get('/bbm/dashboard/result-summary', function(data) {
+		  	$('#bbm-result-summary').html(data);
+		});
+	});";
+	
+	drupal_add_js($js, 'inline');
+	
+	return $form;
+}
+
+/*
+ * dashboard form
+ */
+function bbm_agent_dashboard_form($form_state)
+{
+	$form = array();
+	
+	$form['#theme'] = 'bbm_agent_forms'; 
+	
+	$form['button_group'] = array(
+		'#type' => 'fieldset',
+	);
+	
+	$form['button_group']['refresh'] = array(
+		'#type' => 'submit',
+		'#value' => t('Refresh'),
+	);
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#pre_render' => array('bbm_agent_dashboard_pre_render'),
+	);
+	$form['group']['work_queue_status'] = array(
+		'#title' => t('Work Queue Status'),
+		'#theme' => 'bbm_agent_work_queue_status',
+	);
+	$form['group']['recording_type_status'] = array(
+		'#title' => t('Recording Type Status'),
+		'#theme' => 'bbm_agent_recording_type_status',
+	);
+	$form['group']['bbm_result_summary'] = array(
+		'#value' => '<h1>' . t('BBM Result Summary') . '</h1>' . 
+		'<div id="bbm-result-summary">Loading, please wait... ' . 
+		theme('image',drupal_get_path('module', 'bbm_agent').'/images/loadingAnimation.gif') . 
+		'</div>',
+	);
+	$form['group']['agent_summary_status'] = array(
+		'#title' => t('Agent Summary Status'),
+		'#theme' => 'bbm_agent_agent_summary_status',
+	);
+	
+	return $form;
+}
+
+/*
+ * dashboard agent_result_summary ajax content loader
+ */
+function bbm_agent_result_summary_ajax_loader()
+{
+	$form = array();
+	print theme('bbm_agent_result_summary', $form);
+	exit();
+}
+
+/*
+ * audio handler
+ */
+function bbm_agent_audio_handler($WorkQueueID)
+{
+	// Check if there were any records
+	if($filepath = bbm_agent_monitoring_filepath_web($WorkQueueID)){
+		
+	}else{
+		//drupal_set_message(t('No recording file path was found in table.'), 'error');
+	    exit; 
+	}
+
+	// avoid double streaming of file, grab file size from response http header
+	if (substr($filepath,0,4)=='http') 
+	{
+		$x = array_change_key_case(get_headers($filepath, 1),CASE_LOWER);
+		if ( strcasecmp($x[0], 'HTTP/1.1 200 OK') != 0 ) 
+		{ 
+			$filesize = $x['content-length'][1]; 
+		}
+		else 
+		{ 
+			$filesize = $x['content-length']; 
+		}
+	}
+	else 
+	{ 
+		$filesize = @filesize($filepath); 
+	}
+
+	// set headers
+	header('Content-type: audio/mpeg');
+	header('Content-Length: '. $filesize );
+	header("Expires: -1");
+	header("Cache-Control: no-store, no-cache, must-revalidate");
+	header("Cache-Control: post-check=0, pre-check=0", false);
+
+	@readfile($filepath);
+
+}
+
+
+
+
+
+/*
+ * pre render language selection box
+ */
+function bbm_agent_language_pre_render($element)
+{
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.language.js');
+	
+	return $element;
+}
+
+/*
+ * agents list
+ */
+function bbm_agent_agents_form($form_state)
+{
+	$form = array();
+
+	$form['#theme'] = 'bbm_agent_forms';
+
+	if ( empty($form_state['storage']['step']))
+	{
+		// we are coming in without a step, so default to step 1
+		$form_state['storage']['step'] = 1;
+	}
+
+	switch($form_state['storage']['step']){
+
+		case 1:
+		default:
+			
+			$form['submit'] = array(
+				'#type' => 'submit',
+				'#value' => t('submit'),
+				'#attributes' => array('style' => 'display:none'),
+			);
+			
+			$form['buttons'] = array(
+				'#type' => 'fieldset',
+				'#attributes' => array('class' => 'left-label'),
+			);
+		
+			$form['buttons']['create'] = array(
+				'#type' => 'submit',
+				'#value' => t('Create new User'),
+				'#submit' => array('bbm_agent_agents_form_submit_create'),
+			);
+			
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Languages');
+			$options = array();
+			while($language = mssql_fetch_array($result))
+			{
+				if($language['LanguageCd'])
+				{
+					$options[$language['LanguageCd']] = $language['LanguageName'];
+				}
+			}
+			$form['buttons']['LanguageCd'] = array(
+				'#prefix' => '<div style="float:right;">',
+				'#suffix' => '</div>',
+				'#type' => 'select',
+				'#title' => t('List by Language'),
+				'#options' => $options,
+				'#default_value' => $form_state['storage']['LanguageCd'] ? $form_state['storage']['LanguageCd'] : 1,
+				'#pre_render' => array('bbm_agent_language_pre_render'),
+			);
+			
+			$form['list_agents'] = array(
+				'#type' => 'fieldset',
+				'#theme' => 'bbm_agent_agents_list',
+			);
+			
+			$sp_params[] = array(
+				'name' => 'LanguageCd', 
+				'value' => $form['buttons']['LanguageCd']['#default_value'],
+				'type' => SQLCHAR,
+				'length' => 1,
+			);
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentByLanguage', $sp_params);
+			$agents = array();
+			while($agent = mssql_fetch_array($result))
+			{
+				$form['list_agents'][$agent['AgentID']] = array(
+					'#type' => 'submit',
+					'#value' => t('Edit User'),
+					'#name' => $agent['AgentLogin'],
+					'#submit' => array('bbm_agent_agents_form_submit_edit'),
+				);
+				$agents[] = $agent;
+			}
+							
+			$form['list_agents']['agents'] = array(
+				'#type' => 'item',
+				'#value' => $agents,
+			);
+				
+			break;
+
+		case 2:
+			
+			if(is_numeric($form_state['storage']['AgentID']))
+			{
+				$sp_params[] = array(
+					'name' => 'AgentID', 
+					'value' => $form_state['storage']['AgentID'],
+					'type' => SQLINT1,
+					'length' => 1,
+				);
+				$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Agent', $sp_params);
+				$agent = mssql_fetch_array($result);
+				$form['group0'] = array('#type' => 'fieldset');
+				$form['group0']['edit_user'] = array(
+					'#value' => t('Edit <strong>%userlongname</strong>', array('%userlongname' => $agent['AgentFirstName'].' '.$agent['AgentLastName'])),
+				);
+			}
+			
+			$form['group1'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('User Info'),
+				'#attributes' => array('class' => 'left-label'),
+			);
+			$form['group1']['AgentLogin'] = array(
+				'#type' => 'textfield',
+				'#title' => t('Username'),
+				'#default_value' => $agent['AgentLogin'],
+			);
+			$form['group1']['AgentFirstName'] = array(
+				'#type' => 'textfield',
+				'#title' => t('First Name'),
+				'#default_value' => $agent['AgentFirstName'],
+			);
+			$form['group1']['AgentLastName'] = array(
+				'#type' => 'textfield',
+				'#title' => t('Last Name'),
+				'#default_value' => $agent['AgentLastName'],
+			);	
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Sites');
+			$options = array();
+			while($sites = mssql_fetch_array($result))
+			{
+				$options[$sites['SiteId']] = $sites['SiteDescription'];
+			}
+			$form['group1']['SiteId'] = array(
+				'#type' => 'select',
+				'#title' => t('Site Name'),
+				'#options' => $options,
+				'#default_value' => $agent['SiteId'],
+			);
+			$form['group1']['AgentEmailAddress'] = array(
+				'#type' => 'textfield',
+				'#title' => t('Email Address'),
+				'#default_value' => $agent['AgentEmailAddress'],
+			);
+			
+			if(!is_numeric($form_state['storage']['AgentID']))
+			{
+				$form['group1']['AgentPassword'] = array(
+					'#type' => 'password',
+					'#title' => t('Password'),
+				);
+				$form['group1']['confirm_password'] = array(
+					'#type' => 'password',
+					'#title' => t('Confirm Password'),
+				);
+			}
+			
+			
+			$form['group2'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('User Preferences'),
+				'#theme' => 'bbm_agent_agents_user_preferences_form',
+			);
+			$form['group2']['roles'] = array(
+				'#type' => 'radios',
+				'#title' => t('Select Access Level'),
+				'#options' => array(
+					'administrator' => 'Administrator',
+					'auditor' => 'Auditor',
+					'agent' => 'Agent',
+				),
+				'#default_value' => ($agent['AgentAdministratorYNFlag'] == 'Y' ? 'administrator' : ($agent['AgentAuditorYNFlag'] == 'Y' ? 'auditor' : 'agent')),
+			);
+			
+			/**
+			 * super user checkbox
+			 */
+			$form['group2']['AgentSuperUserYNFlag'] = array(
+				'#type' => 'checkbox',
+				'#title' => t('Access Configuration Rules?'),
+				'#attributes' => $agent['AgentSuperUserYNFlag'] == 'Y' ? array('checked' => 'checked') : null,
+			);
+			
+			$form['group2']['AgentSupervisorYNFlag'] = array(
+				'#title' => t('Make this Agent a Supervisor?'),
+				'#type' => 'checkbox',
+				'#attributes' => $agent['AgentSupervisorYNFlag'] == 'Y' ? array('checked' => 'checked') : null,
+			);
+			
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Languages');
+			$options = array();
+			while($language = mssql_fetch_array($result))
+			{
+				if($language['LanguageCd'])
+				{
+					$options[$language['LanguageCd']] = $language['LanguageName'];
+				}
+			}
+			$form['group2']['AgentLanguages'] = array(
+				'#type' => 'checkboxes',
+				'#title' => t('Languages'),
+				'#options' => $options,
+				'#default_value' => explode(',', $agent['AgentLanguages']),
+			);
+			
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Supervisors');
+			$options = array();
+			while($super = mssql_fetch_array($result))
+			{
+				$options[$super['SupervisorID']] = $super['SupervisorName'];
+			}
+			$form['group2']['AgentSupervisorID'] = array(
+				'#type' => 'select',
+				'#title' => t("Agent's Supervisor"),
+				'#options' => $options,
+				'#default_value' => $agent['AgentSupervisorID'],
+			);
+			
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentStatus');
+			$options = array();
+			while($status = mssql_fetch_array($result))
+			{
+				$options[$status['AgentStatusCd']] = $status['AgentStatusDescription'];
+			}
+			$form['group2']['AgentStatusCd'] = array(
+				'#type' => 'select',
+				'#title' => t("Agent's Status"),
+				'#options' => $options,
+				'#default_value' => $agent['AgentStatusCd'],
+			);
+			$form['group3'] = array('#type' => 'fieldset');	
+			$form['group3']['cancel'] = array(
+				'#type' => 'submit',
+				'#value' => t('Cancel'),
+				'#submit' => array('bbm_agent_agents_form_submit_create'),
+			);
+			$form['group3']['save'] = array(
+				'#type' => 'submit',
+				'#value' => t('Save'),
+				'#submit' => array('bbm_agent_agents_form_submit_save'),
+				'#validate' => array('bbm_agent_agents_form_validate_save'),
+			);
+			break;
+
+	}
+	
+	
+	
+	return $form;
+}
+
+/*
+ * default submit handler for bbm_agent_agents_form_submit
+ */
+function bbm_agent_agents_form_submit($form, &$form_state)
+{
+	//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+	$form_state['storage']['LanguageCd'] = $form_state['values']['LanguageCd'];
+}
+
+
+/*
+ * edit user agent
+ */
+function bbm_agent_agents_form_submit_edit($form, &$form_state)
+{
+	$form_state['storage']['AgentID'] = $form_state['clicked_button']['#parents'][0];
+	
+	$form_state['storage']['step'] = 2;
+}
+
+/*
+ * validate save agent info
+ */
+function bbm_agent_agents_form_validate_save($form, &$form_state)
+{
+	if (($form_state['values']['AgentPassword'] <> $form_state['values']['confirm_password']))
+	{
+		form_set_error('AgentPassword', t("Passwords don't match"));
+	}
+	
+	if( !valid_email_address($form_state['values']['AgentEmailAddress']) )
+	{
+		form_set_error('AgentEmailAddress', t("Invalid Email Address"));
+	}
+	
+	foreach((array)$form_state['values']['AgentLanguages'] as $key => $value)
+	{
+		(trim($value) ? $languages[] = $value : null);
+	}
+	if(!count($languages))
+	{
+		form_set_error('AgentLanguages', 'Select a language.');
+	}
+	if(!strlen($form_state['values']['AgentLogin']))
+	{
+		form_set_error('AgentLogin', 'Invalid username.');
+	}
+	if(!is_numeric($form_state['storage']['AgentID']))
+	{
+		$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentsForConfig');
+		while($name = mssql_fetch_array($result))
+		{
+			if(trim($form_state['values']['AgentLogin']) == $name['AgentLogin'])
+			{
+				form_set_error('AgentLogin', 'Username allready in use by another User.');	
+				break;
+			}	
+		}
+	}
+	
+	if(!strlen($form_state['values']['AgentFirstName']))
+	{
+		form_set_error('AgentFirstName', 'Invalid first name.');
+	}
+	if(!strlen($form_state['values']['AgentLastName']))
+	{
+		form_set_error('AgentLastName', 'Invalid last name.');
+	}
+	
+	if(!is_numeric($form_state['storage']['AgentID']))
+	{
+		if(empty($form_state['values']['AgentPassword']))
+		{
+			form_set_error('AgentPassword', t("Please enter a password for this user."));
+		}
+	}
+	/*
+	if(is_numeric($form_state['storage']['AgentID']) && strlen($form_state['values']['confirm_password']))
+	{
+		form_set_error('AgentPassword', t("Existing passwords can only be chanegd through the 'Create New Password' screen."));
+	}
+	*/
+}
+
+/*
+ * save agent info
+ */
+function bbm_agent_agents_form_submit_save($form, &$form_state)
+{
+	//drupal_set_message('<pre>'.print_r($form_state['values'], true).'</pre>');
+
+	if(is_numeric($form_state['storage']['AgentID']))
+	{
+		$sp_params['AgentID'] = array(
+			'name' => 'AgentID', 
+			'value' => $form_state['storage']['AgentID'],
+			'type' => SQLINT1,
+			'length' => 1,
+		);
+	}
+	
+	$sp_params[] = array(
+		'name' => 'AgentStatusCd', 
+		'value' => $form_state['values']['AgentStatusCd'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+		'name' => 'SiteId', 
+		'value' => $form_state['values']['SiteId'],
+		'type' => SQLINT1,
+		'length' => 1,
+	);
+	$sp_params['AgentLogin'] = array(
+		'name' => 'AgentLogin', 
+		'value' => $form_state['values']['AgentLogin'],
+		'type' => SQLVARCHAR,
+		'length' => 20,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentFirstName', 
+		'value' => $form_state['values']['AgentFirstName'],
+		'type' => SQLVARCHAR,
+		'length' => 30,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentLastName', 
+		'value' => $form_state['values']['AgentLastName'],
+		'type' => SQLVARCHAR,
+		'length' => 30,
+	);
+	if(strlen($form_state['values']['AgentPassword']) && empty($form_state['storage']['AgentID']))
+	{
+		$sp_params[] = array(
+			'name' => 'AgentPassword', 
+			'value' => md5($form_state['values']['AgentPassword']),
+			'type' => SQLVARCHAR,
+			'length' => 32,
+		);	
+	}
+	$sp_params[] = array(
+		'name' => 'AgentAuditorYNFlag', 
+		'value' => $form_state['values']['roles'] == 'auditor' ? 'Y' : 'N',
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentAdministratorYNFlag', 
+		'value' => $form_state['values']['roles'] == 'administrator' ? 'Y' : 'N',
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentSupervisorYNFlag', 
+		'value' => $form_state['values']['AgentSupervisorYNFlag'] ? 'Y' : 'N',
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentSupervisorID', 
+		'value' => $form_state['values']['AgentSupervisorID'],
+		'type' => SQLINT1,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentEmailAddress', 
+		'value' => $form_state['values']['AgentEmailAddress'],
+		'type' => SQLVARCHAR,
+		'length' => 60,
+	);
+	$sp_params[] = array(
+		'name' => 'AgentSuperUserYNFlag', 
+		'value' => $form_state['values']['AgentSuperUserYNFlag'] ? 'Y' : 'N',
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	
+	foreach((array)$form_state['values']['AgentLanguages'] as $key => $value)
+	{
+		(trim($value) ? $languages[] = $value : null);
+	}
+	if(count($languages))
+	{
+		$sp_params[] = array(
+			'name' => 'AgentLanguages', 
+			'value' => implode(',', $languages),
+			'type' => SQLVARCHAR,
+			'length' => 30,
+		);
+	}
+	
+	$form_state['storage']['step'] = 1;
+	
+	if( is_numeric($sp_params['AgentID']['value']) )
+	{
+		if( bbm_agent_db_query(null, 'dbo.bbmsp_upd_Agent', $sp_params))
+		{
+			drupal_set_message(t('User [%agentid] has been updated successfully', array('%agentid' => $form_state['values']['AgentLogin'])));
+						
+			// force user to login again so that the changes can be applied to the account
+			global $user;
+			$account = user_load( array( 'name' => $form_state['values']['AgentLogin'] ));
+			if($user->uid != $account->uid)
+			{
+				db_query("DELETE FROM {sessions} WHERE uid = %d", $account->uid);
+			}
+		}
+		else
+		{
+			drupal_set_message(t('Failed saving user [%agentid]', array('%agentid' => $sp_params['AgentID']['value'] )), 'error');
+		}
+	}
+	else
+	{	
+		( bbm_agent_db_query(null, 'dbo.bbmsp_ins_Agent', $sp_params) ? 
+			drupal_set_message(t('User [%username] has been created successfully', array('%username' => $form_state['values']['AgentLogin'] ))) : 
+			drupal_set_message(t('Failed creating user '), 'error') 
+		);
+	}
+	
+	// drupal_set_message('<pre>'.print_r($sp_params, true).'</pre>');
+	
+}
+
+/*
+ * submit agents list create
+ */
+function bbm_agent_agents_form_submit_create($form, &$form_state){
+
+	//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+
+	// check the button that was clicked and action the step change
+	if ($form_state['clicked_button']['#id'] == 'edit-cancel')
+	{
+		$form_state['storage']['step']--;
+	}
+	else
+	{
+		$form_state['storage']['step']++;
+	}
+	
+	unset($form_state['storage']['AgentID']);
+	//tell Drupal we are redrawing the same form
+	//$form_state['rebuild'] = TRUE;
+
+}
+
+
+
+
+
+/*
+ * check for mp3 file path for web
+ */
+function bbm_agent_monitoring_filepath_web($WorkQueueID){
+	
+	$sp_params[] = array(
+		'name' => 'WorkQueueID', 
+		'value' => $WorkQueueID,
+		'type' => SQLINT4,
+		'length' => 30,
+	);
+	$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_WorkQueue_RecordingFileNameForWeb', $sp_params);
+	$recording = mssql_fetch_array($result);
+	
+	// Check if there were any records
+	if ($recording['RecordingFileNameForWeb']) 
+	{
+	    return $recording['RecordingFileNameForWeb'];
+	} 
+	else 
+	{
+	    //drupal_set_message(t('No recording file path was found in table.'), 'error');
+	    return false; 
+	}
+}
+
+/*
+ * pre render bbm_agent_pre_render_monitoring_form
+ */
+function bbm_agent_monitoring_pre_render($form)
+{
+	if(form_get_errors())
+	{
+
+	}
+
+	$head  = drupal_get_html_head();
+	$head .= '<script language="javascript">AC_FL_RunContent = 0;</script>';
+	drupal_set_html_head($head);
+
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/audioplayer/AC_RunActiveContent.js');
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.css');
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.monitoring.js');
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.shortkeys.js');
+	//drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.addnotes.js');
+	
+	//drupal_set_message('<pre>'.print_r($form['vals']['#value'], true).'</pre>');
+	
+	if(!user_access('access auditing screen'))
+	{
+		//control time for agents, log them out if over the time limit
+		if( time() > strtotime('+' . variable_get('bbm_agent_user_session_duration', 30) . ' minutes', $_SESSION['AgentSession']) && variable_get('bbm_agent_user_session_duration', 30) )
+		{
+			drupal_goto('bbm/logout', array('destination' => 'bbm/monitoring'));
+		}
+		else
+		{
+			$_SESSION['AgentSession'] = time();
+		}	
+	}
+	
+	if( count($form['recording_stats']['vals']['#value']) )
+	{
+		$values = $form['recording_stats']['vals']['#value'];
+	}
+	else
+	{	
+		$sp_params[] = array(
+			'name' => 'AgentID', 
+			'value' => $_SESSION['AgentID'],
+			'type' => SQLINT1,
+			'length' => 4
+		);
+		
+		$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_RecordingAgentSingle', $sp_params);
+		$values = mssql_fetch_array($result);
+		if(!mssql_num_rows($result))
+		{
+			form_set_error('', 'No recordings at the moment, please try again later.');
+			$form['recording_stats']['#type'] = 'hidden';
+			$form['buttons']['#type'] = 'hidden';
+			$form['static_group']['#type'] = 'hidden';
+			$form['attributes']['#type'] = 'hidden';
+			return $form;
+			//unset($form['push']);
+		}
+		
+	}
+	
+	//drupal_set_message('<pre>'.print_r($values, true).'</pre>');
+	
+	// add agent monitoring counter to session
+	$_SESSION['bbm_agent_counter'] = $values['AgentSessionRecordingsReviewedCnt']; //$values['computed'];
+	
+	$form['recording_stats']['vals']['#value'] = $values;
+	$form['recording_stats']['workqueueid']['#value'] = $values['WorkQueueID'];
+	$form['recording_stats']['audio']['#value'] = $values['WorkQueueID'];
+	
+	/* https://www.callnotes.zoomapprove.com/Default.aspx?
+	 * &HubId=
+	 * &BrandId=
+	 * &Account=
+	 * &Ani=
+	 * &Id=e4fc7b4622bbbaec499f8b53051fecfa
+	 */
+	$get_notes  = 'HubId=' . $values['IVRHubId'];
+	$get_notes .= '&BrandId=' . $values['IVRBrandId'];
+	$get_notes .= '&Account=' . $values['IVRAccountNumber'];
+	$get_notes .= '&Ani=' . $values['IVRCallerANI'];
+	$get_notes .= '&Id=' . md5(intval($values['IVRBrandId']) . $values['IVRAccountNumber'] . $values['IVRHubId'] . $values['IVRCallerANI'] . '~C@llN0te$');
+	//$form['buttons']['show_notes']['#attributes'] = array('alt' => '/bbm/view-notes?height=600&width=800&inlineId=add-notes&modal=true' . $get_notes, 'class' => 'thickbox');
+	$form['buttons']['show_notes']['#attributes'] = array('alt' => 'http://callnotes.teligence.net/Default.aspx?' . $get_notes);
+	//$form_state['resultset']['#value'] = 
+	
+	
+	/**
+		 * command=BbmCallNoteData|
+		 * sequenceId=ECEAA303409E46058921A53681789B85|
+		 * RecordingType=F|
+		 * HubId=13|
+		 * Dnis=7042371123|
+		 * Ani=7048553371|
+		 * BrandId=007|
+		 * AgentId=999|
+		 * RequestStatus=R|
+		 * DisapprovalReason=3|
+		 * MembershipNumber=76167|
+		 * WebUserId=maryk|
+		 * CallNoteText=Male using FFM|
+		 * ECEAA303409E46058921A53681789B85|
+		 * ClientDateTime=100316095259
+		 */
+		$set_notes  = '&command=BbmCallNoteData';
+		$set_notes .= '&RecordingType=' . $values['GenderCd_IVR'];
+		$set_notes .= '&HubId=' . $values['IVRHubId'];
+		$set_notes .= '&Dnis=';
+		$set_notes .= '&Ani=' . $values['IVRCallerANI'];
+		$set_notes .= '&BrandId=' . $values['IVRBrandId'];
+		$set_notes .= '&AgentId=' . 999;//$values['AgentID'];
+		$set_notes .= '&RequestStatus=';
+		$set_notes .= '&DisapprovalReason=';
+		$set_notes .= '&MembershipNumber=';
+		$set_notes .= '&WebUserId=' . $_SESSION['AgentLogin'];
+		//$set_notes .= '&CallNoteText=Male using FFM';
+		$set_notes .= '&ClientDateTime=' . time();
+	$form['buttons']['add_note']['#attributes'] = array(
+		'alt' => '/bbm/add-notes?height=600&width=600' . $set_notes, 
+		'class' => 'thickbox',
+		'title' => t('Add Notes to Message ID %id', array('%id' => $values['WorkQueueID'])),
+	);
+	
+	
+	return $form;
+}
+
+/*
+ * monitoring form
+ */
+function bbm_agent_monitoring_form($form_state)
+{
+	$form['#theme'] = 'bbm_agent_forms';
+	$form['#pre_render'] = array('bbm_agent_monitoring_pre_render');
+	
+	$form['recording_stats'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Recording Info'),
+		//'#pre_render' => array('bbm_agent_monitoring_pre_render'),
+		'#attributes' => array('class' => 'recording-stats'),
+	);
+	$form['recording_stats']['resultset'] = array(
+		'#type' => 'item',
+	);
+	$form['recording_stats']['vals'] = array(
+		'#type' => 'item',
+		'#value' => $form_state['auditor']['values']['recording'],
+		'#theme' => 'bbm_agent_recording_stats',
+	);
+	$form['recording_stats']['workqueueid'] = array(
+		'#type' => 'hidden',
+		//'#value' => $form_state['storage']['dbarray']['WorkQueueID'],
+	);
+	$form['recording_stats']['audio'] = array(
+		'#type' => 'item',
+		'#title' => t('Audio'),
+		//'#value' => $form_state['storage']['dbarray']['WorkQueueID'], //$form_state['storage']['dbarray']['RecordingFileNameForWeb'],
+		'#theme' => 'bbm_agent_audio_player',
+	);
+
+	if(count($form_state['auditor']['values'])):
+		$form['static_group'] = array(
+	    	'#type' => 'fieldset',
+	    	'#theme' => 'bbm_agent_recording_auditor_columns',
+		);
+		$form['static_group']['auditor'] = array(
+			'#value' => $form_state['auditor']['values']['recording'],
+		);
+	else:
+		$form['static_group'] = array(
+	    	'#type' => 'fieldset',
+			//'#description' => $form_state['auditor'],
+			//'#theme' => 'bbm_agent_recording_auditor_columns',
+		);
+	endif;
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Gender')):
+		$options = array();
+		while($language = mssql_fetch_array($result)){
+			$options[$language['GenderCd']] = $language['GenderDescription'];
+		}
+		(count($form_state['auditor']['values']) ? $options[''] = t('N/A') : null);
+		$form['static_group']['gender'] = array(
+			'#type' => 'radios',
+			'#title' => t('Gender'),
+			'#options' => $options,
+			//'#required' => true,
+			'#default_value' => $form_state['auditor']['values']['Gender'],
+			'#attributes' => array('id' => 'gender'),
+			'#prefix' => '<div id="gender" class="float-radios">',
+			'#suffix' => '</div>',
+		);
+	endif;
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Languages')):
+		$options = array();
+		while($language = mssql_fetch_array($result)){
+			$options[$language['LanguageCd']] = $language['LanguageName'];
+		}
+		(count($form_state['auditor']['values']) ? $options[''] = t('N/A') : null);
+		$form['static_group']['language'] = array(
+			'#type' => 'radios',
+			'#title' => t('Language'),
+			'#options' => $options,
+			'#default_value' => $form_state['auditor']['values']['Language'],
+			'#attributes' => array('id' => 'language'),
+			'#prefix' => '<div id="language" class="float-radios">',
+			'#suffix' => '</div>',
+		);
+	endif;
+
+	// review result types by priority
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_ReviewResultTypesByPriority')):
+		//drupal_set_message('<pre>'.print_r($result, true).'</pre>');
+	
+		$form['attributes'] = array(
+		'#type' => 'fieldset',
+		'#title' => 'Attributes',
+		'#tree' => true,
+		'#attributes' => array('id' => 'monitor-attributes'),
+		);
+	
+		$options = array();
+		while($attributes = mssql_fetch_array($result))
+		{
+			if(count($form_state['auditor']['values'])):
+				$options[''] = 'N/A';
+				$options[$attributes['ReviewResultTypeId']] = $attributes['ReviewResultTypeDescription'];
+			else:
+				$form['attributes'][strtolower(str_replace(array(':',' '), array('','_'), $attributes['ReviewResultTypeGroupDescription']))]['#prefix'] = '<div class="float-radios">';
+				$form['attributes'][strtolower(str_replace(array(':',' '), array('','_'), $attributes['ReviewResultTypeGroupDescription']))]['#suffix'] = '</div>';
+				$form['attributes'][strtolower(str_replace(array(':',' '), array('','_'), $attributes['ReviewResultTypeGroupDescription']))]['#type'] = 'radios';
+				$form['attributes'][strtolower(str_replace(array(':',' '), array('','_'), $attributes['ReviewResultTypeGroupDescription']))]['#title'] = str_replace('Verbiage: ','', $attributes['ReviewResultTypeGroupDescription']);
+				$form['attributes'][strtolower(str_replace(array(':',' '), array('','_'), $attributes['ReviewResultTypeGroupDescription']))]['#options'][$attributes['ReviewResultTypeId']] = $attributes['ReviewResultTypeDescription'];
+			endif;
+		}
+	
+		if(count($form_state['auditor']['values'])):
+			// show select box to auditor only
+			unset($form['attributes']);
+			$form['static_group']['attributes'] = array(
+				'#type' => 'select',
+				'#title' => t('Select an attribute'),
+				'#options' => $options,
+				'#default_value' => $form_state['auditor']['values']['Attribute'],
+			);
+		endif;
+		//drupal_set_message('<pre>'.print_r($form_state['auditor']['values']['Attribute'], true).'</pre>');
+	endif;
+	
+	
+	
+	$form['recording_stats']['flag'] = array('#type' => 'hidden', '#value' => 0);
+
+	if(!isset($form_state['auditor']['values']))
+	{	
+		$form['call_notes'] = array(
+			'#type' => 'hidden',
+		);	
+		$form['attributes']['agent_notes'] = array(
+			'#prefix' => '<div class="clearer"></div>',
+			'#type' => 'textfield',
+			'#title' => t('Phrase'),
+			'#weight' => 100,
+			'#description' => t('Please type here the phrase you heard in the recording.'),	
+		);
+		$form['buttons'] = array(
+			'#type' => 'fieldset',
+			'#pre_render' => array('bbm_agent_monitoring_buttons_pre_render'),
+		);
+		$form['buttons']['show_notes'] = array (
+    		'#type'=>'button',
+    		'#value'=>t('Show Notes'),
+			//'#attributes' => $form['recording_stats']['view_notes']['#attributes'],
+		);
+		$form['buttons']['add_note'] = array (
+    		'#type'=>'button',
+    		'#value'=>t('Add Note'),
+    		//'#attributes' => array('alt' => '/bbm/add-notes?height=600&width=600&inlineId=add-notes&modal=true', 'class' => 'thickbox'),
+		);
+		$form['buttons']['deselect'] = array(
+			'#type' => 'button',
+			'#value' => t('Clear Options'),
+		);
+		$form['buttons']['skip'] = array (
+    		'#type'=>'submit',
+    		'#value'=>t('Skip'),
+			'#submit'=> array('bbm_agent_monitoring_form_skip'),
+		);
+		$form['buttons']['next'] = array (
+    		'#type'=>'submit',
+    		'#value'=>t('Save and Next'),
+		);
+		
+	}
+
+	if($norecordings){
+		unset($form['buttons']);
+		unset($form['recording_stats']);
+	}
+
+	return $form;
+
+}
+
+/*
+ * pre render
+ */
+function bbm_agent_monitoring_buttons_pre_render($form)
+{
+	if(form_get_errors())
+	{
+		/*
+		 *  if there are no recording then hide the buttons
+		 */
+		$form['#type'] = 'hidden';
+	}
+	return $form;
+}
+
+/*
+ * validate form
+ */
+function bbm_agent_monitoring_form_validate($form, &$form_state)
+{
+	//$form_state['rebuild'] = true;
+}
+
+/*
+ * submit monitoring
+ */
+function bbm_agent_monitoring_form_submit($form, &$form_state)
+{
+	$sp_params = array();
+	$sp_params['WorkQueueID'] = array(
+		'name' => 'WorkQueueID', 
+		'value' => $form_state['values']['workqueueid'],
+		'type' => SQLINT4,
+		'length' => 30,
+	);
+	$sp_params['AgentID'] = array(
+		'name' => 'AgentID', 
+		'value' => $_SESSION['AgentID'],
+		'type' => SQLINT2,
+		'length' => 4,
+	);
+	
+	foreach((array)$form_state['values']['attributes'] as $key => $val)
+	{
+		( (int)$val ? $reviewresult[] = (int)$val : '' );
+	}
+	$reviewresult = implode(',', (array)$reviewresult);
+	if(is_numeric($reviewresult))
+	{
+		$sp_params['ReviewResultTypeString'] = array(
+		'name' => 'ReviewResultTypeString', 
+		'value' => $reviewresult,
+		'type' => SQLVARCHAR,
+		'length' => 100,
+		);
+	}
+	
+	if(strlen($form_state['values']['gender']))
+	{
+		$sp_params['GenderCd_Agent'] = array(
+		'name' => 'GenderCd_Agent', 
+		'value' => $form_state['values']['gender'],
+		'type' => SQLCHAR,
+		'length' => 1,
+		);
+	}
+	
+	if(strlen($form_state['values']['language']))
+	{
+		$sp_params['LanguageCd_Agent'] = array(
+		'name' => 'LanguageCd_Agent', 
+		'value' => $form_state['values']['language'],
+		'type' => SQLCHAR,
+		'length' => 1,
+		);
+	}
+	
+	$sp_params['NoTalkYNFlag'] = array(
+		'name' => 'NoTalkYNFlag', 
+		'value' => ($form_state['values']['attributes']['no_talk'] ? 'Y' : 'N'),
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	
+	if(strlen($form_state['values']['attributes']['agent_notes']))
+	{
+		$sp_params['AgentResultPhraseText'] = array(
+		'name' => 'AgentResultPhraseText', 
+		'value' => $form_state['values']['attributes']['agent_notes'],
+		'type' => SQLVARCHAR,
+		'length' => 155,
+		);
+	}
+	
+	if(strlen($form_state['values']['call_notes']))
+	{
+		$sp_params['AgentCallNoteText'] = array(
+		'name' => 'AgentCallNoteText', 
+		'value' => $form_state['values']['call_notes'],
+		'type' => SQLVARCHAR,
+		'length' => 512,
+		);
+	}
+	
+	
+	/**
+	 * debug
+	 */
+	//drupal_set_message('<pre>'.print_r($sp_params, true).'</pre>');
+	
+	if(is_numeric($sp_params['WorkQueueID']['value']) && is_numeric($sp_params['AgentID']['value']))
+	{
+		$result = bbm_agent_db_query(null, 'dbo.bbmsp_upd_WorkQueueAgentResults', $sp_params);
+		drupal_set_message(t('Recording [%record] processed successfully', array('%record' => $form_state['values']['workqueueid'])));
+	}
+	else
+	{
+		drupal_set_message('Recording not processed', 'error');
+	}
+	
+	//unset($form_state['storage']['dbarray']);
+	
+	//drupal_goto('/bbm/monitoring');
+}
+
+/*
+ * skip and next 
+ */
+function bbm_agent_monitoring_form_skip($form, &$form_state)
+{
+	$sp_params = array();
+	$sp_params['WorkQueueID'] = array(
+		'name' => 'WorkQueueID', 
+		'value' => $form_state['values']['workqueueid'],
+		'type' => SQLINT4,
+		'length' => 30,
+	);
+	$sp_params['AgentID'] = array(
+		'name' => 'AgentID', 
+		'value' => $_SESSION['AgentID'],
+		'type' => SQLINT2,
+		'length' => 4,
+	);
+
+	if(strlen($sp_params['WorkQueueID']['value']) && strlen($sp_params['AgentID']['value']))
+	{
+		$result = bbm_agent_db_query(null, 'dbo.bbmsp_upd_WorkQueueAgentSkip', $sp_params);
+		drupal_set_message(t('Recording [%record] skipped', array('%record' => $form_state['values']['workqueueid'])));
+	}
+	else
+	{
+		drupal_set_message('Recording not skipped', 'error');
+	}
+}
+
+/*
+ * callback to add notes
+ */
+function bbm_agent_add_notes_callback()
+{
+	/**
+	 * command=BbmCallNoteData|
+	 * sequenceId=ECEAA303409E46058921A53681789B85|
+	 * RecordingType=F|
+	 * HubId=13|
+	 * Dnis=7042371123|
+	 * Ani=7048553371|
+	 * BrandId=007|
+	 * AgentId=999|
+	 * RequestStatus=R|
+	 * DisapprovalReason=3|
+	 * MembershipNumber=76167|
+	 * WebUserId=maryk|
+	 * CallNoteText=Male using FFM|
+	 * ECEAA303409E46058921A53681789B85|
+	 * ClientDateTime=100316095259
+	 */
+
+	$params = new stdClass ();
+	$params->command = 'BbmCallNoteData';
+	$params->data = array(
+		'CallNoteText' => 'testing with hard coded params', //$_REQUEST['CallNoteText'],
+		'RecordingType' => 'F', //$_REQUEST['RecordingType'],
+		'HubId' => 13, //$_REQUEST['HubId'],
+		'Ani' => 7048553371, //$_REQUEST['Ani'],
+		'BrandId' => 007, //$_REQUEST['BrandId'],
+		'AgentId' => 999, //$_REQUEST['AgentId'],
+		'RequestStatus' => 'R',
+		'DisapprovalReason' => 3,
+		'MembershipNumber' => 76167, // $_REQUEST['AccountNumber '],
+		'WebUserId' => 'maryk', // $_REQUEST['AgentLogin'],
+		'ClientDateTime' => 100316095259 // time()
+	);	
+	$result = teligence_cart_soap_call($params, 'ProcessCDMessageIn', 'http://ws.wsmessageconsumer.alldir.net/WsMessageConsumer/MessageConsumer.asmx');
+	
+	print drupal_json(array('content'=> '<pre>' . check_plain(print_r($result, true)) . '</pre>'));
+	
+	exit;
+}
+
+/*
+ * add notes modal page
+ */
+function bbm_agent_add_notes_form_page(){
+
+	//$output = '';
+	//$output .=  drupal_get_form('bbm_agent_add_notes_form');
+	//print $output; 
+	
+	return drupal_get_form('bbm_agent_add_notes_form');
+}
+
+/*
+ * list notes modal page
+ */
+function bbm_agent_view_notes_form_page(){
+
+	$redirect = '/bbm/monitoring';
+	print drupal_get_form('bbm_agent_view_notes_form', $redirect);
+
+}
+
+/*
+ * add notes form
+ */
+function bbm_agent_add_notes_form($form_state, $redirect = null){
+
+	$form = array();
+	$form['#theme'] = 'bbm_agent_add_notes_page';
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Call Note'),
+	);
+	
+	$form['command'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['command'],
+	);
+	$form['RecordingType'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['RecordingType'],
+	);
+	$form['HubId'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['HubId'],
+	);
+	$form['Ani'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['Ani'],
+	);
+	$form['BrandId'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['BrandId'],
+	);
+	$form['AgentId'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['AgentId'],
+	);
+	
+	$form['group']['notes'] = array(
+		'#type' => 'textarea',
+		'#title' => t('(Maximum 512 characters)'),
+		//'#cols' => 45,
+		'#rows' => 25,
+		'#attributes' => array('style' => 'width:100%'),
+	);
+
+	$form['group']['cancel'] = array(
+		'#type' => 'button',
+		'#value' => t('Cancel'),
+		'#attributes' => array('onclick' => 'tb_remove(); return false;'),
+	);
+
+	$form['group']['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+		//'#attributes' => array('onclick' => 'tb_remove(); return false;'),
+	);
+
+	($redirect ? $form['#action'] = $redirect : null);
+
+	return $form;
+
+}
+
+/*
+ * submit add notes form
+ */
+function bbm_agent_add_notes_form_submit($form, &$form_state)
+{
+
+}
+
+/*
+ * validate add notes form
+ */
+function bbm_agent_add_notes_form_validate($form, &$form_state)
+{
+
+}
+
+/*
+ * view existing notes
+ */
+function bbm_agent_view_notes_form($form_state){
+	
+	$url = 'https://callnotes.teligence.net/Default.aspx?';
+	foreach((array)$_GET as $key => $value)
+	{
+		if(in_array($key, array('HubId', 'BrandId', 'Account', 'Ani', 'Id')))
+		{
+			$url .= $key . '=' . $value . '&';
+		}	
+	}
+	$notes = file_get_contents(trim($url, '&'));
+	preg_match_all('/<body.*>(.+)<\/body.*>/uis', $notes, $matches);
+
+	$form = array();
+	$form['group'] = array(
+		'#type' => 'fieldset',
+	);
+	$form['group']['list'] = array(
+		'#type' => 'item',
+		//'#value' => print_r($matches, true),
+		//'#value' => trim($url, '&'),
+		'#value' => $matches[0][0],
+	);
+	$form['done'] = array(
+		'#type' => 'button',
+		'#value' => t('Done'),
+		'#attributes' => array('onclick' => 'tb_remove(); return false;'),
+	);
+
+	return $form;
+}
+
+
+/*
+ * bbm web UI system admin settings form
+ */
+function bbm_agent_settings_form($form_state){
+
+	$form = array();
+
+	/*
+	 * $myServer = "192.168.198.170:1433";
+	 * $myUser = "VVANDEVLIX01";
+	 * $myPass = "Linux123";
+	 * $myDB = "BBM2";
+	 */
+	$form['bbm_agent_user_session_duration'] = array(
+		'#type' => 'textfield',
+		'#title' => t('User innactivity expire (minutes)'),
+		'#size' => 2,
+		'#maxlength' => 2,
+		'#required' => true,
+		'#default_value' => variable_get('bbm_agent_user_session_duration', 30),
+		'#description' => t('Enter here the amount of minutes the monitoring window can be inactive before logging the user out. Enter 0 to never expire.'),
+		'#element_validate' => array('bbm_agent_user_session_duration_validate'),
+	);
+	$form['bbm_agent_db_server'] = array(
+		'#type' => 'textfield',
+		'#required' => true,
+		'#title' => t('Data Base Server IP or URL'),
+		'#default_value' => variable_get('bbm_agent_db_server', "192.168.198.170:1433"),
+		'#description' => t('Enter here the ip address optionally with the port in the form of xxx.xxx.xxx.xxx:xxxx where the number after the colon is the port number.')
+	);
+	$form['bbm_agent_db_username'] = array(
+		'#type' => 'textfield',
+		'#required' => true,
+		'#title' => t('Database Username'),
+		'#default_value' => variable_get('bbm_agent_db_username', "VVANDEVLIX01"),
+		'#description' => t('Enter the username for the database'),
+	);
+	$form['bbm_agent_db_pass'] = array(
+		'#type' => 'password',
+		'#required' => true,
+		'#title' => t('Database Password'),
+		'#default_value' => variable_get('bbm_agent_db_pass', ""),
+		'#description' => t('Enter the password for the database'),
+		'#pre_render' => array('bbm_agent_pre_render_password'),
+	);
+	$form['bbm_agent_db_name'] = array(
+		'#type' => 'textfield',
+		'#required' => true,
+		'#title' => t('Database Name'),
+		'#default_value' => variable_get('bbm_agent_db_name', ""),
+		'#description' => t('Enter the name of the database'),
+	);
+	$form['bbm_agent_temp_pass_message'] = array(
+		'#type' => 'textarea',
+		'#required' => true,
+		'#title' => t('Temporary Password Message'),
+		'#default_value' => variable_get('bbm_agent_temp_pass_message', "Your temporary password is: [password]"),
+		'#description' => t('Put the message the agents will recieve by email when requesting a password reset.'),
+	);
+
+	return system_settings_form($form);
+}
+
+/*
+ * validate session expiration value
+ */
+function bbm_agent_user_session_duration_validate($element, &$form_state)
+{
+	if(!is_numeric($element['#value']))
+	{
+		form_error($element, 'Invalid value. Please enter only numeric values.');
+	}
+}
+
+/*
+ * pre render password field
+ */
+function bbm_agent_pre_render_password($element){
+	$element['#value'] = variable_get('bbm_agent_db_pass', "");
+
+	return $element;
+}
+
+/*
+ * blank page
+ */
+function bbm_agent_blank(){
+	return '';
+}
+
+/*
+ * test db connection
+ */
+function bbm_agent_test_db_connection(){
+
+	//declare the SQL statement that will query the database
+	$query = "select * from information_schema.tables";
+	$output .= "<h1>Query: ".$query."</h1>";
+
+	//execute the SQL query and return records
+	//$result = mssql_query($query);
+	if(!$result = bbm_agent_db_query($query)):
+	return '';
+	endif;
+
+	$numRows = mssql_num_rows($result);
+	$output .= "<h2>" . $numRows . " Row" . ($numRows == 1 ? "" : "s") . " Returned </h2>";
+
+	//display the results
+	while($row = mssql_fetch_array($result))
+	{
+		$rows['header'] = array_keys($row);
+		$rows['data'][] = array('data' => array_values($row));
+	}
+	$output .= theme('table', $rows['header'], $rows['data']);
+
+	return $output;
+}
+
+/*
+ * bbm login form
+ */
+function bbm_agent_login_form($form_state){
+
+	if(!user_access('access login screen')){
+		drupal_goto('bbm/monitoring');
+	}
+
+	$form = array();
+
+	$form['#theme'] = 'bbm_agent_forms';
+
+	$form['login'] = array (
+    '#type'=>'fieldset',
+    '#title'=>t('Login'),
+	'#attributes' => array('class' => 'left-label'),
+	);
+
+	$form['login']['username'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('Username'),
+    '#required'=>true,
+    '#element_validate'=>array('bbm_agent_validate_trim')
+	);
+
+	$form['login']['password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Password'),
+    '#required'=>true,
+	);
+
+	$form['login']['button'] = array (
+    '#type'=>'submit',
+    '#value'=>'Login',
+	);
+
+	$form['login']['forgotlink'] = array (
+    '#type'=>'item',
+    '#value'=> l('Forgot your password?', 'bbm/reset-password'),
+	);
+
+	return $form;
+}
+
+/*
+ * login form submit
+ */
+function bbm_agent_login_form_submit($form, &$form_state){
+
+	$sp_params = array();
+	$sp_params[] = array(
+		'name' => 'AgentLogin',
+		'value' => $form_state['values']['username'],
+		'type' => SQLVARCHAR,
+		'length' => 60
+	);
+	$sp_params[] = array(
+		'name' => 'AgentPassword',
+		'value' => md5($form_state['values']['password']),
+		'type' => SQLVARCHAR,
+		'length' => 60
+	);
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentInfo', $sp_params)):
+		if($agent = mssql_fetch_array($result)):
+			
+			if($agent['AgentStatusCd'] == 'D'){
+				drupal_set_message('Your account has been deleted', 'error');
+				return;
+			}
+			
+		if($agent['AgentStatusCd'] == 'S'){
+			drupal_set_message('Your account has been suspended', 'warning');
+			return;
+		}
+	
+		$redirect = 'bbm/monitoring';
+		$urlquery = array();
+			
+		if($agent['AgentAdministratorYNFlag'] == 'Y'){
+			$rolename = 'bbm_admin';
+		}elseif($agent['AgentAuditorYNFlag'] == 'Y'){
+			$rolename = 'bbm_audit';
+		}else{
+			$rolename = 'bbm_agent';
+		}
+		// find role id
+		$rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", $rolename));
+		
+		// build roles array
+		$roles = array();
+		$roles[$rid] = $rolename;
+		
+		/**
+		 * add super user role 
+		 */
+		// find role id
+		$surid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'superadmin'));
+		if($agent['AgentSuperUserYNFlag'] == 'Y')
+		{
+			$roles[$surid] = 'superadmin';
+		}
+			
+		global $user;
+		if ($user = user_load( array( 'name' => $agent['AgentLogin'] )))
+		// EXISTNG USER
+		{
+			$user->access = time();
+			
+			/*
+			 * fix for multiple user roles, 
+			 * this will allow to assign multiple roles through drupal interface to any user 
+			 * $user->roles += array($rid => $rolename);
+			 */
+			// $user->roles += array($rid => $rolename);
+			$user->roles = (array)$roles;
+			
+			/**
+			 * remove super user role if set to N
+			 */
+			if($agent['AgentSuperUserYNFlag'] == 'N' && in_array('superadmin', (array)$user->roles))
+			{
+				unset($user->roles[$surid]);
+			}			
+			
+			$user = user_save($user, (array)$user);
+			 
+			if(variable_get('bbm_agent_temp_password_'.$form_state['values']['username'], 0)):
+				variable_del('bbm_agent_temp_password_'.$form_state['values']['username']);
+				$redirect = 'bbm/new-password';
+				$urlquery = array('destination' => '');
+				drupal_set_message('Please change your password.', 'warning');
+			endif;
+		}
+		else
+		// NEW USER
+		{
+			/*
+			// Default implementation of name generation
+			$namenew = preg_replace('/@.*$/', '', $form_state['values']['username']);
+			 
+			// if username generated from email record already exists, append underscore and number eg:(chris_123)
+			if (db_result(db_query("SELECT count(*) FROM {users} WHERE LOWER(name) = LOWER('%s')", $namenew)) > 0)
+			{
+				// find the next number available to append to the name
+				$sql = "SELECT SUBSTRING_INDEX(name,'_',-1) FROM {users} WHERE name REGEXP '%s' ORDER BY CAST(SUBSTRING_INDEX(name,'_',-1) AS UNSIGNED) DESC LIMIT 1";
+				$nameidx = db_result(db_query($sql, '^'.$namenew.'_[0-9]+$'));
+				$namenew .= '_' . ($nameidx+1);
+			}
+			*/
+	
+			$newuser = array(
+						'name' => $form_state['values']['username'],
+						'mail' => $agent['AgentEmailAddress'],
+						'status' => 1,
+	  					'pass' => $agent['AgentPassword'],
+						// 'roles' => array($rid => $rolename),
+						'roles' => $roles,
+						'init' => $agent['AgentEmailAddress'],
+						'access' => time(),
+			);
+	
+			// create new user
+			$user = user_save("", $newuser);
+		}
+	
+		// Log the user in. $params array must have a minimum of 'name' and 'pass' keys.
+		//$user = user_authenticate((array)$user);
+	
+		watchdog('user', 'Session opened for %name.', array ('%name'=>$user->name));
+	
+		// Regenerate the session ID to prevent against session fixation attacks.
+		// sess_regenerate();
+		//$_SESSION['username'] = $agent['AgentLogin'];
+		$_SESSION['userlongname'] = $agent['AgentFirstName'] . ' ' . $agent['AgentLastName'];
+		$_SESSION['AgentID'] = $agent['AgentID'];
+		$_SESSION['AgentEmailAddress'] = $agent['AgentEmailAddress'];
+		$_SESSION['AgentSession'] = time();
+		$_SESSION['AgentLogin'] = $agent['AgentLogin'];
+	
+		$sp_params = array();
+		$sp_params[] = array(
+			'name' => 'AgentID', 
+			'value' => $agent['AgentID'],
+			'type' => SQLINT1,
+			'length' => 4,
+		);
+		bbm_agent_db_query(null, 'dbo.bbmsp_ins_AgentSession_Login', $sp_params);
+		
+		// redirect user after login
+		drupal_goto($redirect, $urlquery);
+			
+		else:
+			form_set_error('][', 'Invalid username or password');
+		endif;
+	endif;
+
+}
+
+/*
+ * bbm reset password
+ */
+function bbm_agent_reset_password_form($form_state){
+
+	$form = array();
+
+	$form['#theme'] = 'bbm_agent_forms';
+
+	$form['reset_password'] = array (
+    '#type'=>'fieldset',
+    '#title'=> t('Reset your password'),
+	'#attributes' => array('class' => 'left-label'),
+	);
+
+	$form['reset_password']['username'] = array (
+    '#type'=>'textfield',
+    '#title'=> t('Username'),
+    '#required'=>true,
+    '#element_validate'=>array('bbm_agent_validate_trim')
+	);
+
+	$form['reset_password']['button'] = array (
+    '#type'=>'submit',
+    '#value'=> t('Reset Password'),
+	);
+
+	return $form;
+}
+
+/*
+ * bbm reset password validate
+ */
+function bbm_agent_reset_password_form_validate($form, &$form_state)
+{
+	$form_state['values']['username'] = filter_xss($form_state['values']['username']);
+}
+
+/*
+ * bbm reset password submit
+ */
+function bbm_agent_reset_password_form_submit($form, &$form_state)
+{
+	$sp_params[] = array(
+		'name' => 'AgentLogin',
+		'value' => $form_state['values']['username'],
+		'type' => SQLVARCHAR,
+		'length' => 20
+	);
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentEmailAddress', $sp_params)):
+
+		if($agent = mssql_fetch_array($result)):
+			
+			$newpass = user_password(10);
+				
+			$sp_params[] = array(
+				'name' => 'AgentLogin',
+				'value' => $form_state['values']['username'],
+				'type' => SQLVARCHAR,
+				'length' => 20
+			);
+			$sp_params[] = array(
+				'name' => 'AgentPassword',
+				'value' => md5($newpass),
+				'type' => SQLVARCHAR,
+				'length' => 32
+			);
+		
+			if($result = bbm_agent_db_query(null, 'dbo.bbmsp_upd_AgentPassword', $sp_params)):
+				$params['tokens'] = array(
+					'[password]' => $newpass,
+				);
+			
+				drupal_mail('bbm_agent', 'temp_password', $agent['AgentEmailAddress'], language_default(), $params);
+				variable_set('bbm_agent_temp_password_'.$form_state['values']['username'],1);
+				drupal_set_message(t('Thank you. A temporary password has been sent to the email address.' . "<br />" .
+												'When you log in you will be asked to change your password.' . "<br />" .
+												'Check your email and !login', array('!login' => l('login', 'bbm/login'))), 'warning');
+				drupal_goto('bbm/blank');
+			else:
+				drupal_set_message('We are having technical problems, please try again later.');
+			endif;
+			
+		else:
+			drupal_set_message(t('Sorry, <strong>@username</strong> is not recognized as a user name.', array('@username' => $form_state['values']['username'])));		
+		endif;
+	endif;
+}
+
+
+/*
+ * new password form
+ */
+function bbm_agent_new_password_form($form_state){
+
+	$form = array();
+
+	$form['#theme'] = 'bbm_agent_forms';
+
+	$form['newpass'] = array (
+    '#type'=>'fieldset',
+    '#title'=>t('Create new password'),
+	'#attributes' => array('class' => 'left-label'),
+	);
+
+	$form['newpass']['current_password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Current Password'),
+    '#required'=>true,
+	);
+
+	$form['newpass']['password'] = array (
+    '#type'=>'password',
+    '#title'=>t('New Password'),
+    '#required'=>true,
+	);
+
+	$form['newpass']['confirm_password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Retype New Password'),
+    '#required'=>true,
+	);
+
+	$form['newpass']['button'] = array (
+    '#type'=>'submit',
+    '#value'=> t('Change Password'),
+	);
+
+	return $form;
+}
+
+/*
+ * validate new password form
+ */
+function bbm_agent_new_password_form_validate($form, &$form_state){
+
+	$sp_params[] = array(
+		'name' => 'AgentLogin',
+		'value' => $_SESSION['AgentLogin'],
+		'type' => SQLVARCHAR,
+		'length' => 60
+	);
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentPassword', $sp_params)):
+		if($agent = mssql_fetch_array($result)):
+			if($agent['AgentPassword'] <> md5($form_state['values']['current_password']))
+			{
+				form_set_error('current_password', t("Your current password doesn't match"));
+			}
+		endif;
+	endif;
+
+	if ($form_state['values']['password'] <> $form_state['values']['confirm_password'])
+	{
+		form_set_error('confirm_password', t("Passwords don't match"));
+	}
+
+}
+
+/*
+ * submit new password form
+ */
+function bbm_agent_new_password_form_submit($form, &$form_state){
+
+	$sp_params[] = array(
+		'name' => 'AgentLogin',
+		'value' => $_SESSION['AgentLogin'],
+		'type' => SQLVARCHAR,
+		'length' => 60
+	);
+	$sp_params[] = array(
+		'name' => 'AgentPassword',
+		'value' => md5($form_state['values']['password']),
+		'type' => SQLVARCHAR,
+		'length' => 32
+	);
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_upd_AgentPassword', $sp_params)):
+		drupal_set_message('Password has been changed successfuly.');
+	else:
+		drupal_set_message('Your password could not be changed.', 'error');
+	endif;
+
+}
+
+
+
+
+/*
+ * pre render bbm_agent_auditing_form_pre_render
+ */
+function bbm_agent_auditing_form_pre_render($form)
+{
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery-1.3.2.min.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/timepicker.css');
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.ui.js');
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.timepicker.js');
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.auditor.js');
+
+	return $form;
+}
+
+/**
+ * circular prev next
+ */
+function bbm_agent_circular_prev_next($items = array(), $value)
+{
+	if(count($items) <= 1)
+	{
+		return false;
+	}
+
+	$output = array();
+
+	$key = array_search($value, $items);
+
+	$output['next'] = ($items[$key+1] ? $items[$key+1] : $items[0]);
+	$output['prev'] = ($items[$key-1] ? $items[$key-1] : $items[count($items)-1]);
+
+	return $output;
+}
+
+/*
+ * auditing form
+ */
+function bbm_agent_auditing_form($form_state){
+
+	//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+
+	$form = array();
+
+	if((isset($form_state['clicked_button']['#post']) && ($form_state['clicked_button']['#post'][key($form_state['clicked_button']['#post'])] == 'Audit')))
+	{
+		$form_state['clicked_button']['#id'] = 'edit-searchid';
+		$form_state['values']['mid'] = key($form_state['clicked_button']['#post']);
+		bbm_agent_auditing_form_submit($form, $form_state);
+		$form_state['storage']['step'] = 2;
+		$form_state['prev_next'] = bbm_agent_circular_prev_next($form_state['storage']['values'][1]['WorkQueueIDs'], $form_state['values']['mid']);
+		
+		//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+	}
+	elseif(is_numeric($form_state['clicked_button']['#name']) && $form_state['storage']['step'] == 2)
+	{
+		$form_state['clicked_button']['#id'] = 'edit-searchid';
+		$form_state['values']['mid'] = $form_state['clicked_button']['#name'];
+		bbm_agent_auditing_form_submit($form, $form_state);
+		$form_state['storage']['step'] = 2;
+		$form_state['prev_next'] = bbm_agent_circular_prev_next($form_state['storage']['values'][1]['WorkQueueIDs'], $form_state['clicked_button']['#name']);
+
+		//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+	}
+
+	$form['#theme'] = 'bbm_agent_forms';
+
+	if ( empty($form_state['storage']['step']))
+	{
+		// we are coming in without a step, so default to step 1
+		$form_state['storage']['step'] = 1;
+	}
+
+	//$form['#submit'] = array('bbm_agent_auditing_form_submit');
+
+	switch($form_state['storage']['step']){
+		case 1:
+		default:
+							
+			$form['messageid'] = array (
+		    	'#type'=>'fieldset',
+				'#attributes' => array('class' => 'left-label'),
+			);
+			$form['messageid']['mid'] = array (
+		    	'#type'=>'textfield',
+		    	'#title'=>t('Message ID'),
+				'#size' => 30,
+			);
+
+			$form['messageid']['searchid'] = array (
+		    	'#type'=>'submit',
+		    	'#value'=> t('Search Id'),
+		    	'#pre_render' => array('bbm_agent_per_render_button'),
+			);
+				
+			/*******************************************************************/
+				
+			$form['details'] = array (
+		    	'#type'=>'fieldset',
+				'#attributes' => array('class' => 'left-label auditing-searchdetails'),
+				'#pre_render' => array('bbm_agent_auditing_form_pre_render'),
+			);
+			$form['details']['fromdate'] = array (
+		    	'#type'=>'textfield',
+		    	'#title'=>t('From Date Time'),
+		    	'#size' => 20,
+		    	'#field_suffix' => theme('image', drupal_get_path('module', 'bbm_agent').'/images/calendar.gif'),
+		    	'#default_value' => $form_state['storage']['values'][1]['fromdate'] ? $form_state['storage']['values'][1]['fromdate'] : date('m/d/Y h:i a', strtotime('-30 days')),
+			);
+			$form['details']['todate'] = array (
+		    	'#type'=>'textfield',
+		    	'#title'=>t('To Date Time'),
+		    	'#size' => 20,
+		    	'#field_suffix' => theme('image', drupal_get_path('module', 'bbm_agent').'/images/calendar.gif'),
+		    	'#default_value' => $form_state['storage']['values'][1]['todate'] ? $form_state['storage']['values'][1]['todate'] : date('m/d/Y h:i a'),
+			);
+
+			$options = array( '' => 'All');
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_RecordingTypes');
+			while($option = mssql_fetch_array($result)){
+				$options[$option['RecordingTypeId']] = $option['RecordingTypeDescription'];
+			}
+			$form['details']['recordingtype'] = array(
+		    	'#type' => 'select',
+		    	'#title' => t('Recording Type'),
+		    	'#options' => $options,
+				'#default_value' => $form_state['storage']['values'][1]['recordingtype'],
+			);
+
+			$options = array();
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Languages');
+			while($option = mssql_fetch_array($result))
+			{
+				( $option['LanguageCd'] ? $options[$option['LanguageCd']] = $option['LanguageName'] : null);
+			}
+			$form['details']['language'] = array(
+		    	'#type' => 'checkboxes',
+		    	'#title' => t('Language'),
+		    	'#options' => $options,
+				'#default_value' => (array)$form_state['storage']['values'][1]['language'],
+				'#suffix' => '<div class="clearer"></div>',
+				'#theme' => 'bbm_agent_language_selection_boxes'
+			);
+
+			$form['details']['ani'] = array (
+		    	'#type'=>'textfield',
+		    	'#title'=>t('ANI'),
+				'#size' => 22,
+				'#maxlength' => 22,
+				'#default_value' => $form_state['storage']['values'][1]['ani'],
+			);
+			
+			$options = array( '' => 'All');
+			$result = bbm_agent_db_query(null, "dbo.bbmsp_get_AgentNamesActive");
+			while($option = mssql_fetch_array($result))
+			{
+				$options[$option['AgentID']] = $option['AgentName'];
+			}
+			$form['details']['agentid'] = array (
+		    	'#type'=>'select',
+		    	'#title'=>t('Agent'),
+				'#options' => $options,
+				'#default_value' => $form_state['storage']['values'][1]['agentid'],
+			);
+
+			$options = array( '' => 'All');
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_IVRBrands');
+			while($option = mssql_fetch_array($result))
+			{
+				$options[$option['IVRBrandId']] = $option['IVRBrandDescription'];
+			}
+			$form['details']['brand'] = array(
+		    	'#type' => 'select',
+		    	'#title' => t('Brand'),
+		    	'#options' => $options,
+				'#default_value' => $form_state['storage']['values'][1]['brand'],
+			);
+
+			$options = array( '' => 'All');
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Actions');
+			while($option = mssql_fetch_array($result))
+			{
+				$options[$option['ActionCd']] = $option['ActionDescription'];
+			}
+			$form['details']['result'] = array(
+		    	'#type' => 'select',
+		    	'#title' => t('Result'),
+		    	'#options' => $options,
+				'#default_value' => $form_state['storage']['values'][1]['result'],
+			);
+
+			$options = array( '' => 'All');
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Sites');
+			while($option = mssql_fetch_array($result))
+			{
+				$options[$option['SiteId']] = $option['SiteDescription'];
+			}
+			$form['details']['site'] = array(
+		    	'#type' => 'select',
+		    	'#title' => t('Site Name'),
+		    	'#options' => $options,
+				'#default_value' => $form_state['storage']['values'][1]['site'],
+			);
+
+			$form['details']['searchdetails'] = array (
+		    	'#type'=>'submit',
+		    	'#value'=> t('Search'),
+		    	'#pre_render' => array('bbm_agent_per_render_button'),
+			);
+
+			//empty $form_state step 1
+			unset($form_state['storage']['values'][1]);
+				
+			break;
+		case 2:
+			// stored proc AuditRecordingsList
+			// show multiple recordings
+			switch($form_state['storage']['values'][1]['clicked_button']['#id'])
+			{
+				case 'edit-searchdetails':
+				case 'edit-next-page':
+				case 'edit-prev-page':
+					//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+					$form['results'] = array(
+						'#type' => 'fieldset',
+						'#title' => t('Search Results'),
+						'#theme' => 'bbm_agent_auditor_multiple_paging',
+					);
+					$form['results']['new_search'] = array (
+		    			'#type'=>'submit',
+		    			'#value'=> t('New Search'),
+//						'#attributes' => array('style' => 'float:right;'),
+					);
+					$form['results']['time_range'] = array(
+						'#type' => 'item',
+						'#value' => $form_state['storage']['values'][1]['fromdate'] . ' to ' . $form_state['storage']['values'][1]['todate'],
+					);
+					$form['results']['count'] = array(
+						'#type' => 'item',
+						'#value' => $form_state['storage']['values'][1]['count'],
+					);
+					$form['results']['page'] = array(
+						'#type' => 'item',
+						'#value' => $form_state['storage']['values'][1]['page'] ? $form_state['storage']['values'][1]['page'] : 1,
+					);
+					
+					// list of recordings
+					$form['list_audit'] = array(
+		    			'#type' => 'fieldset',
+		    			'#value' => $form_state['storage']['values'][1]['RecordingAuditorMultiple'],
+		    			'#theme' => 'bbm_agent_auditor_recording_list',
+					);
+					
+					// buttons
+					if($form_state['storage']['values'][1]['count'] || $form_state['storage']['values'][1]['page'] > 1)
+					{
+						$form['pager_group'] = array(
+							'#type' => $form_state['storage']['values'][1]['count'] == 50 || $form_state['storage']['values'][1]['page'] > 1 ? 'fieldset' : 'hidden',
+							'#prefix' => '<div class="pager-buttons">',
+							'#suffix' => '</div>',
+						);
+					}
+					
+					if($form_state['storage']['values'][1]['count'] == 50)
+					{
+						$form['pager_group']['next_page'] = array (
+		    				'#type'=>'submit',
+		    				'#value'=> t('Next Page >>'),
+						);
+					}
+					if($form_state['storage']['values'][1]['page'] > 1)
+					{
+						$form['pager_group']['prev_page'] = array (
+			    			'#type'=>'submit',
+			    			'#value'=> t('<< Previous Page'),
+						);
+					}
+					break;
+					 
+				case 'edit-searchid':
+				
+					$form = bbm_agent_monitoring_form($form_state);
+					
+					$form['top_button_group'] = array(
+						'#type' => 'fieldset',
+						'#weight' => -100,
+					);
+					$form['top_button_group']['new_search'] = array(
+			    		'#type' => 'submit',
+			    		'#value' => t('New Search'),
+			    		
+					);
+					$form['button_group'] = array(
+						'#type' => 'fieldset',
+						'#theme' => 'bbm_agent_bottom_button_group',	
+					);
+					
+					if(isset($form_state['prev_next']))
+					{
+						if(empty($form_state['prev_next']))
+						{
+							$form['button_group']['search_results'] = array(
+								'#type' => 'submit',
+								'#value' => t('<<< Search Results'),
+				    			'#submit' => array('bbm_agent_auditing_form_return_search_result'),
+							);
+							$form['button_group']['save'] = array(
+					    		'#type' => 'submit',
+					    		'#value' => t('<<< Save and Back to list'),
+					    		'#submit' => array('bbm_agent_auditing_form_save_back'),
+								'#name' => 'backtolist',
+							);
+						}
+						else
+						{
+							$form['button_group']['search_results'] = array(
+								'#type' => 'submit',
+								'#value' => t('<<< Search Results List'),
+				    			'#submit' => array('bbm_agent_auditing_form_return_search_result'),
+							);
+							$form['button_group']['prev_rec'] = array(
+								'#type' => 'submit',
+								'#value' => t('<< Previous Recording'),
+					    		'#name' => $form_state['prev_next']['prev'],
+							);
+							$form['button_group']['next_rec'] = array (
+					    		'#type'=>'submit',
+					    		'#value'=>t('Next Recording >>'),
+								'#name' => $form_state['prev_next']['next'],
+							);
+	
+							// TODO: add code to handle ArchiveSourceYNFlag flag
+							if($form_state['auditor']['values']['recording']['ArchiveSourceYNFlag'] == 'N')
+							{
+								$form['button_group']['save'] = array(
+						    		'#type' => 'submit',
+						    		'#value' => t('Save and Next >>'),
+						    		'#submit' => array('bbm_agent_auditing_form_save_back'),
+						    		'#name' => $form_state['prev_next']['next'],
+								);	
+							}
+						}
+					}
+					else
+					{
+						// TODO: add code to handle ArchiveSourceYNFlag flag
+						if($form_state['auditor']['values']['recording']['ArchiveSourceYNFlag'] == 'N')
+						{
+							$form['button_group']['save'] = array(
+					    		'#type' => 'submit',
+					    		'#value' => t('<<< Save and Back'),
+					    		'#submit' => array('bbm_agent_auditing_form_save_back'),
+							);	
+						}
+						else
+						{
+							unset($form['button_group']);
+						} 
+					}
+					break;
+			}
+			break;
+	}
+	
+	//drupal_set_message('<pre>'.print_r($form_state['auditor']['values']['recording'], true).'</pre>');
+	
+	return $form;
+}
+
+/*
+ * return to search results
+ */
+function bbm_agent_auditing_form_return_search_result($form, &$form_state)
+{
+	//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+	$form_state['storage']['step'] = 2;
+	$form_state['storage']['values'][1]['clicked_button']['#id'] = 'edit-searchdetails';
+}
+
+/*
+ * auditor save and back
+ */
+function bbm_agent_auditing_form_save_back($form, &$form_state)
+{
+	$sp_params[] = array(
+		'name' => 'WorkQueueID', 
+		'value' => $form_state['values']['workqueueid'],
+		'type' => SQLINT4,
+		'length' => 30,
+	);
+	$sp_params[] = array(
+    	'name' => 'LanguageCd_Auditor',
+    	'value' => $form_state['values']['language'],
+    	'type' => SQLCHAR,
+    	'length' => 1
+	);
+	$sp_params[] = array(
+		'name' => 'GenderCd_Auditor', 
+		'value' => $form_state['values']['gender'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+		'name' => 'AuditorID', 
+		'value' => $_SESSION['AgentID'],
+		'type' => SQLINT1,
+		'length' => 4,
+	);
+	$sp_params[] = array(
+		'name' => 'NoTalkYNFlag', 
+		'value' => $form_state['values']['attributes'] == 1 ? 'Y' : 'N',
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params[] = array(
+    	'name' => 'AuditorNotes',
+    	'value' => '',
+    	'type' => SQLVARCHAR,
+    	'length' => 500
+	);
+	$sp_params[] = array(
+		'name' => 'ReviewResultTypeString', 
+		'value' => $form_state['values']['attributes'],
+		'type' => SQLVARCHAR,
+		'length' => 100,
+	);
+	
+	/*
+	 *  debugging
+	 */
+	//drupal_set_message('<pre>'.print_r($sp_params, true).'</pre>');
+
+
+	if($result = bbm_agent_db_query(null, 'dbo.bbmsp_upd_WorkQueueAuditorResults', $sp_params))
+	{
+		drupal_set_message('Recording ' . $form_state['values']['workqueueid'] . ' processed successfully.');
+	}
+	else
+	{
+		drupal_set_message('Recording ' . $form_state['values']['workqueueid'] . ' NOT processed.', 'error');
+	}
+
+	//drupal_set_message('<pre>'.print_r($form_state['storage']['values'][1]['RecordingAuditorMultiple'], true).'</pre>');
+	if(is_numeric($form_state['clicked_button']['#name']))
+	{
+		/*
+		 * go to next recording
+		 */
+		$form_state['storage']['step'] = 2;
+		$form_state['storage']['values'][1]['RecordingAuditorMultiple'][$form_state['values']['workqueueid']]['AuditorCompleteUTCDtm'] = gmdate('F d Y h:iA');
+		return;
+	}
+	
+	if($form_state['clicked_button']['#name'] == 'backtolist')
+	{
+		/*
+		 * go back to list of recordings
+		 */
+		bbm_agent_auditing_form_return_search_result($form, $form_state);
+		return;
+	}
+	
+	/*
+	 * go back to search form
+	 */
+	$form_state['storage']['step'] = 1;
+	unset($form_state['storage']['values'][1]['RecordingAuditorMultiple']);
+	unset($form_state['storage']['values'][1]['WorkQueueIDs']);
+
+}
+
+/*
+ * bbm agent validate
+ */
+function bbm_agent_auditing_form_validate($form, &$form_state)
+{
+	//drupal_set_message('<pre>'.print_r($sp_params, true).'</pre>');
+}
+
+/*
+ * common submit function for bbm_agent_auditing_form
+ */
+function bbm_agent_auditing_form_submit($form, &$form_state){
+
+	//drupal_set_message('<pre>'.print_r($form_state['clicked_button']['#id'], true).'</pre>');
+	/*
+	 * show multiple rows of recordings
+	 */
+	if ($form_state['clicked_button']['#id'] == 'edit-searchdetails' || $form_state['clicked_button']['#id'] == 'edit-next-page' || $form_state['clicked_button']['#id'] == 'edit-prev-page')
+	{	 
+		
+		(isset($form_state['storage']['values'][1]) ? null : $form_state['storage']['values'][1] = $form_state['values']);
+		
+		if(empty($form_state['storage']['values'][1]['fromdate']))
+		{
+			form_error($form['details']['fromdate'], 'From Date is requiered');
+			return;
+		}
+		if(empty($form_state['storage']['values'][1]['todate']))
+		{
+			form_error($form['details']['todate'], 'To Date is requiered');
+			return;
+		}
+		if(!empty($form_state['storage']['values'][1]['agentid']) && !is_numeric($form_state['storage']['values'][1]['agentid']))
+		{
+			form_error($form['details']['agentid'], 'Agent ID must be a number');
+			return;
+		}
+
+		if(!count(form_get_errors()))
+		{
+		
+			
+		
+			$sp_params = array();
+			$sp_params[] = array(
+	    		//'name' => 'AgentCompleteUTCDtmStart',
+	    		'name' => 'HubSubmissionCreatedUTCDtmStart',
+	    		'value' => $form_state['storage']['values'][1]['fromdate'],
+	    		'type' => SQLVARCHAR,
+	    		'length' => 30
+			);
+			$sp_params[] = array(
+	    		//'name' => 'AgentCompleteUTCDtmEnd',
+				'name' => 'HubSubmissionCreatedUTCDtmEnd',
+	    		'value' => $form_state['storage']['values'][1]['todate'],
+	    		'type' => SQLVARCHAR,
+	    		'length' => 30
+			);
+			if($form_state['clicked_button']['#id'] == 'edit-next-page')
+			{
+				
+				$sp_params['StartListUTCDtm'] = array(
+					'name' => 'StartListUTCDtm',
+		    		'value' => date("M d Y h:i:s a", strtotime($form_state['storage']['values'][$form_state['storage']['values'][1]['page'] + 1]['StartListUTCDtm'])),
+		    		'type' => SQLVARCHAR,
+		    		'length' => 30
+				);
+
+				//drupal_set_message('<pre>'.print_r($form_state['storage']['values'][1]['page'], true).'</pre>');
+			}
+			elseif($form_state['clicked_button']['#id'] == 'edit-prev-page')
+			{
+				$sp_params['StartListUTCDtm'] = array(
+					'name' => 'StartListUTCDtm',
+		    		'value' => $form_state['storage']['values'][$form_state['storage']['values'][1]['page'] - 1]['StartListUTCDtm'],
+		    		'type' => SQLVARCHAR,
+		    		'length' => 30
+				);
+				
+				//drupal_set_message('<pre>'.print_r($sp_params['StartListUTCDtm']['value'], true).'</pre>');
+			}
+			$sp_params[] = array(
+	    		'name' => 'NumberOfRecordsToReturn',
+	    		'value' => 50,
+	    		'type' => SQLINT2,
+	    		'length' => 2
+			);
+	
+			if($form_state['storage']['values'][1]['recordingtype']):
+				$sp_params[] = array(
+		    		'name' => 'RecordingTypeId',
+		    		'value' => $form_state['storage']['values'][1]['recordingtype'],
+		    		'type' => SQLINT1,
+		    		'length' => 1
+				);
+			endif;
+			if($form_state['storage']['values'][1]['brand']):
+				$sp_params[] = array(
+		    		'name' => 'IVRBrandId',
+		    		'value' => $form_state['storage']['values'][1]['brand'],
+		    		'type' => SQLCHAR,
+		    		'length' => 3
+				);
+			endif;
+			if($form_state['storage']['values'][1]['language'][1]):
+				$sp_params[] = array(
+		    		'name' => 'LanguageCd_Agent1',
+		    		'value' =>$form_state['storage']['values'][1]['language'][1],
+		    		'type' => SQLCHAR,
+		    		'length' => 1
+				);
+			endif;
+			if($form_state['storage']['values'][1]['language'][2]):
+				$sp_params[] = array(
+		    		'name' => 'LanguageCd_Agent2',
+		    		'value' => $form_state['storage']['values'][1]['language'][2],
+		    		'type' => SQLCHAR,
+		    		'length' => 1
+				);
+			endif;
+			if(strlen($form_state['storage']['values'][1]['ani'])):
+				$sp_params[] = array(
+		    		'name' => 'IVRCallerANI',
+		    		'value' => $form_state['storage']['values'][1]['ani'],
+		    		'type' => SQLVARCHAR,
+		    		'length' => 22
+				);
+			endif;
+			if(is_numeric($form_state['storage']['values'][1]['agentid'])):
+				$sp_params[] = array(
+		    		'name' => 'AgentID',
+		    		'value' => $form_state['storage']['values'][1]['agentid'],
+		    		'type' => SQLINT4,
+		    		'length' => 2
+				);
+			endif;
+			/*
+			if(strlen($form_state['storage']['values'][1]['result'])):
+				$sp_params[] = array(
+		    		'name' => 'ReviewResultTypeId_Agent',
+		    		'value' => $form_state['storage']['values'][1]['result'],
+		    		'type' => SQLCHAR,
+		    		'length' => 1
+				);
+			endif;
+			*/
+			if(strlen($form_state['storage']['values'][1]['result'])):
+				$sp_params[] = array(
+		    		'name' => 'HubAction',
+		    		'value' => $form_state['storage']['values'][1]['result'],
+		    		'type' => SQLCHAR,
+		    		'length' => 1
+				);
+			endif;
+			if(strlen($form_state['storage']['values'][1]['site'])):
+				$sp_params[] = array(
+		    		'name' => 'SiteId',
+		    		'value' => $form_state['storage']['values'][1]['site'],
+		    		'type' => SQLINT1,
+					'length' => 1
+				);
+			endif;
+			
+			/**
+			 * debug
+			 */
+			//drupal_set_message('<pre>'.print_r($sp_params, true).'</pre>'); 	
+			
+			
+			
+			$form_state['storage']['values'][1]['page'] ? null : $form_state['storage']['values'][1]['page'] = 1;
+			$form_state['storage']['values'][1]['StartListUTCDtm'] = $form_state['storage']['values'][1]['fromdate'];
+			
+			$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_RecordingAuditorMultiple', $sp_params);
+			if($form_state['storage']['values'][1]['count'] = mssql_num_rows($result))
+			{
+				/*
+				 * increase or decrease page number
+				 */
+				if($form_state['clicked_button']['#id'] == 'edit-next-page')
+				{
+					$form_state['storage']['values'][1]['page'] += 1;
+				}
+				if($form_state['clicked_button']['#id'] == 'edit-prev-page')
+				{
+					$form_state['storage']['values'][1]['page'] -= 1;
+				}
+			
+				while($recording = mssql_fetch_array($result))
+				{
+					$recordings[$recording['WorkQueueID']] = $recording;
+					$WorkQueueID[] = $recording['WorkQueueID'];
+					
+					// REMEMBER LAST RECORD IN PAGE
+					//$form_state['storage']['values'][$form_state['storage']['values'][1]['page'] + 1]['StartListUTCDtm'] = ($recording['AuditorCompleteUTCDtm'] ? $recording['AuditorCompleteUTCDtm'] : $recording['AgentCompleteUTCDtm']);
+					$form_state['storage']['values'][$form_state['storage']['values'][1]['page'] + 1]['StartListUTCDtm'] = $recording['HubSubmissionCreatedUTCDtm'];
+				}
+				//drupal_set_message('<pre>'.print_r($form_state['storage']['values'][$form_state['storage']['values'][1]['page'] + 1]['StartListUTCDtm'], true).'</pre>'); 
+				$form_state['storage']['values'][1]['RecordingAuditorMultiple'] = $recordings;
+				$form_state['storage']['values'][1]['WorkQueueIDs'] = $WorkQueueID;
+								
+			}
+			else
+			{
+				if($form_state['clicked_button']['#id'] == 'edit-next-page')
+				{
+					drupal_set_message('No more records', 'error');
+				}
+				else
+				{
+					form_set_error('', 'No record was found.');
+				}
+			}
+			
+		}
+		
+		// stay in step 2
+		$form_state['storage']['step'] = 2;
+		$form_state['storage']['values'][1]['clicked_button']['#id'] = $form_state['clicked_button']['#id'];
+		
+	}
+
+	/*
+	 * show single recording to be monitored or audited
+	 * Happens when 
+	 * - they click the "Audit" button for a specific recording in the list after doing a search for multiple recordings or
+	 * - they input a recoding id in the Message ID field and click Search Id button
+	 */
+	if ($form_state['clicked_button']['#id'] == 'edit-searchid')
+	{
+		if(empty($form_state['values']['mid']))
+		{
+			form_error($form['messageid']['mid'], 'MessageID is requiered');
+			return;
+		}
+		if(!is_numeric($form_state['values']['mid']))
+		{
+			form_error($form['messageid']['mid'], 'MessageID must be a number');
+			return;
+		}
+
+		$sp_params['WorkQueueID'] = array(
+    		'name' => 'WorkQueueID',
+    		'value' => $form_state['values']['mid'],
+    		'type' => SQLCHAR,
+    		'length' => 30
+		);
+		
+		$sp_params[] = array(
+			'name' => 'AuditorID', 
+			'value' => $_SESSION['AgentID'],
+			'type' => SQLINT1,
+			'length' => 4,
+		);
+
+//		$sp_params[] = array(
+//			'name' => 'ArchiveSourceYNFlag', 
+//			'value' => null,
+//			'type' => SQLCHAR,
+//			'length' => 1,
+//		);
+		
+		if($result = bbm_agent_db_query(null, 'dbo.bbmsp_get_RecordingAuditorSingleArchive', $sp_params))
+		{
+			if($recording = mssql_fetch_array($result))
+			{
+				$form_state['auditor']['values']['recording'] = $recording;
+				$form_state['auditor']['values']['WorkQueueID'] = $form_state['values']['mid'];
+				
+				$form_state['auditor']['values']['Gender'] = $recording['GenderCd_Auditor'] ? $recording['GenderCd_Auditor'] : $recording['GenderCd_Agent'];
+				$form_state['auditor']['values']['Language'] = $recording['LanguageCd_Auditor'] ? $recording['LanguageCd_Auditor'] : $recording['LanguageCd_Agent'];
+				$form_state['auditor']['values']['Attribute'] = $recording['ReviewResultIdsCsvString_Auditor'] ? $recording['ReviewResultIdsCsvString_Auditor'] : ($recording['ReviewResultIdsCsvString_Agent'] ? $recording['ReviewResultIdsCsvString_Agent'] : $recording['ReviewResultIdsCsvString_Automator']);
+			}
+			else
+			{
+				form_error($form['messageid']['mid'], 'No record was found.');
+			}
+		}
+		else
+		{
+			drupal_set_message('Cannot open recording #' . $form_state['values']['mid'], 'error');
+			drupal_set_message('Sproc "dbo.bbmsp_get_RecordingAuditorSingleArchive" did not execute properly', 'error');
+			drupal_goto('bbm/auditing');
+			exit();
+		}
+		
+		$form_state['storage']['step'] = 2;
+		$form_state['storage']['values'][1]['clicked_button']['#id'] = 'edit-searchid';
+	}
+
+	//save the values for the current step into the storage array
+	//$form_state['storage']['values'][$form_state['storage']['step']] = $form_state['values'];
+	//$form_state['storage']['values'][$form_state['storage']['step']]['clicked_button']['#id'] = $form_state['clicked_button']['#id'];
+
+	// New Search button was clicked
+	if ($form_state['clicked_button']['#id'] == 'edit-new-search')
+	{
+		$form_state['storage']['step'] = 1;
+	}
+
+	//drupal_set_message('<pre>'.print_r($form_state['clicked_button']['#id'], true).'</pre>');
+
+}
+
+/**
+ * general trim function to trim white spaces from textfield fields
+ */
+function bbm_agent_validate_trim($element, &$form_state){
+
+	$form_state['values'][$element['#name']] = trim($element['#value']);
+
+	//drupal_set_message('<pre>'.print_r($element, true).'</pre>');
+}
+
+
+
+
+/**********************************
+ * THEME FUNCTIONS
+ ********************************/
+
+/*
+ * theme bbm_agent_auditor_recording_list
+ */
+function theme_bbm_agent_auditor_recording_list($form)
+{
+	$output  = '';
+	$rows = array();
+	foreach((array)$form['#value'] as $recording)
+	{
+		$form['edit_recording_' . $recording['WorkQueueID']] = array(
+			'#type' => 'submit',
+			'#value' => t('Audit'),
+			'#name' => $recording['WorkQueueID'],
+		);
+
+		$rows[] = array(
+			(strlen($recording['AuditorCompleteUTCDtm']) ? theme('image', drupal_get_path('module', 'bbm_agent') . '/images/tick.png', $recording['AuditorCompleteUTCDtm'], $recording['AuditorCompleteUTCDtm']) : 'N'),
+			$recording['WorkQueueID'],
+			$recording['AgentName'] ? $recording['AgentName'] : 'Automator',
+			$recording['RecordingTypeDescription'],
+			//$recording['AgentID'],
+			$recording['IVRBrandDescription'],
+			($recording['LanguageName_Auditor'] ? $recording['LanguageName_Auditor'] : ($recording['LanguageName_Agent'] ? $recording['LanguageName_Agent'] : $recording['LanguageName_Automator'])),
+			($recording['ReviewResultTypeDescription_Auditor'] ? $recording['ReviewResultTypeDescription_Auditor'] : $recording['ReviewResultTypeDescription_Agent']),
+			$recording['SiteDescription'],
+			//($recording['AuditorCompleteUTCDtm'] ? $recording['AuditorCompleteUTCDtm'] : $recording['AgentCompleteUTCDtm']),
+			date("M d Y h:i:s a", strtotime($recording['HubSubmissionCreatedUTCDtm'])),
+			drupal_render($form['edit_recording_' . $recording['WorkQueueID']])
+		);
+	}
+
+	$_SESSION['lastworkqueueid'] = $recording['WorkQueueID'];
+
+	$headers = array(
+		'Audited', 
+		'Message ID', 
+		'Reviewer Name', 
+		'Recording Type', 
+		//'Agent ID',
+		'Brand', 
+		'Language', 
+		'Result', 
+		'Site', 
+		'Captured Time',
+		'Options'
+	);
+	
+	$output .= theme('table', $headers, $rows, array('width' => '100%'));
+	$output .= drupal_render($form);
+	
+	//drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+	
+	return $output;
+}
+
+/*
+ * theme agent list
+ */
+function theme_bbm_agent_agents_list($form)
+{
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/jquery.tablesorter.min.js');
+	drupal_add_js('
+		$(document).ready(function() 
+		    { 
+		        $("#usersTable").tablesorter( {
+		        	sortList: 	[[0,0], [1,0], [2,0], [3,0]],
+		        	headers:	{4:{sorter:false}}
+				}); 
+		    } 
+		);
+	', 'inline');
+		
+	$header = array(
+		'User ID', 
+		'User Name', 
+		'Access Type', 
+		'Last Login', 
+		array(
+			'data' => '',
+			'class' => 'nosort',
+		)
+	);
+
+	$rows = array();
+	foreach((array)$form['agents']['#value'] as $a)
+	{
+		$sp_params = array();
+		$sp_params['AgentID'] = array(
+			'name' => 'AgentID', 
+			'value' => $a['AgentID'],
+			'type' => SQLINT1,
+			'length' => 1,
+		);
+		$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_Agent', $sp_params);
+		$agent = mssql_fetch_array($result);
+		
+		/**
+		 * show basic permissions
+		 */
+		if($agent['AgentAdministratorYNFlag'] == 'Y')
+		{
+			$accesstype = 'Administrator';
+		}
+		elseif($agent['AgentAuditorYNFlag'] == 'Y')
+		{
+			$accesstype = 'Auditor';
+		}
+		else
+		{
+			$accesstype = 'Agent';
+		}
+		
+		/**
+		 * show superuser role if any
+		 */
+		if($agent['AgentSuperUserYNFlag'] == 'Y')
+		{
+			$accesstype .= ', Config';
+		}
+		
+		/**
+		 * show supervisor status if any
+		 */
+		if($agent['AgentSupervisorYNFlag'] == 'Y')
+		{
+			$accesstype .= ', Supervisor';
+		}
+
+		// build agent row
+		$rows[] = array(
+			'data' => array(
+				$agent['AgentLogin'],
+				$agent['AgentLastName'].', '.$agent['AgentFirstName'],
+				$accesstype,
+				$agent['AgentLastLoginUTCDtm'],
+				array(
+					'data' => drupal_render($form[$a['AgentID']]),
+					'align' => 'right'
+				)
+			),
+		);
+	}
+	
+	$output .= theme('table', $header, $rows, array('width' => '100%', 'class' => 'tablesorter', 'id' => 'usersTable'));
+	//$output .= drupal_render($form);
+
+	return $output;
+}
+
+/*
+ * theme function theme_bbm_agent_user_stats
+ */
+function theme_bbm_agent_recording_stats($form)
+{
+	$output = '';
+
+	$items[]['title'] = 'Message ID: ' . $form['#value']['WorkQueueID'];
+	$items[]['title'] = 'Brand: ' . $form['#value']['IVRBrandDescription'];
+	$items[]['title'] = 'Gender: ' . $form['#value']['GenderCd_IVR'];
+	
+	/*
+	$items[]['title'] = 'Gender: ' . ($form['#value']['GenderDescription_Auditor'] ? 
+									$form['#value']['GenderDescription_Auditor'] : 
+									($form['#value']['GenderDescription_Agent'] ? 
+									$form['#value']['GenderDescription_Agent'] : 
+									($form['#value']['GenderDescription_Automator'] ? 
+									$form['#value']['GenderDescription_Automator'] : 
+									$form['#value']['GenderCd_IVR'])) );
+	*/
+	
+	$items[]['title'] = 'Caller Type: ' . $form['#value']['IVRCallerTypeCd'] . ' - ' . $form['#value']['IVRCallerTypeDescription'];
+	$items[]['title'] = 'Hub: ' . $form['#value']['IVRHubFullName'];
+	$items[]['title'] = 'ANI: ' . $form['#value']['IVRCallerANI'];
+	$items[]['title'] = 'Membership Number: ' . $form['#value']['IVRAccountNumber'];
+	$items[]['title'] = 'Recording Type: ' . $form['#value']['RecordingTypeId'] . ' - ' . $form['#value']['RecordingTypeDescription'];
+
+	$output  = theme('links', $items);
+	$output .= drupal_render($form);
+
+	//drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+
+	return $output;
+}
+
+/*
+ * theme function for paging results for ReviewResultAuditorMultiple
+ */
+function theme_bbm_agent_auditor_multiple_paging($form)
+{
+	$output = '';
+	
+	$cells[] = 'Date time range: ' . $form['time_range']['#value'];
+	( $form['count']['#value'] ? $cells[] = 'Record count: ' . $form['count']['#value'] : null );
+	$cells[] = 'Page number: ' . $form['page']['#value'];	
+	$cells[] = array('data' => drupal_render($form['new_search']), 'align' => 'right', 'width' => '50%');	
+	
+	unset($form['time_range']);
+	unset($form['count']);
+	unset($form['page']);
+	
+	$output .= theme('table', array(), array($cells), array('class' => 'white-table', 'width' => '100%'));
+	$output .= drupal_render($form);
+
+	return $output;
+}
+
+
+/*
+ * theme function for auditing single recording
+ */
+function theme_bbm_agent_recording_auditor_columns($form)
+{	
+	$output = '';
+
+	foreach($form as $key => $value)
+	{
+		if($value['#type'] == 'radios')
+		{
+			$form[$key]['#type'] = 'select';
+		}
+	}
+	
+	$headers = array('', '', 'Automator', 'Agent', 'Auditor');
+
+	$rows = array();
+	//$rows[] = array('Message ID:', 			$form['auditor']['#value']['WorkQueueID'], '', '', '');
+	$rows[] = array('Agent Name:', 			'', 'Automator', $form['auditor']['#value']['AgentName'], $form['auditor']['#value']['AuditorName']);
+	$rows[] = array('Captured Date Time:',	$form['auditor']['#value']['HubSubmissionCreatedUTCDtm'], '', '', '');
+	$rows[] = array('Review Start Time:',	'', $form['auditor']['#value']['AutomatorPickupUTCDtm'], $form['auditor']['#value']['AgentPickupUTCDtm'], $form['auditor']['#value']['AuditorPickupUTCDtm']);
+	$rows[] = array('Review End Time:',		'', $form['auditor']['#value']['AutomatorCompleteUTCDtm'], $form['auditor']['#value']['AgentCompleteUTCDtm'], $form['auditor']['#value']['AuditorCompleteUTCDtm']);
+	//$rows[] = array('Non-Talk:', 			'', '', '', drupal_render($form['non_talk']));
+	$form['gender']['#title'] = null;
+	$rows[] = array('Gender:',				'', $form['auditor']['#value']['GenderDescription_Automator'], $form['auditor']['#value']['GenderDescription_Agent'], drupal_render($form['gender']));
+	$form['language']['#title'] = null;
+	$rows[] = array('Language:', 			'', $form['auditor']['#value']['LanguageName_Automator'], $form['auditor']['#value']['LanguageName_Agent'], drupal_render($form['language']));
+	$form['attributes']['#title'] = null;
+	$rows[] = array('Review Result:', 		'', $form['auditor']['#value']['ReviewResultTypeDescription_Automator'], $form['auditor']['#value']['ReviewResultTypeDescription_Agent'], drupal_render($form['attributes']));
+	
+	/*
+	 * Display ReviewResultIdsCsvString attributes
+	 */
+	// SELECT ReviewResultTypeDescription FROM ReviewResultType WHERE ReviewResultTypeId = 13
+	// bbm_agent_db_query("SELECT ReviewResultTypeDescription FROM ReviewResultType WHERE ReviewResultTypeId = 13");
+	// mssql_fetch_array($result);
+	// mssql_result($result) ;
+	$rows[] = array(
+		'Attribute:', 			
+		'',
+		$form['auditor']['#value']['ReviewResultTypeDescription_AutomatorAttribute'], 
+		$form['auditor']['#value']['ReviewResultTypeDescription_AgentAttribute'], 
+		'',//$form['auditor']['#value']['ReviewResultTypeDescription_Auditor']
+	);
+
+	$formattedrows = array();
+	foreach($rows as $value)
+	{
+		$value[0] = array('data' => $value[0], 'class' => 'field-title-auditor');
+		$formattedrows[] = $value;
+	}
+	
+	$output .= theme('table', $headers, $formattedrows, array('id' => 'auditor-recording-table'));
+
+	//drupal_set_message('<pre>'.print_r($form['auditor']['#value'], true).'</pre>');
+	//$form['#description'] = '';
+	//$output .= drupal_render($form);
+
+	return $output;
+}
+
+/*
+ * theme function bbm_agent_work_queue_status for dashboard page
+ */
+function theme_bbm_agent_work_queue_status($form)
+{
+	$output  = '<h1>' . $form['#title'] . '</h1>';
+	/*	
+	$rectypes = array();
+	$rectypes['Queue Total'] = 0;
+	$result = bbm_agent_db_query(" SELECT * FROM dbo.RecordingType ");
+	while($rectype = mssql_fetch_array($result))
+	{
+		$rectypes[$rectype['RecordingTypeDescription']] = 0;
+	}
+	
+	$recstatuses = array();
+	$result = bbm_agent_db_query(" SELECT * FROM dbo.RecordingStatus ");
+	while($recstatus = mssql_fetch_array($result))
+	{
+		if(in_array($recstatus['RecordingStatusId'], array(1,2,3,5,6,9,10)))
+		{
+			$recstatuses[$recstatus['RecordingStatusDescription']] = array($recstatus['RecordingStatusDescription']) + (array)$rectypes;	
+		}		
+	}
+	
+	$form['#value'] = bbm_agent_db_query(null, 'dbo.bbmsp_get_WorkQueueStatus')
+	while($element = mssql_fetch_array($form['#value']))
+	{
+		$recstatuses[$element['RecordingStatusDescription']][$element['RecordingTypeDescription'] ? $element['RecordingTypeDescription'] : 'Queue Total'] = array('data' => $element['Cnt']);
+	}
+	*/
+	
+	$rectypes = array();
+	$alldata = array();
+	$rows = array();
+	$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_WorkQueueStatus');
+	while($element = mssql_fetch_array($result))
+	{
+		$rectype = (is_null($element['RecordingTypeDescription']) ? 'Total' : $element['RecordingTypeDescription']);
+		$alldata[$element['RecordingStatusDescription']][$rectype] = $element['Cnt'];
+		$rectypes[] = $rectype;
+	}
+	$rectypes = array_unique($rectypes);
+	foreach($rectypes as $type)
+	{
+		$row['type'] = $type;
+		foreach($alldata as $key => $value)
+		{
+			$row[$key] = (isset($value[$type]) ? $value[$type] : 0);
+		}
+		$rows[] = $row;
+	}
+	$rows = array_reverse($rows);
+	$totals = array_pop($rows);
+	$rows[] = array(
+		'data' => $totals,
+		'style' => 'font-weight:bold; border-top:2px solid #000;',
+	);
+	$output .= theme('table', array_merge(array('Recording Type'), (array)array_keys($alldata)), $rows, array( 'width' => '100%' ));
+
+	return $output;
+}
+
+/*
+ * theme bbm_agent_recording_type_status for dashboard screen
+ */
+function theme_bbm_agent_recording_type_status($form)
+{
+	$output  = '<h1>' . $form['#title'] . '</h1>';
+	
+	//TODO: user $form['#value'] with foreach to create rows
+	$rows = array();
+	$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_RecordingTypeStatus');
+	if(mssql_num_rows($result))
+	{
+		while($element = mssql_fetch_array($result))
+		{
+			$rows[]= array(
+				'data' => array(
+					isset($element['RecordingTypeDescription']) ? $element['RecordingTypeDescription'] : '-',
+					isset($element['Cnt']) ? $element['Cnt'] : 0,
+					isset($element['AutomatorOldest']) ? $element['AutomatorOldest'] : '-',
+					isset($element['AutomatorAverageSec']) ? $element['AutomatorAverageSec'] : 0,
+					isset($element['AgentOldest']) ? $element['AgentOldest'] : '-',
+					isset($element['AgentAverageSec']) ? $element['AgentAverageSec'] : 0,
+				)
+			);
+		}
+		$headers = array('Recording Type', 'Queue Total', 'Automator Oldest', 'Automator Avg Lag', 'Agent Oldest', 'Agent Avg Lag');
+		$output .= theme('table', $headers, $rows, array( 'width' => '100%' ));
+	}
+	else
+	{
+		$output .= 'No info at the moment.';
+	}
+	
+	//$output .= '<pre>' . print_r($rows, true) . '</pre>';
+	return $output;
+}
+
+/*
+ * theme bbm_agent_result_summary for dashboard screen
+ */
+function theme_bbm_agent_result_summary($form)
+{	
+	//TODO: user $form['#value'] with foreach to create rows
+	$rows = array();
+	$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_ResultSummary');
+	if(mssql_num_rows($result))
+	{
+		while($element = mssql_fetch_assoc($result))
+		{
+			$rows[]= $element;
+		}
+		$headers = array_keys($rows[key($rows)]);
+		$output .= theme('table', $headers, $rows, array( 'width' => '100%' ));
+	}
+	else
+	{
+		$output .= 'No info at the moment.';
+	}
+	
+	//$output .= '<pre>' . print_r($rows, true) . '</pre>';
+	return $output;
+}
+
+/*
+ * theme bbm_agent_agent_summary_status for dashboard screen
+ */
+function theme_bbm_agent_agent_summary_status($form)
+{
+	$output  = '<h1>' . $form['#title'] . '</h1>';
+	
+	//TODO: user $form['#value'] with foreach to create rows
+	$rows = array();
+	$sp_param[] = array(
+		'name' => 'NumberOfMin', 
+		'value' => 15,
+		'type' => SQLINT2,
+		'length' => 2,
+	);
+	$result = bbm_agent_db_query(null, 'dbo.bbmsp_get_AgentSummaryStatus', $sp_param);
+	if($element = mssql_fetch_array($result))
+	{
+		$rows[] = array('Active Agents', $element['ActiveAgentsCnt'] ? $element['ActiveAgentsCnt'] : 0);
+		$rows[] = array('Agent Actions (15 mins)', $element['AgentActionsCnt'] ? $element['AgentActionsCnt'] : 0);
+		$rows[] = array('Average handle time (secs)', $element['AverageHandleTimeInSec'] ? $element['AverageHandleTimeInSec'] : 0);
+		
+		$headers = array('Agent Metric', 'Value');
+		$output .= theme('table', $headers, $rows, array( 'width' => '100%' ));
+	}
+	else
+	{
+		$output .= 'No info at the moment.';
+	}
+	
+	//$output .= '<pre>' . print_r($rows, true) . '</pre>';
+	return $output;
+}
+
+
+/*
+ * theme bbm_agent_performance 
+ */
+function theme_bbm_agent_performance($form)
+{
+	$output  = '<h1>' . $form['#title'] . '</h1>';
+	
+	//TODO: user $form['#value'] with foreach to create rows
+	$rows = array();
+	if(mssql_num_rows($form['#value']))
+	{
+		while($element = mssql_fetch_array($form['#value']))
+		{
+			$rows[]= array(
+				'data' => array(
+					$element['AgentActive'],
+					$element['AgentName'],
+					//$element['FirstSessionStart'],
+					$element['SessionStart'],
+					//$element['LastSessionEnd'],
+					$element['SessionEnd'],
+					//$element['MinuteCnt'],
+					$element['ReviewDurationSec'],
+					$element['RecordingCnt'],
+					$element['AHT'],
+				)
+			);
+		}
+		$headers = array('', 'Agent Name', 'First Login', 'Last Login', 'Minutes', 'Reviewed', 'AHT (sec.)');
+		$output .= theme('table', $headers, $rows, array( 'width' => '100%' ));
+	}
+	else
+	{
+		$output .= 'No info at the moment.';
+	}
+	
+	//$output .= '<pre>' . print_r($rows, true) . '</pre>';
+	return $output;
+}
+
+/*
+ * theme language selectin boxes for auditing screen
+ */
+function theme_bbm_agent_language_selection_boxes($form)
+{
+	$output = '';
+	$rows = $cells = array();
+
+	$form['#title'] = '';
+	$cells[] = drupal_render($form);
+	$rows[] = $cells;
+	$output .= theme('table', array(''), $rows, array('id' => 'language-selection-boxes-table'));
+	
+	return $output;
+}
+
+/*
+ * theme_bbm_agent_agents_user_preferences_form
+ * bbm_agent_agents_user_preferences_form
+ * user administration screen
+ */
+function theme_bbm_agent_agents_user_preferences_form($form)
+{
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') .'/bbm_agent-style.css');
+	$output = '';
+	
+	foreach(element_children($form) as $key)
+	{
+		$title = $form[$key]['#title'];
+		$form[$key]['#title'] = '';
+		$rows[] = array(
+			array('data' => $title, 'valign' => 'top', 'class' => 'bold'), 
+			drupal_render($form[$key]));
+	}
+	$output .= theme('table', array('',''), $rows, array('class' => 'white-table'));
+	$output .= drupal_render($form);
+	return $output;
+}
+
+/*
+ * theme function for button group in auditor single recording screen
+ */
+function theme_bbm_agent_bottom_button_group($form)
+{
+	$output = '';
+	
+	$row = array();
+	$row[] = array('data' => drupal_render($form['search_results']).drupal_render($form['prev_rec']));
+	$row[] = array('data' => drupal_render($form['next_rec']).drupal_render($form['save']), 'align' => 'right');
+	$output .= theme('table', array(), array($row), array('width' => '100%', 'class' => 'white-table'));
+	$output .= drupal_render($form);
+	
+	return $output;
+}

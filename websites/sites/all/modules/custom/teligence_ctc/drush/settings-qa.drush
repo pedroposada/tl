@@ -1,0 +1,20 @@
+#!/usr/bin/env drush php-script
+
+<?php
+
+if(module_exists('teligence_ctc'))
+{
+	// WAPID wsdl
+	variable_set('teligence_ctc_soap_wsdl_1', 'http://ws.wswap.alldir.net/WapWcfService/ServiceWeb.svc?wsdl');
+
+	//
+	variable_set('teligence_ctc_destination_cid', 'PASSTHROUGH');
+	
+	// 
+	variable_set('teligence_ctc_time_limit', '600');
+	
+	// click to call server 
+	variable_set('teligence_ctc_url','http://voice2.f8.teligence.net/callmenow/CallMeNow.php');
+
+	drupal_set_message('Settings Variables were set successfully.');
+}

@@ -1,0 +1,194 @@
+<?php
+// $Id: teligence_secure.module,v 1.15.2.22 2009/05/03 23:00:18 gordon Exp $
+/**
+ * @file
+ * Provide method of creating allowing certain pages to only viewable from
+ * https pages
+ */
+
+/**
+ * Implementation of hook_init().
+ */
+function teligence_secure_init() 
+{
+  if (variable_get('teligence_secure_enable', 0) && basename($_SERVER['PHP_SELF']) == 'index.php') 
+  {
+    teligence_secure_redirect();
+  }  
+
+  /**
+   * If we have redirected in the hook_boot(). Then don't try to redirect
+   * again. This will prevent a loop
+   */
+  /*
+  if (!isset($_SESSION['teligence_secure_redirect'])) 
+  {
+    teligence_secure_redirect();
+  }
+  else 
+  {
+    unset($_SESSION['teligence_secure_redirect']);
+  }
+  */
+  
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function teligence_secure_menu() {
+  $items = array();
+
+  $items['admin/build/teligence_secure'] = array(
+    'title' => 'Teligence Secure Pages',
+    'description' => 'Configure which pages are and are not to be viewed in SSL',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('teligence_secure_settings_form'),
+    'access arguments' => array('administer site configuration'),
+    'type' => MENU_NORMAL_ITEM,
+    'secure' => 1,
+    'file' => 'teligence_secure.admin.inc'
+  );
+
+  return $items;
+}
+
+
+/**
+ * Check the current page and see if we need to redirect to the secure or
+ * insecure version of the page.
+ */
+function teligence_secure_redirect() 
+{
+  $path = isset($_GET['q']) ? $_GET['q'] : '';
+  $page_match = teligence_secure_match($path);
+  
+  //drupal_set_message("teligence_secure_redirect: page_match <pre>" . print_r($page_match, true) . "</pre>");
+  //drupal_set_message("teligence_secure_redirect: teligence_secure_is_secure <pre>" . print_r(teligence_secure_is_secure(), true) . "</pre>");
+  //drupal_set_message("teligence_secure_redirect: teligence_secure_switch <pre>" . print_r(variable_get('teligence_secure_switch', FALSE), true) . "</pre>");
+  //drupal_set_message("teligence_secure_redirect: POST <pre>" . print_r($_POST, true) . "</pre>");
+  
+  if ($page_match && !teligence_secure_is_secure()) 
+  {
+    teligence_secure_goto(TRUE);
+  }
+  elseif ($page_match === 0 && teligence_secure_is_secure() ) 
+  {
+    teligence_secure_goto(FALSE);
+  }
+
+  // Correct the base_url so that everything comes from https.
+  /*
+  if (teligence_secure_is_secure()) {
+    $base_url = teligence_secure_baseurl();
+  }
+  */
+}
+
+/**
+ * securepage_goto()
+ *
+ * Redirects the current page to the secure or insecure version.
+ *
+ * @param $secure
+ *  Determine which version of the set to move to.
+ */
+function teligence_secure_goto($secure) 
+{ 
+  global $base_url;
+	
+  //$_SESSION['teligence_secure_redirect'] = TRUE;
+  $path = !empty($_REQUEST['q']) ? '/' . $_REQUEST['q'] : '';
+  $query = count($_GET) > 1 ?  '?' . teligence_secure_get_query($_GET) : NULL;
+  
+  /*
+   * replace host name and protocol with secure and non-secure base URLs
+   */
+  if($secure)
+  {
+  	$url = 'http://' . variable_get('teligence_secure_basepath_ssl', '') . $path . $query;
+  	$base_url = 'http://' . variable_get('teligence_secure_basepath_ssl', '');
+  }
+  else
+  {
+  	$url = 'http://' . variable_get('teligence_secure_basepath', '') . $path . $query;
+  	$base_url = 'http://' . variable_get('teligence_secure_basepath_ssl', '');
+  }
+  
+  header('Location: '. $url, true, 301);
+  
+  // Make sure the cache is clear so that the next page will not pick up a cached version.
+  cache_clear_all($base_url . request_uri(), 'cache_page');
+  exit();
+}
+
+/**
+ * teligence_secure_match()
+ *
+ * check the page past and see if it should be secure or insecure.
+ *
+ * @param $path
+ *  the page of the page to check.
+ *
+ * @return
+ *  0 - page should be insecure.
+ *  1 - page should be secure.
+ *  NULL - do not change page.
+ */
+function teligence_secure_match($path) {
+  /**
+   * Check to see if the page matches the current settings
+   */
+  $secure = variable_get('teligence_secure_secure', 1);
+  $pages = variable_get('teligence_secure_pages', "node/add*\nnode/*/edit\nuser/*\nadmin*");
+  $ignore = variable_get('teligence_secure_ignore', "*/autocomplete/*\n*/ajax/*");
+
+  if ($ignore) {
+    $regexp = '/^('. preg_replace(array('/(\r\n?|\n)/', '/\\\\\*/', '/(^|\|)\\\\<front\\\\>($|\|)/'), array('|', '.*', '\1'. preg_quote(variable_get('site_frontpage', 'node'), '/') .'\2'), preg_quote($ignore, '/')) .')$/';
+    if (preg_match($regexp, $path)) {
+      return teligence_secure_is_secure() ? 1 : 0;
+    }
+  }
+  if ($pages) {
+    $regexp = '/^('. preg_replace(array('/(\r\n?|\n)/', '/\\\\\*/', '/(^|\|)\\\\<front\\\\>($|\|)/'), array('|', '.*', '\1'. preg_quote(variable_get('site_frontpage', 'node'), '/') .'\2'), preg_quote($pages, '/')) .')$/';
+    $result = preg_match($regexp, $path);
+    if (function_exists('drupal_get_path_alias')) {
+      $path_alias = drupal_get_path_alias($path);
+      $result |= preg_match($regexp, $path_alias);
+    }
+    return !($secure xor $result) ? 1 : 0;
+  }
+  else {
+    return;
+  }
+}
+
+
+
+/**
+ * Check if the current page is SSL
+ */
+function teligence_secure_is_secure() 
+{
+  //drupal_set_message("teligence_secure_is_secure: SERVER <pre>" . print_r($_SERVER, true) . "</pre>");	
+  return ($_SERVER['HTTP_HOST'] == variable_get('teligence_secure_basepath_ssl', '')) ? TRUE : FALSE;
+}
+
+
+
+/**
+ * Return a querystring without the q paramter
+ */
+function teligence_secure_get_query($query) {
+  unset($query['q']);
+  $q = array();
+
+  foreach ($query as $key => $value) {
+    if (is_array($value)) {
+      $value = http_build_query(array($key => $value));
+    }
+    $q[] = drupal_urlencode($key) .'='. drupal_urlencode($value);
+  }
+
+  return implode('&', $q);
+}

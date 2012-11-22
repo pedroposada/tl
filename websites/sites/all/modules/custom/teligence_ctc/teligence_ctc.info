@@ -1,0 +1,11 @@
+; $Id$ 
+name = "Teligence Click to Call"
+description = "Handels click to call functionality."
+package = "Teligence"
+version = "6.0"
+core = "6.x"
+dependencies[] = menu
+dependencies[] = views
+dependencies[] = content
+dependencies[] = locale
+dependencies[] = translation

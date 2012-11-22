@@ -1,0 +1,120 @@
+<?php
+
+function bbm_agent_install() {
+	
+	# create a new menu block 
+	// Add 'menu-' to the menu name to help avoid name-space conflicts.
+  	$path = 'admin/build/menu-customize/';
+    $menu['menu_name'] = 'menu-bbm-login';
+	$menu['description'] = t('BBM Login');
+    $link['link_title'] = $menu['title'] = 'BBM LOGIN';
+    $link['link_path'] = $path . $menu['menu_name'];
+    $link['router_path'] = $path .'%';
+    $link['module'] = 'menu';
+    $link['plid'] = db_result(db_query("SELECT mlid FROM {menu_links} WHERE link_path = '%s' AND module = '%s'", 'admin/build/menu', 'system'));
+    menu_link_save($link);
+	if (db_query("INSERT INTO {menu_custom} (menu_name, title, description) VALUES ('%s', '%s', '%s')", $menu['menu_name'], $menu['title'], $menu['description'])) {
+		drupal_set_message(t('The menu "'.$menu['menu_name'].'" has been added.'));
+	}
+	
+	# create a new menu block 
+	// Add 'menu-' to the menu name to help avoid name-space conflicts.
+  	$path = 'admin/build/menu-customize/';
+    $menu['menu_name'] = 'menu-bbm-tabs';
+	$menu['description'] = t('BBM Tabs');
+    $link['link_title'] = $menu['title'] = 'BBM TABS';
+    $link['link_path'] = $path . $menu['menu_name'];
+    $link['router_path'] = $path .'%';
+    $link['module'] = 'menu';
+    $link['plid'] = db_result(db_query("SELECT mlid FROM {menu_links} WHERE link_path = '%s' AND module = '%s'", 'admin/build/menu', 'system'));
+    menu_link_save($link);
+	if (db_query("INSERT INTO {menu_custom} (menu_name, title, description) VALUES ('%s', '%s', '%s')", $menu['menu_name'], $menu['title'], $menu['description'])) {
+		drupal_set_message(t('The menu "'.$menu['menu_name'].'" has been added.'));
+	}
+	
+	# add a new role 'bbm_agent'
+	if(db_query("INSERT INTO {role} (name) VALUES ('%s')", 'bbm_agent')){
+		drupal_set_message(t('The role "bbm_agent" has been added.'));
+	}
+	
+	# add a new role 'bbm_agent'
+	if(db_query("INSERT INTO {role} (name) VALUES ('%s')", 'bbm_audit')){
+		drupal_set_message(t('The role "bbm_audit" has been added.'));
+	}
+	
+	# add a new role 'bbm_agent'
+	if(db_query("INSERT INTO {role} (name) VALUES ('%s')", 'bbm_admin')){
+		drupal_set_message(t('The role "bbm_admin" has been added.'));
+	}
+	
+	// set front page to login page
+	variable_set('site_frontpage', 'bbm/monitoring');
+	drupal_set_message(t('The front page "site_frontpage" has been set to "bbm/monitoring".'));
+	
+	// set access denied page
+	variable_set('site_403', 'bbm/login');
+	drupal_set_message(t('The 403 page "site_403" has been set to "bbm/login".'));
+	
+	// set theme
+	variable_set('theme_default', 'bluemarine');
+	drupal_set_message(t('The default theme has been set to "bluemarine".'));
+	
+    drupal_set_message('DONT FORGET TO SET <strong>PERMISSIONS</strong>, AND SAVE '.l('SYSTEM VARIABLES', 'admin/settings/bbm'), 'warning');
+
+}
+
+function bbm_agent_uninstall() {
+	
+	# delete menu bbm-login
+	$menu_name = 'menu-bbm-login';
+	$path = 'admin/build/menu-customize/' . $menu_name;
+	$mlid = null;
+	menu_link_delete($mlid, $path);
+	if ($delete = db_result(db_query("SELECT menu_name FROM {menu_custom} WHERE menu_name = '%s'", $menu_name))) {
+		db_query("DELETE FROM {menu_custom} WHERE menu_name = '%s'", $menu_name);
+		drupal_set_message(t('The menu "'.$menu_name.'" has been deleted.'));
+	}
+	
+	# delete menu bbm-tabs
+	$menu_name = 'menu-bbm-tabs';
+	$path = 'admin/build/menu-customize/' . $menu_name;
+	$mlid = null;
+	menu_link_delete($mlid, $path);
+	if ($delete = db_result(db_query("SELECT menu_name FROM {menu_custom} WHERE menu_name = '%s'", $menu_name))) {
+		db_query("DELETE FROM {menu_custom} WHERE menu_name = '%s'", $menu_name);
+		drupal_set_message(t('The menu "'.$menu_name.'" has been deleted.'));
+	}
+	
+	# delete role 'bbm_agent'
+	if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'bbm_agent'))) {
+		$result = db_query("DELETE FROM {role} WHERE rid = %d", $rid);
+	    $result = db_query("DELETE FROM {permission} WHERE rid = %d", $rid);
+	    // Update the users who have this role set:
+	    $result = db_query('DELETE FROM {users_roles} WHERE rid = %d', $rid);
+	    if($result){
+	    	drupal_set_message(t('The role "bbm_agent" has been deleted.'));
+	    }
+	};
+	
+	# delete role 'bbm_agent'
+	if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'bbm_audit'))) {
+		$result = db_query("DELETE FROM {role} WHERE rid = %d", $rid);
+	    $result = db_query("DELETE FROM {permission} WHERE rid = %d", $rid);
+	    // Update the users who have this role set:
+	    $result = db_query('DELETE FROM {users_roles} WHERE rid = %d', $rid);
+	    if($result){
+	    	drupal_set_message(t('The role "bbm_audit" has been deleted.'));
+	    }
+	};
+	
+	# delete role 'bbm_agent'
+	if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'bbm_admin'))) {
+		$result = db_query("DELETE FROM {role} WHERE rid = %d", $rid);
+	    $result = db_query("DELETE FROM {permission} WHERE rid = %d", $rid);
+	    // Update the users who have this role set:
+	    $result = db_query('DELETE FROM {users_roles} WHERE rid = %d', $rid);
+	    if($result){
+	    	drupal_set_message(t('The role "bbm_admin" has been deleted.'));
+	    }
+	};
+}

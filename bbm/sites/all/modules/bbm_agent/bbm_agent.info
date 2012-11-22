@@ -1,0 +1,4 @@
+name = BBM Agent Screens
+description = Collection of screens for BBM Agents.
+package = BBM
+core = 6.x

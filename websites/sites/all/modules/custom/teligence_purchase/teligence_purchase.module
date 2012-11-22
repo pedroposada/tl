@@ -1,0 +1,2406 @@
+<?php
+
+/************************************************
+ * DRUPAL HOOKS
+ */
+
+/**
+ * Implements hook_init()
+ */
+function teligence_purchase_init()
+{
+	switch ($_GET['q']) 
+	{
+		case 'cart/buy':
+		case 'cart/add-time':
+		case 'purchase/buy-package':
+		case 'purchase/add-time':
+			
+			// message to user
+			// drupal_set_message($_GET['q']);
+						
+			// fill the sessions variable with regions and markets
+			teligence_purchase_getmarkets('void');
+			break;
+	}
+}
+ 
+/**
+ * Implements hook_perm()
+ */
+function teligence_purchase_perm()
+{
+	return array(
+		// admin
+		'access purchase settings',
+	
+		// anonymous pages
+		'access sign-up page',
+		
+		// web account pages
+		'access profile page',
+		'access change email page',
+		'access change password page',
+		'access buy package 3.2 page',
+		
+		// ivr account pages
+		'access linkivrtoweb page',
+		'access change passcode page',
+		'access add credit card page',
+		'access show balance page',
+		'access manage subscriptions page',
+		'access order history page',
+		'access buy package 3.3 page',
+	);
+}
+ 
+/**
+ * Implements hook_menu_alter()
+ */ 
+function teligence_purchase_menu_alter(&$items)
+{
+	// alter access to default drupal user profile page
+	$items['user']['access callback'] = 'teligence_purchase_userEditPageAccess';
+	
+	# STORY 3
+	// ASU
+	$items['cart/buy']					= $items['purchase/buy-package'];
+	
+	// SR
+	$items['cart/add-time']				= $items['purchase/add-time'];
+	
+	// PAYPAL
+	$items['cart/paypal/asu/success']			= $items['purchase/paypal/asu/success'];
+	$items['cart/paypal/sr/success']			= $items['purchase/paypal/sr/success'];
+	$items['cart/paypal/failure']				= $items['purchase/paypal/failure'];
+	$items['cart/paypal/price-confirmation']	= $items['purchase/paypal/price-confirmation'];
+	
+	
+	# STORY 2
+	$items['cart/signup'] 						= $items['purchase/sign-up'];
+	$items['cart/login'] 						= $items['purchase/sign-in'];
+	$items['cart/forgot-password'] 				= $items['purchase/forgot-password'];
+	$items['cart/logout'] 						= $items['purchase/logout'];
+	$items['cart/change-web-password'] 			= $items['purchase/change-web-password'];
+	$items['cart/ivr-passcode'] 				= $items['purchase/change-passcode'];
+	$items['cart/profile'] 						= $items['purchase/profile'];
+	$items['cart/contact-perm'] 				= $items['purchase/manage-subscriptions'];
+	$items['cart/password-reset/%'] 			= $items['purchase/reset-password/%'];
+	$items['cart/order-history']				= $items['purchase/order-history'];
+	$items['cart/delete-cc/%']					= $items['purchase/delete-cc/%'];
+	$items['cart/forgot-email']					= $items['purchase/forgot-email'];
+	$items['cart/forgot-password']				= $items['purchase/forgot-password'];
+	$items['cart/send-validation-email/%']		= $items['purchase/send-validation-email/%'];
+	$items['cart/reset-email/%/%']				= $items['purchase/reset-email/%/%'];
+	$items['cart/result/%']						= $items['purchase/result/%'];
+	$items['cart/validate-web-account/%/%']		= $items['purchase/validate-web-account/%/%'];
+	$items['cart/manage-credit-cards'] 			= $items['purchase/manage-credit-cards'];
+	$items['cart/link-accounts'] 				= $items['purchase/link-accounts'];
+	$items['cart/change-email'] 				= $items['purchase/change-email'];
+	
+	unset($items['purchase/sign-up']);
+	unset($items['purchase/sign-in']);
+	unset($items['purchase/forgot-password']);
+	unset($items['purchase/logout']);
+	unset($items['purchase/change-web-password']);
+	unset($items['purchase/change-passcode']);
+	unset($items['purchase/profile']);
+	unset($items['purchase/manage-subscriptions']);
+	unset($items['purchase/manage-credit-cards']);
+	unset($items['purchase/order-history']);
+	unset($items['purchase/buy-package']);
+	unset($items['purchase/add-time']);
+	unset($items['purchase/delete-cc/%']);
+	unset($items['purchase/forgot-email']);
+	unset($items['purchase/forgot-password']);
+	unset($items['purchase/send-validation-email/%']);
+	unset($items['purchase/reset-email/%/%']);
+	unset($items['purchase/result/%']);
+	unset($items['purchase/validate-web-account/%/%']);
+	unset($items['purchase/link-accounts']);
+	unset($items['purchase/change-email']);
+
+	unset($items['cart/billing-address']);
+	unset($items['cart/add-card']);
+	unset($items['cart/show-balance']);
+	unset($items['cart/validate/%']); // new $items['purchase/validate-web-account/%/%']
+	
+	
+	# EMAIL CAMPAIGN, this needs to be changed completely
+	// $items['cart/email-campaign']
+	// $items['cart/email-campaign/success']
+	// $items['cart/validate-campaign/%teligence_cart_campaign']
+
+	
+	# THIS FUNCTIONALITY WILL REMAIN IN teligence_cart MODULE
+	// $items['cart/state'] // no call to back-end
+	// $items['cart/blank'] // no call to back-end
+	// $items['cart/getlocalnumber']	// Localization; GetLocalAccessNumberByAreaCode 
+	// $items['cart/find-packages']		// Provisioning; GetPackagesByBrandAni
+}
+ 
+/**
+ * Implements hook_menu()
+ */
+function teligence_purchase_menu()
+{
+	/**
+	 * ADMIN
+	 */
+	$items['admin/purchase'] = array (
+	    'title'=>'Teligence Purchase',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('teligence_purchase_settings_form'),
+	    'access arguments'=> array ('access purchase settings'),
+	    'file' => 'teligence_purchase-settings.inc',
+    );
+    $items['admin/purchase/settings'] = array (
+	    'title'=>'Settings',
+	    'type'=>MENU_DEFAULT_LOCAL_TASK,
+    	'weight'=> -10,
+    );
+	$items['admin/purchase/settings2'] = array (
+	    'title'=>'Configure Emails',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('teligence_purchase_settings2_form'),
+	    'access arguments'=> array ('access purchase settings'),
+	    'file' => 'teligence_purchase-settings.inc',
+	    'type'=>MENU_LOCAL_TASK,
+    );
+	
+	/**
+	 * PAGES
+	 */
+	$items['purchase/sign-in'] = array(
+		'title' => 'Sign-in',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_signin_form'),
+		'access callback' => 'user_is_anonymous',
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 0,
+	);
+	$items['purchase/forgot-email'] = array(
+		'title' => 'Forgot Email',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_forgotemail_form'),
+		'access callback' => 'user_is_anonymous',
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 0,
+	);
+	$items['purchase/forgot-password'] = array(
+		'title' => 'Forgot Password',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_forgotpassword_form'),
+		'access callback' => 'user_is_anonymous',
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 0,
+	);
+	$items['purchase/reset-password/%'] = array(
+		'title' => 'Reset Password',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_resetpassword_form', 2),
+		'access callback' => 'user_is_anonymous',
+		'file' => 'teligence_purchase-pages.inc',
+	);
+	$items['purchase/sign-up'] = array(
+		'title' => 'Sign-up',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_signup_form'),
+		'access arguments' => array('access sign-up page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 0,
+	);
+	$items['purchase/profile'] = array(
+		'title' => 'Profile',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_profile_form'),
+		'access arguments' => array('access profile page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 1,
+	);
+	$items['purchase/link-accounts'] = array(
+		'title' => 'Link Accounts',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_linkivrtoweb_form'),
+		'access arguments' => array('access linkivrtoweb page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 5,
+	);
+	$items['purchase/change-email'] = array(
+		'title' => 'Change Email Address',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_newemail_form'),
+		'access arguments' => array('access change email page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 2,
+	);
+	$items['purchase/change-web-password'] = array(
+		'title' => 'Change Web Password',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_changepassword_form'),
+		'access arguments' => array('access change password page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 3,
+	);
+	$items['purchase/change-passcode'] = array(
+		'title' => 'Change Passcode',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_changepasscode_form'),
+		'access arguments' => array('access change passcode page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+		'weight' => 4,
+	);
+	$items['purchase/order-history'] = array(
+		'title' => 'Order History',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_orderhistory_form'),
+		'access arguments' => array('access order history page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+	);
+	$items['purchase/manage-credit-cards'] = array(
+		'title' => 'Manage Credit Cards',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_addnewcc_form'),
+		'access arguments' => array('access add credit card page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+	);
+	$items['purchase/manage-subscriptions'] = array(
+		'title' => 'Subscriptions',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_subscriptions_form'),
+		'access arguments' => array('access manage subscriptions page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-pages.inc',
+	);
+	$items['purchase/logout'] = array(
+		'title' => 'Logout',
+		// 'page callback' => 'teligence_purchase_logout',
+		'page callback' => 'user_logout',
+		'access callback' => 'user_is_logged_in',
+		'menu_name' => 'menu-teligence-purchase',
+		'weight' => 100,
+    	'file' => 'user.pages.inc',
+    	'file path' => drupal_get_path('module', 'user'),
+	);
+	$items['purchase/validate-web-account/%/%'] = array(
+		'title' => 'Validate Web Account',
+		'page callback' => 'teligence_purchase_validatewebaccount',
+		'page arguments' => array(2,3),
+		'access callback' => TRUE,
+		'type'=>MENU_CALLBACK,
+	);	
+	$items['purchase/send-validation-email/%'] = array(
+		'title' => 'Send Validation Email',
+		'page callback' => 'teligence_purchase_sendvalidationemail',
+		'page arguments' => array(2),
+		'access callback' => 'user_is_anonymous',
+		'type'=>MENU_CALLBACK,
+	);	
+	$items['purchase/delete-cc/%'] = array(
+		'title' => 'Delete Credit Card',
+		'page callback' => 'teligence_purchase_deactivatepayment',
+		'page arguments' => array(2),
+		'access arguments' => array('access add credit card page'),
+		'type'=>MENU_CALLBACK,
+	);	
+	$items['purchase/reset-email/%/%'] = array(
+		'title' => 'Validate Change of Email',
+		'page callback' => 'teligence_purchase_validatechangeemail',
+		'page arguments' => array(2,3),
+		'access callback' => TRUE,
+		'type'=>MENU_CALLBACK,
+	);
+	$items['purchase/captcha/%/%/%'] = array(
+    	'page callback' => 'teligence_purchase_getcaptchaimage',
+		'page arguments' => array(2,3,4),
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);	
+	$items['purchase/change-ivr-account/%'] = array(
+    	'page callback' => 'teligence_purchase_changeivraccount',
+		'page arguments' => array(2),
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access show balance page'),
+  	);	
+	$items['purchase/get-balance/%'] = array(
+    	'page callback' => 'teligence_purchase_getbalance',
+		'page arguments' => array(2),
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access show balance page'),
+  	);	
+	$items['purchase/result/%'] = array(
+		'title' => 'Result',
+		'page callback' => 'theme',
+		'page arguments' => array('teligence_purchase_result_page'),
+		'access callback' => TRUE,
+	);
+	$items['purchase/getmarkets/%'] = array(
+		'title' => 'Get Markets',
+		'page callback' => 'teligence_purchase_getmarkets',
+		'page arguments' => array(2),
+		'access callback' => TRUE,
+	);
+	$items['purchase/getpackages/%'] = array(
+		'title' => 'Get Packages',
+		'page callback' => 'teligence_purchase_getpackages',
+		'page arguments' => array(2),
+		'access callback' => TRUE,
+	);
+	$items['purchase/getpackagesbymembership/%'] = array(
+		'title' => 'Get Packages by Membership',
+		'page callback' => 'teligence_purchase_getpackagesbymembership',
+		'page arguments' => array(2),
+		'access callback' => TRUE,
+	);
+	
+	/**
+	 * Story 3
+	 */
+	$items['purchase/buy-package'] = array(
+		'title' => 'Buy a Package',
+		'page callback' => 'teligence_purchase_buypackagepage',
+		'access callback' => 'teligence_purchase_buypackagepage_access',
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-story3.inc',
+	);
+	$items['purchase/add-time'] = array(
+		'title' => 'Buy a Package.',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_purchase_buypackage33_form'),
+		'access arguments' => array('access buy package 3.3 page'),
+		'menu_name' => 'menu-teligence-purchase',
+		'file' => 'teligence_purchase-story3.inc',
+	);
+	
+	/**
+	 * PAYPAL
+	 */
+	$items['purchase/paypal/asu/success'] = array(
+		'title' => 'PAYPAL Success',
+		'page callback' => 'teligence_purchase_paypalhandler',
+		'access callback' => true,
+		'type' => MENU_CALLBACK,
+		'file' => 'teligence_purchase-paypal.inc',
+	);
+	$items['purchase/paypal/sr/success'] = array(
+		'title' => 'PAYPAL Success',
+		'page callback' => 'teligence_purchase_paypalhandler',
+		'access callback' => true,
+		'type' => MENU_CALLBACK,
+		'file' => 'teligence_purchase-paypal.inc',
+	);
+	$items['purchase/paypal/failure'] = array(
+		'title' => 'PAYPAL Failure',
+		'page callback' => 'teligence_purchase_paypalhandler',
+		'access callback' => true,
+		'type' => MENU_CALLBACK,
+		'file' => 'teligence_purchase-paypal.inc',
+	);
+	$items['purchase/paypal/price-confirmation'] = array(
+		'title' => 'PAYPAL Price Confirmation',
+		'page callback' => 'theme',
+		'page arguments' => array('teligence_purchase_paypalprice'),
+		'access callback' => true,
+		'type' => MENU_CALLBACK,
+		'file' => 'teligence_purchase-paypal.inc',
+	);
+	
+	return $items;
+}
+ 
+
+/**
+ * Implements hook_theme()
+ */
+function teligence_purchase_theme($existing, $type, $theme, $path)
+{
+	return array(
+		'teligence_purchase_signin_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-signin-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_signup_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-signup-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_forgotemail_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-forgotemail-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_profile_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-profile-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_linkivrtoweb_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-linkivrtoweb-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_newemail_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-newemail-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_membership_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-membership-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_changepassword_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-changepassword-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_changepasscode_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-changepasscode-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_addnewcc_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-addnewcc-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_showbalance_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-showbalance-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_subscriptions_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-subscriptions-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_resetpassword_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-resetpassword-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_orderhistory_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-orderhistory-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_forgotpassword_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-forgotpassword-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_result_page' => array(
+			'template' => 'teligence_purchase-result-page',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_ccexpirationdate' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_purchase_addnewcclist' => array(
+			'arguments' => array('form' => null),
+		),
+		
+		// story 3
+		'teligence_purchase_packagesradios' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_purchase_verifyorder' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-verifyorder',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_creditcardslist' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_purchase_memberships' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_purchase_buypackage31_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-buypackage31-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_buypackage32_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-buypackage32-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_buypackage33_form' => array(
+			'arguments' => array('form' => null),
+			'template' => 'teligence_purchase-buypackage33-form',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_paypalprice' => array(
+			'arguments' => array('withemail' => null),
+			'template' => 'teligence_purchase-paypalprice',
+			'path' => drupal_get_path('module','teligence_purchase') .'/templates',
+		),
+		'teligence_purchase_paypalfailuremessage' => array(
+			'arguments' => array('errorCode' => null),
+		),
+	);
+}
+
+/**
+ * Implements MYMODULE_preprocess_hook()
+ */
+function teligence_purchase_preprocess(&$vars,$hook)
+{
+	switch ($hook) 
+	{			
+		case 'teligence_purchase_buypackage31_form':
+		case 'teligence_purchase_buypackage32_form':
+		case 'teligence_purchase_buypackage33_form':
+			// drupal_set_message($hook);
+			break;
+			
+		case 'teligence_purchase_paypalprice':
+			if(isset($_REQUEST['Email']) && strlen($_REQUEST['Email']))
+				$vars['hasEmail'] = TRUE;
+			if(array_key_exists($_REQUEST['lang'], language_list()))
+			{
+				$GLOBALS['language']->language = $_REQUEST['lang'];
+			}
+			break;
+
+		case 'teligence_purchase_result_page':
+			$vars['id'] = arg(2);
+			foreach ((array)$_GET as $key => $value) 
+			{
+				$vars[$key] = rawurldecode(rawurldecode($value));
+			}
+			if($vars['id'] == 'paypalfailure')
+			{
+				$vars['ErrorMessage'] = theme('teligence_purchase_paypalfailuremessage',$vars['ErrorMessage']);
+			}
+			break;
+		
+		default:
+			break;
+	}
+}
+/**
+ * Implements MYMODULE_preprocess_page()
+ */
+function teligence_purchase_preprocess_page(&$vars)
+{ 
+	// PAYPAL Price Confirmation Page
+	if(in_array($_GET['q'],array('purchase/paypal/price-confirmation','cart/paypal/price-confirmation')))
+	{
+		$vars = array('content' => $vars['content']);
+	}
+	
+	// add newer jquery version to pages from this module
+	if((arg(0) == 'purchase') || (arg(0) == 'cart'))
+	{
+		if(!empty($vars['scripts']))
+		{
+			if(!in_array(arg(0).arg(1),array('cartadd-time','cartbuy')))
+			{
+				// Get an array of all the JavaScript files loaded by Drupal on this page.
+			    $scripts = drupal_add_js();
+			
+			    // Replace jquery.js first.
+			    $new_jquery = array(drupal_get_path('module', 'teligence_purchase') . '/js/jquery-1.6.2.min.js' => $scripts['core']['misc/jquery.js']);
+			    $scripts['core'] = array_merge($new_jquery, $scripts['core']);
+			    unset($scripts['core']['misc/jquery.js']);
+				unset($scripts['module']['sites/all/modules/teligence_cart/js/jquery.button.js']);
+				
+				// render header scripts 
+				$vars['scripts'] = drupal_get_js('header', $scripts);
+			}
+		}
+	}
+	
+	// cookie login
+	if(user_is_anonymous() && isset($_COOKIE['keepMeLoggedIn']))
+	{
+		watchdog('teligence_purchase','user_is_anonymous() && isset($_COOKIE[\'keepMeLoggedIn\'])');
+		$form_state = unserialize($_COOKIE['keepMeLoggedIn']);
+		$form_state['values']['keep'] = 0;
+		module_load_include('inc', 'teligence_purchase', 'teligence_purchase-pages');
+		teligence_purchase_signin_form_submit($form, $form_state);
+	}
+}
+
+/**
+ * Implementation of hook_theme_registry_alter().
+ *
+ * Make jQuery Update's page preprocess function run *after* everything else's,
+ * so that a theme can't call drupal_get_js() and mess everything up.
+ */
+function teligence_purchase_theme_registry_alter(&$theme_registry) {
+  if (isset($theme_registry['page'])) {
+    if (count($theme_registry['page']['preprocess functions']) > 0) {
+      // If jquery_update's preprocess function is there already, remove it.
+      if ($key = array_search('teligence_purchase_preprocess_page', $theme_registry['page']['preprocess functions'])) {
+        unset($theme_registry['page']['preprocess functions'][$key]);
+      }
+    }
+    // Now tack it on at the end so it runs after everything else.
+    $theme_registry['page']['preprocess functions'][] = 'teligence_purchase_preprocess_page';
+  }
+}
+
+/**
+ * Implements hook_block()
+ */
+function teligence_purchase_block($op = 'list', $delta = 0, $edit = array())
+{
+	if($op == 'list')
+	{
+		$blocks['teligencePurchaseMemberInfo'] = array(
+	      'info' => t('Teligence Purchase - Member Info'), 
+	      'status' => 0,
+	      'pages' =>  'cart/*' . "\n" . 'purchase/*',
+	      'visibility' => 1,
+	    );
+		$blocks['teligencePurchasePagesMenu'] = array(
+	      'info' => t('Teligence Purchase - Links to pages'), 
+	      'status' => 0, 
+	    );
+		
+		return $blocks;
+	}
+	
+	if($op == 'view')
+	{
+		switch($delta)
+		{
+			case 'teligencePurchaseMemberInfo':
+				if(isset($_SESSION['emsMemberships']))
+				{
+					$block = array(
+						'content' => '<div class="membershipInfo">' . drupal_get_form('teligence_purchase_membership_form') . '</div>',
+					);
+				}
+			break;
+			case 'teligencePurchasePagesMenu':
+				drupal_add_css(drupal_get_path('module', 'teligence_purchase') . '/teligence_purchase-styles.css');
+				$links = menu_navigation_links('menu-teligence-purchase');
+				$block = array(
+					// 'subject' => t('Teligence Purchase Links'),
+					'content' => '<div class="horizontalLinksWrap">' . theme('links', $links, array('class' => 'horizontalLinks')) . '</div>',
+				);
+			break;
+		}
+		
+		return $block;
+	}
+}
+
+/**
+ * Implements hook_mail($key, &$message, $params)
+ */
+function teligence_purchase_mail($key, &$message, $params)
+{
+	// make all emails HTML
+	$message['headers']['Content-Type'] = 'text/html; charset=UTF-8; format=flowed';
+	$message['headers']['From'] = '"'.variable_get('site_name','').'" <'.variable_get('site_mail','').'>';
+	$message['from'] = '"'.variable_get('site_name','').'" <'.variable_get('site_mail','').'>';
+	
+	switch($key)
+    {
+		case 'emailResetEmailId':
+		case 'emailPasswordRecovery':
+		case 'emailValidateAccount':
+			$subject = variable_get('teligence_purchase_'.$key.'_subject', '');
+			$body = variable_get('teligence_purchase_'.$key, '');
+			if(module_exists('i18n'))
+			{
+				$subject = i18n_variable_get('teligence_purchase_'.$key.'_subject', $params['languagecode'],$subject);
+				$body = i18n_variable_get('teligence_purchase_'.$key, $params['languagecode'],$body);
+			}
+				
+			$message['subject'] = str_replace(array_keys($params), array_values($params), $subject);
+			$message['body'] = str_replace(array_keys($params), array_values($params), $body);
+			break;
+	}
+}
+ 
+/**
+ * Implements hook_watchdog()
+ */
+function teligence_purchase_watchdog($log_entry)
+{
+	/*
+	type: The type of message for this entry. For contributed modules, this is normally the module name. Do not use 'debug', use severity WATCHDOG_DEBUG instead.
+	user: The user object for the user who was logged in when the event happened.
+	request_uri: The Request URI for the page the event happened in.
+	referer: The page that referred the use to the page where the event occurred.
+	ip: The IP address where the request for the page came from.
+	timestamp: The UNIX timetamp of the date/time the event occurred
+	severity: One of the following values as defined in RFC 3164 http://www.faqs.org/rfcs/rfc3164.html WATCHDOG_EMERG Emergency: system is unusable WATCHDOG_ALERT Alert: action must be taken immediately WATCHDOG_CRITICAL Critical: critical conditions WATCHDOG_ERROR Error: error conditions WATCHDOG_WARNING Warning: warning conditions WATCHDOG_NOTICE Notice: normal but significant condition WATCHDOG_INFO Informational: informational messages WATCHDOG_DEBUG Debug: debug-level messages
+	link: an optional link provided by the module that called the watchdog() function.
+	message: The text of the message to be logged.
+	*/
+	
+	// use the common event log 
+	// One of: SQLTEXT, SQLVARCHAR, SQLCHAR, SQLINT1, SQLINT2, SQLINT4, SQLBIT, SQLFLT4, SQLFLT8, SQLFLTN. 	
+	// $message = unserialize($log_entry['message']);
+	// if($log_entry['type'] == 'teligence_purchase' && isset($message['sequenceId']))
+	// {
+		// $sp_params['@EventDefinitionId'] = array(
+			// 'value' => $message['EventDefinitionId'], // event explorer generated
+			// 'type' => SQLINT4,
+			// 'length' => 4,
+		// );
+		// $sp_params['@StringValueA'] = array(
+			// 'value' => $message['sequenceId'], // sequence id
+			// 'type' => SQLVARCHAR,
+			// 'length' => 50,
+		// );
+		// $sp_params['@DataValue'] = array(
+			// 'value' => $message['message'], // message
+			// 'type' => SQLVARCHAR,
+			// 'length' => 1000,
+		// );
+		// teligence_purchase_mssqlDbQuery(null, 'bosp_InsertEvent', $sp_params)
+	// }
+	// $message['sequenceId'] = $message['message'];
+}
+
+/**
+ * Implements hook_user()
+ */
+function teligence_purchase_user($op, &$edit, &$account, $category = NULL)
+{
+	switch ($op) 
+	{
+		case 'logout':
+			
+			// expire the cookie if exists
+			if(isset($_COOKIE['keepMeLoggedIn']))
+			{
+				setcookie('keepMeLoggedIn',serialize($form_state),(time()-60*60*24*30),"/",str_replace(array('www','secure'),'',$_SERVER['HTTP_HOST']),0);
+			}
+			
+			
+			if(user_access('access buy package 3.3 page') || user_access('access buy package 3.2 page'))
+			{
+				// flush all caches for ivr_user
+				cache_clear_all();
+				
+				// unset any session variables
+				unset($_SESSION['emsMemberships']);
+				unset($_SESSION['IvrMembershipNumber']);
+				unset($_SESSION['emsMembershipId']);
+				unset($_SESSION['IvrPasscode']);
+				unset($_SESSION['EmsMemberId']);
+				unset($_SESSION['WebMemberId']);
+				unset($_SESSION['WebMemberPassword']);
+				unset($_SESSION['WebMemberEmail']);
+				
+				// force logout in sessions table
+				db_query("DELETE FROM sessions WHERE uid = %d",$account->uid);
+				
+				// Regenerate the session ID to prevent against session fixation attacks.
+		    	sess_regenerate();
+				
+				watchdog('teligence_purchase','session closed for @name - ivr_user or web_user: !session',array('@name'=>$account->name,'!session'=>'<pre>'.print_r($account,1).'</pre>'));
+			}
+			
+			break;
+		
+		default:
+			
+			break;
+	}
+}
+
+/********************************************************8
+ * MENU CALLBACKS
+ */
+
+/**
+ * access callback for user edit page
+ */
+function teligence_purchase_userEditPageAccess()
+{
+	return (user_is_anonymous() || user_access('administer nodes'));
+}
+ 
+/**
+ * page and access callbacks for cart/buy page
+ * will point the user the appropriate form depending on the access level
+ */
+function teligence_purchase_buypackagepage()
+{
+	if(user_is_anonymous())
+	{
+		return drupal_get_form('teligence_purchase_buypackage31_form');
+	}
+	elseif(user_access('access buy package 3.2 page')) 
+	{
+		return drupal_get_form('teligence_purchase_buypackage32_form');
+	}
+}
+function teligence_purchase_buypackagepage_access()
+{
+	return (user_is_anonymous() || user_access('access buy package 3.2 page')); 
+}
+ 
+ 
+/**
+ * GetPackagesByBrandMarket
+ */
+function teligence_purchase_getpackages($marketId, $returnpackages = null)
+{
+	// return packages array for default values
+	if($marketId == 'void' || !$marketId)
+	{
+		// find default region and market; localization
+		$region = (empty($_SESSION['localization']->Region) ? key((array)$_SESSION['stateprovincecity']['city']) : 
+			$_SESSION['localization']->Region);
+		$sanitizedRegion = strtoupper(filter_var($region,FILTER_SANITIZE_URL));
+		$newMarketId = (empty($_SESSION['localization']->MarketId) ? key((array)$_SESSION['stateprovincecity']['city'][$sanitizedRegion]) : 
+			$_SESSION['localization']->MarketId);
+	}
+	else
+	{
+		$newMarketId = $marketId;
+	}
+	
+	// check to see that marketId is a number and bigger than 0
+	if(ctype_digit($newMarketId) && $newMarketId > 0)
+	{
+		// call back-end
+		$packages = array();
+		$params = new stdClass ();
+	    $params->ivrBrandId = variable_get('teligence_purchase_brandid', 1);
+	    $params->marketId = $newMarketId;
+	    $result = teligence_purchase_soap_call($params, 'GetPackagesByBrandMarket', variable_get('teligence_purchase_wsdl_provisioning',''));
+		switch ($result->GetPackagesByBrandMarketResult->ResponseCode) 
+		{
+			case 'Success':
+				if(!is_array($result->GetPackagesByBrandMarketResult->WebPackages->WebPackage)): 
+					$WebPackages = array($result->GetPackagesByBrandMarketResult->WebPackages->WebPackage);
+				else:
+					$WebPackages = $result->GetPackagesByBrandMarketResult->WebPackages->WebPackage;
+				endif;
+				foreach ((array)$WebPackages as $Package) 
+				{
+					$packages[$Package->PackageId] = $Package;
+				}
+				break;
+				
+			default:
+				drupal_set_message(t('!error',array('!error'=>$result->GetPackagesByBrandMarketResult->ErrMsg)),'error');
+				break;
+		}
+	}
+	
+	// return packages array for default values
+	if($marketId == 'void' || $returnpackages)
+		return $packages;
+	
+	$element['#name'] = 'packages';
+	$element['#options'] = $packages;
+	print theme('teligence_purchase_packagesradios',$element);
+	exit;
+}
+/**
+ * GetPackagesByMembership
+ */
+function teligence_purchase_getpackagesbymembership($IvrMembershipNumber, $returnpackages = null)
+{
+	// return packages array for default values
+	if($IvrMembershipNumber == 'void' || !$IvrMembershipNumber)
+	{
+		$newEmsMembershipId = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->EmsMembershipId;
+	}
+	else
+	{
+		$newEmsMembershipId = $_SESSION['emsMemberships'][$IvrMembershipNumber]->EmsMembershipId;
+	}
+	
+	// check to see that marketId is a number and bigger than 0
+	if(ctype_digit($newEmsMembershipId) && $newEmsMembershipId > 0)
+	{
+		// call back-end
+		$packages = array();
+		$params = new stdClass ();
+	    $params->ivrBrandId = variable_get('teligence_purchase_brandid', 1);
+	    $params->emsMembershipId = $newEmsMembershipId;
+	    $result = teligence_purchase_soap_call($params, 'GetPackagesByMembership', variable_get('teligence_purchase_wsdl_provisioning',''));
+		switch ($result->GetPackagesByMembershipResult->ResponseCode) 
+		{
+			case 'Success':
+				if(!is_array($result->GetPackagesByMembershipResult->WebPackages->WebPackage)): 
+					$WebPackages = array($result->GetPackagesByMembershipResult->WebPackages->WebPackage);
+				else:
+					$WebPackages = $result->GetPackagesByMembershipResult->WebPackages->WebPackage;
+				endif;
+				foreach ((array)$WebPackages as $Package) 
+				{
+					$packages[$Package->PackageId] = $Package;
+				}
+				break;
+				
+			default:
+				drupal_set_message(t('!error',array('!error'=>$result->GetPackagesByMembershipResult->ErrMsg)),'error');
+				break;
+		}
+	}
+	
+	// return packages array for default values
+	if($IvrMembershipNumber == 'void' || $returnpackages)
+		return $packages;
+	
+	$element['#name'] = 'packages';
+	$element['#options'] = $packages;
+	print theme('teligence_purchase_packagesradios',$element);
+	exit;
+}
+ 
+/**
+ * GetMarkets
+ * state, province and city 
+ * populate $_SESSION 
+ */
+function teligence_purchase_getmarkets($region)
+{
+	if(!isset($_SESSION['stateprovincecity']))
+	{
+		$params = new stdClass ();
+	    $params->ivrBrandId = variable_get('teligence_purchase_brandid', 1);
+	    $result = teligence_purchase_soap_call($params, 'GetMarkets', variable_get('teligence_purchase_wsdl_localization',''));
+		switch ($result->GetMarketsResult->ResponseCode) 
+		{
+			case 'Success':
+				if(!is_array($result->GetMarketsResult->Markets->WebActiveMarket)): 
+					$Markets = array($result->GetMarketsResult->Markets->WebActiveMarket);
+				else:
+					$Markets = $result->GetMarketsResult->Markets->WebActiveMarket;
+				endif;
+				foreach ((array)$Markets as $Market) 
+				{
+					$sanitizedRegion = strtoupper(filter_var($Market->Region,FILTER_SANITIZE_URL));
+					$_SESSION['stateprovincecity']['stateprovince'][$Market->Country][$sanitizedRegion] = ucwords(strtolower($Market->Region));
+					$_SESSION['stateprovincecity']['city'][$sanitizedRegion][$Market->MarketId] = trim(str_replace("2", "", $Market->City));
+				}
+				break;
+				
+			default:
+				drupal_set_message(t('!error', array('!error' => $result->GetMarketsResult->ErrMsg)), 'error');
+				break;
+		};
+	}
+
+	// find region from localization values
+	if($region == 'void')
+		return;
+	
+	// print drupal_json(form_select_options(array(), $_SESSION['stateprovincecity']['city'][urldecode($region)]));
+	print form_select_options(array(), $_SESSION['stateprovincecity']['city'][$region]);
+	exit;
+}
+ 
+
+ 
+/**
+ * Get Balance
+ */
+function teligence_purchase_getbalance($EmsMembershipId)
+{
+	$output = NULL;
+	$params = new stdClass ();
+    $params->emsMembershipId = $EmsMembershipId;
+    $result = teligence_purchase_soap_call($params, 'GetMembershipStats', variable_get('teligence_purchase_wsdl_ivrrtm',''));
+	switch ($result->GetMembershipStatsResult->ResponseCode) 
+	{
+		case 'Success':
+			
+			// save balance in session for future requests
+			$_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->Balance = $result->GetMembershipStatsResult;
+			
+			// build string to display balance
+			$mins = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->Balance->Balance;
+			$expires = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->Balance->ExpiryBalanceDateTime;
+			$tokens['!mins'] = $mins; 
+			$tokens['!exp'] = strlen($expires) ? '- Expires on ' . substr($expires,2,2).'/'.substr($expires,4,2).'/'.substr($expires,0,2): ''; 
+			$output = t('!mins minutes !exp',$tokens);
+			break;
+		
+		case 'InactiveMembership':
+		case 'InvalidParametersSentToIvr':
+			$output = t('Your membership is inactive. !pleasecall', array('!pleasecall' => variable_get('teligence_purchase_customerservice', 'Please call customer service at 1-800-984-6889')));
+			break;
+		
+		default:
+			$output = $result->GetMembershipStatsResult->ErrMsg;
+			break;
+	};
+	
+	print $output;
+	exit();
+} 
+
+/**
+ * Change active IVR membership values in session
+ */
+function teligence_purchase_changeivraccount($IvrMembershipNumber)
+{
+	if(array_key_exists($IvrMembershipNumber, $_SESSION['emsMemberships']))
+	{
+		$_SESSION['IvrMembershipNumber'] = $IvrMembershipNumber;
+	}
+}
+ 
+/**
+ * Validate change of email
+ */
+function teligence_purchase_validatechangeemail($resetId, $email)
+{
+	$params = new stdClass ();
+    $params->emailResetId = urldecode($resetId);
+    $params->newEmail = urldecode($email);
+    $result = teligence_purchase_soap_call($params, 'ResetEmail', variable_get('teligence_purchase_wsdl_membercredentials',''));
+	switch($result->ResetEmailResult->ResponseCode)
+	{
+		case 'Success':
+			// update value of email stored in the session
+			$_SESSION['WebMemberEmail'] = urldecode($email);
+		
+			// show message to user
+			drupal_set_message(t('Email changed successfully.'));
+			break;
+		default:
+			drupal_set_message(t('!error', array('!error' => $result->ResetEmailResult->ErrMsg)), 'error');
+			break;
+	}
+	drupal_goto('cart/profile');
+}
+ 
+ 
+/**
+ * send validation email
+ * this request comes from link in warning messages at purchase/sign-up
+ */
+function teligence_purchase_sendvalidationemail($validationCode)
+{
+	if(isset($_SESSION['emailValidateAccount']))
+	{
+		$tokens = teligence_purchase_tokens('emailValidateAccount');
+		$tokens['[email]'] = $_SESSION['emailValidateAccount']['email'];
+		$tokens['[password]'] = $_SESSION['emailValidateAccount']['password'];
+		$tokens['[url]'] = url('cart/validate-web-account/' . 
+				$validationCode . '/' . 
+				$_SESSION['emailValidateAccount']['email'] . '/' . 
+				$_SESSION['emailValidateAccount']['password'], array('absolute' => TRUE)
+			);
+		drupal_mail('teligence_purchase', 'emailValidateAccount', $_SESSION['emailValidateAccount']['email'], language_default(), $tokens);
+		drupal_set_message(t('Thanks for signing up with us. Please check your emails to validate your account.'));
+		unset($_SESSION['emailValidateAccount']);
+	}
+	
+	drupal_goto('cart/login');
+}
+ 
+/**
+ * validate web account
+ * if success, login user
+ */
+function teligence_purchase_validatewebaccount($validationCode, $email, $pass)
+{
+	if(empty($validationCode) || empty($email))
+		drupal_set_message(t('Your validation link is corrupted. Please try !sign again', array('!sign' => l(t('signing-in'),'cart/login'))));
+	
+	$params = new stdClass ();
+    $params->validationCode = $validationCode;
+    $result = teligence_purchase_soap_call($params, 'ValidateWebAccount', variable_get('teligence_purchase_wsdl_membercredentials',''));
+	switch($result->ValidateWebAccountResult->ResponseCode)
+	{
+		case 'Success':
+			// login user
+			global $user;
+			
+			// Regenerate the session ID to prevent against session fixation attacks.
+		    sess_regenerate();
+			
+			// load or create new user and then create session
+			$form_state['values']['email'] = urldecode($email);
+			$form_state['values']['password'] = urldecode($pass);
+			$form_state['WebActiveMemberships'] = $result->ValidateWebAccountResult->WebActiveMemberships;
+			$user = teligence_purchase_drupaluser($form_state);
+			
+			// log event
+			watchdog('teligence_purchase', 'Session opened for %name.', array ('%name'=>$user->name));
+			
+			// save values in the session
+			$sessionValues = new stdClass();
+			$sessionValues->WebActiveMemberships = $result->ValidateWebAccountResult->WebActiveMemberships;
+			$sessionValues->email = $form_state['values']['email'];
+			$sessionValues->password =  $form_state['values']['password'];
+			$sessionValues->WebMemberId = $result->ValidateWebAccountResult->WebMemberId;
+			teligence_purchase_setsessionvalues($sessionValues,TRUE);
+			
+			// show message to user
+			drupal_set_message(t('Account validated successfully.'));
+			
+			// redirect to web profile page
+			drupal_goto('cart/profile');
+			break;
+			
+		case 'Failure':
+			drupal_set_message(t('Your email was validated already.'), 'error');
+			break;
+		
+		default:
+			drupal_set_message(t('!error', array('!error' => $result->ValidateWebAccountResult->ErrMsg)), 'error');
+			break;
+			
+	}
+
+	drupal_goto();
+}
+
+/*
+ * delete credit card DeactivatePaymentMethod
+ */
+function teligence_purchase_deactivatepayment($key)
+{
+	$params = new stdClass ();
+    $params->paymethodId = $key;
+    $result = teligence_purchase_soap_call($params, 'DeactivatePaymentMethod', variable_get('teligence_purchase_wsdl_membermanagement',''));
+	switch ($result->DeactivatePaymentMethodResult->ResponseCode) 
+	{
+		case 'Success':
+			drupal_set_message(t('Credit Card successfully deleted.'));
+			break;
+		
+		default:
+			drupal_set_message(t('!error', array('!error' => $result->DeactivatePaymentMethodResult->ErrMsg)), 'error');
+			break;
+	};
+	
+	drupal_goto('cart/manage-credit-cards');
+} 
+
+
+/******************
+ * Membership information form
+ */
+function teligence_purchase_membership_form($form_state)
+{
+	$form['memberships'] = array(
+		'#type' => 'select',
+		'#title' => t('Memberships'),
+		'#options' => drupal_map_assoc(array_keys((array)$_SESSION['emsMemberships'])),
+		'#default_value' => $_SESSION['IvrMembershipNumber'],
+		'#attributes' => array('onChange' => "javascript:this.form.submit()"),
+	);
+	$form['passcode'] = array(
+		'#type' => 'item',
+		'#title' => t('Passcode'),
+		'#value' => $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->IvrPasscode,
+	);
+	$form['market'] = array(
+		'#type' => 'item',
+		'#title' => t('Market'),
+		'#value' => $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->MarketName,
+	);
+	$form['balance'] = array(
+		'#type' => 'item',
+		'#title' => t('Balance'),
+		'#value' => t('Loading balance...'),
+		'#pre_render' => array('teligence_purchase_prerender_balance'),
+	);
+	
+	// invisible element to activate submit handler
+	$form['submit'] = array(
+		'#type' => 'submit',
+		'#value' => t('submit'),
+		'#attributes' => array('style' => 'display:none'),
+	);
+	
+	return $form;
+}
+function teligence_purchase_membership_form_validate($form,&$form_state)
+{
+	if(!array_key_exists($form_state['values']['memberships'], $_SESSION['emsMemberships']))
+	{
+		form_error($form['memberships'], 'Invalid Membership Number.');
+	}
+}
+function teligence_purchase_membership_form_submit($form,&$form_state)
+{
+	$_SESSION['IvrMembershipNumber'] = $form_state['values']['memberships'];
+	
+	// drupal_set_message('<pre>'.print_r($form_state,1).'</pre>');
+}
+
+
+/****************************************************
+ * PROCESS
+ */
+
+
+/*********************************************************
+ * AFTER BUILD
+ */
+
+/**
+ * afterbuild for teligence_purchase_buypackage31_form
+ */
+function teligence_purchase_buypackage_form_afterbuild($element, &$form_state)
+{
+	drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.buypackage.js');
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('regionSelectId' => array($element['location']['stateprovince']['#id'])))), 'setting');
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('marketSelectId' => array($element['location']['city']['#id'])))), 'setting');
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('ajaxLoaderImg' => array(theme('image',drupal_get_path('module','teligence_purchase').'/images/ajax-loader.gif'))))), 'setting');
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('getMarketsUrl' => array(url('purchase/getmarkets'))))), 'setting');
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('getPackagesByMarketUrl' => array(url('purchase/getpackages'))))), 'setting');
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('getPackagesByMembershipUrl' => array(url('purchase/getpackagesbymembership'))))), 'setting');
+
+	return $element;
+}
+
+/*********************************************************
+ * PRE RENDERS
+ * 
+ * pre_render functions
+ */
+
+  
+/**
+ * state and city
+ */
+function teligence_purchase_buypackage_form_prerender($element)
+{
+	// memberships
+	if(isset($element['#post']['memberships']))
+	{
+		$element['memberships']['#default_value'] = $element['#post']['memberships'];
+	}
+	
+	// markets
+	if(isset($element['#post']['stateprovince']))
+	{
+		$element['location']['city']['#options'] = (array)$_SESSION['stateprovincecity']['city'][$element['#post']['stateprovince']];
+	}
+	else 
+	{
+		$element['location']['city']['#options'] = (array)$_SESSION['stateprovincecity']['city'][$element['location']['stateprovince']['#default_value']];
+	}
+	
+	// packages	
+	if(isset($element['#post']['memberships']) && $element['#post']['memberships'] <> 'newmarket')
+	{
+		$element['packages']['#options'] = teligence_purchase_getpackagesbymembership($element['#post']['memberships'], TRUE);
+	}
+	elseif(isset($element['#post']['city']))
+	{
+		$element['packages']['#options'] = teligence_purchase_getpackages($element['#post']['city'], TRUE);
+	}
+	elseif(isset($element['memberships']) && $element['memberships']['#default_value'] <> 'newmarket')
+	{
+		$element['packages']['#options'] = teligence_purchase_getpackagesbymembership($element['memberships']['#default_value'], TRUE);
+	}
+	else 
+	{
+		$element['packages']['#options'] = teligence_purchase_getpackages($element['location']['city']['#default_value'], TRUE);
+	}
+	
+	if(isset($element['#post']['packages']) && !empty($element['#post']['packages']))
+	{
+		$element['packages']['#default_value'] = $element['#post']['packages'];
+	}
+	
+	// creditcardslist
+	if(isset($element['#post']['creditcardslist']))
+	{
+		$element['creditcardslist']['#default_value'] = $element['#post']['creditcardslist'];
+	}
+	
+	// drupal_set_message('$_SESSION[\'emsMemberships\']<pre>'.check_plain(print_r($_SESSION['emsMemberships'],1)).'</pre>');
+	// drupal_set_message('$_SESSION[\'emsMemberships\']<pre>'.check_plain(print_r($_SESSION['emsMemberships'],1)).'</pre>');
+	// drupal_set_message('#default_value<pre>'.check_plain(print_r($element['memberships']['#default_value'],1)).'</pre>');
+	
+	return $element;
+}
+ 
+/*
+ * captcha field pre render
+ */
+function teligence_purchase_captcha_prerender($element)
+{
+	/*
+	 * captcha image
+	 */
+	$AuthSecret = "G3n3r4t3_1m4g3!";
+	if(db_set_active('paypal'))
+	{
+		if(db_table_exists("Captchas"))
+		{
+			$CaptchaID = rand(1,1000);
+			$Result = db_fetch_array(db_query("SELECT ID, CaptchaHash FROM {Captchas} WHERE ID = %d ", $CaptchaID));
+			$Auth = md5($AuthSecret . "_" . $Result['ID'] . "_" . $Result['CaptchaHash']);
+			$element['CaptchaImage']['#value'] = '<img src="/ctc/captcha/' . $Result['ID'] . '/' . $Result['CaptchaHash'] . '/' . $Auth .'" />';
+			$element['CaptchaID']['#value'] = $Result['ID'];
+			$element['CaptchaHash']['#value'] = $Result['CaptchaHash'];
+		}
+		else
+		{
+			unset($element['CaptchaValue']);
+			drupal_set_message("Captchas table doesn't exist. Re-enable teligence_ctc module.");
+		}
+		db_set_active();
+	}
+	
+	return $element;		
+}
+ 
+/**
+ * date picker
+ */ 
+function teligence_purchase_date_prerender($element)
+{
+	date_default_timezone_set('America/Los_Angeles');
+	drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.maskedinput-1.3.min.js');
+	$script = '	
+		$(document).ready(function(){
+			$("#'.$element['#id'].'").mask("99/99/9999");
+		});
+	';
+	drupal_add_js($script, 'inline');
+	drupal_add_css(drupal_get_path('module', 'teligence_purchase') . '/css/redmond/jquery-ui-1.8.16.custom.css');
+	drupal_add_js(drupal_get_path('module', 'teligence_purchase') . '/js/jquery-ui-1.8.16.custom.min.js');
+	$script = '	
+		$(document).ready(function(){
+			$("#'.$element['#id'].'").datepicker({
+				changeMonth: true,
+				changeYear: true,
+				yearRange: "-70:+0",
+				maxDate: "'.date("m/d/Y").'"
+			});
+			$("#datePickerIcon").bind("click",function(){
+				$("#'.$element['#id'].'").datepicker("show");
+			});
+		});
+	';
+	drupal_add_js($script, 'inline');
+	
+	return $element;
+}
+
+/**
+ * phone number
+ */
+function teligence_purchase_phone_prerender($element)
+{
+	drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.maskedinput-1.3.min.js');
+	$script = '	
+		$(document).ready(function(){
+			$("#'.$element['#id'].'").mask("(999) 999-9999");
+		});
+	';
+	drupal_add_js($script, 'inline');
+	// $element['#description'] = t('Enter phone in the form of (xxx) xxx-xxxx');
+	
+	return $element;
+}
+
+/**
+ * email
+ */
+function teligence_purchase_email_prerender($element)
+{
+	// $element['#description'] = t('Enter email in the form of xxxx@xxx.xxx');
+	
+	return $element;
+}
+
+/**
+ * password
+ */
+function teligence_purchase_password_prerender($element)
+{
+	$script = '	
+	$(document).ready(function(){
+		if($("#'.$element['#id'].'")){
+			$("<div id=\"shortPassword'.$element['#id'].'\"></div>").insertAfter($("#'.$element['#id'].'"));
+			$("#'.$element['#id'].'").keyup(function(){
+				var strlen = $(this).val();
+				if(strlen.length > 0 && strlen.length < 6){
+					$("#shortPassword'.$element['#id'].'").text("'.t('Password is too short!').'");
+					$("#shortPassword'.$element['#id'].'").css("color", "red");
+				}else{
+					$("#shortPassword'.$element['#id'].'").text("");
+				}
+			});
+		}
+	});
+	';
+	drupal_add_js($script, 'inline');
+	// $element['#description'] = t('Password must be at least 6 characters long.');
+	
+	return $element;
+}
+/**
+ * passcode
+ */
+function teligence_purchase_passcode_prerender($element)
+{
+	drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.maskedinput-1.3.min.js');
+	$script = '	
+	$(document).ready(function(){
+		if($("#'.$element['#id'].'")){
+			$("<div id=\"shortPassword'.$element['#id'].'\"></div>").insertAfter($("#'.$element['#id'].'"));
+			$("#'.$element['#id'].'").keyup(function(){
+				var strlen = $(this).val();
+				if(strlen.length > 0 && strlen.length < 4){
+					$("#shortPassword'.$element['#id'].'").text("'.t('Passcode is too short!').'");
+					$("#shortPassword'.$element['#id'].'").css("color", "red");
+				}else{
+					$("#shortPassword'.$element['#id'].'").text("");
+				}
+			});
+			$("#'.$element['#id'].'").mask("?9999",{placeholder:""});
+		}
+	});
+	';
+	drupal_add_js($script, 'inline');
+	// $element['#description'] = t('Passcode must be exactly 4 characters long.');
+	
+	return $element;
+}
+/**
+ * membership number
+ */
+function teligence_purchase_membershipnumber_prerender($element)
+{
+	// $element['#description'] = t('Membership number must be exactly 5 characters long.');
+	
+	return $element;
+}
+/**
+ * button
+ */
+function teligence_purchase_button_prerender($element)
+{
+	$script = '	
+	var touched;
+	var t;
+	function disabler(buttonId){
+		document.getElementById(buttonId).disabled=true;
+		document.getElementById(buttonId).value="'.t('Processing...').'";
+	    clearTimeout(t);
+	};
+	';
+	drupal_add_js($script, 'inline');
+	$element['#attributes'] = array(
+		'onclick' => 'javascript:setTimeout("disabler(\'' . $element['#id'] .'\')", 1);',
+	);
+	
+	return $element;
+}
+/**
+ * prerender teligence_purchase_balance
+ */
+function teligence_purchase_prerender_balance($form)
+{
+	if(isset($_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->Balance))
+	{
+		// build string to display balance
+		$mins = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->Balance->Balance;
+		$expires = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->Balance->ExpiryBalanceDateTime;
+		$tokens['!mins'] = $mins; 
+		$tokens['!exp'] = strlen($expires) ? '- Expires on ' . substr($expires,2,2).'/'.substr($expires,4,2).'/'.substr($expires,0,2): ''; 
+		$output = t('!mins minutes !exp',$tokens);
+	}
+	else 
+	{
+		$EmsMembershipId = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->EmsMembershipId;
+		$loadBalanceUrl = url('purchase/get-balance/'.$EmsMembershipId);
+		$loadBalanceElementId = 'ivrBalance';
+		drupal_add_js(array('loadBalanceUrl' => $loadBalanceUrl), 'setting');
+		drupal_add_js(array('loadBalanceElementId' => $loadBalanceElementId), 'setting');
+		drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.loadbalance.js');
+		
+		$output = t('Loading balance...');
+	}
+	
+	$form['#value'] = '<div id="ivrBalance">'.$output.'</div>';
+	
+	return $form;
+}
+/**
+ * prerender credit card number
+ */
+function teligence_purchase_ccn_prerender($element)
+{
+	drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.maskedinput-1.3.min.js');
+	$script = '	
+		$(document).ready(function(){
+			$("#'.$element['#id'].'").mask("9?999999999999999999");
+		});
+	';
+	drupal_add_js($script, 'inline');
+	
+	return $element;
+}
+/**
+ * prerender credit card security code
+ */
+function teligence_purchase_cvv_prerender($element)
+{
+	drupal_add_js(drupal_get_path('module','teligence_purchase') . '/js/jquery.maskedinput-1.3.min.js');
+	$script = '	
+		$(document).ready(function(){
+			$("#'.$element['#id'].'").mask("999?9");
+		});
+	';
+	drupal_add_js($script, 'inline');
+	
+	return $element;
+}
+
+/********************************************
+ * VALIDATORS
+ * 
+ * generic validators for form elements
+ */
+
+/**
+ * validate zip and postal codes
+ */
+function teligence_purchase_validate_dateofbirth($element, &$form_state)
+{
+	if(strlen($form_state['values']['dateofbirth']))
+	{
+		date_default_timezone_set('America/Los_Angeles');
+		if(!preg_match("#^(0[1-9]|1[012])\/(0[1-9]|[12][0-9]|3[01])\/((19|20)\d\d)$#",$form_state['values']['dateofbirth'],$matches))
+		{
+			form_error($element, t('Invalid date of birth.'));
+		}
+		elseif(mktime(0,0,0,$matches[1],$matches[2],$matches[3])>time())
+		{
+			form_error($element, t('Date of birth cannot be in the future.'));
+		}
+	}
+}
+/**
+ * validate zip and postal codes
+ */
+function teligence_purchase_validate_zippostal($zippostal)
+{
+	$valid = FALSE;
+	if (preg_match("/^\D{1}\d{1}\D{1}[ ]?\d{1}\D{1}\d{1}/i",$zippostal) || 
+			preg_match("/(^\d{5}$)|(^\d{5}-\d{4}$)$/i",$zippostal)) 
+	{ 
+  		$valid = TRUE; 
+  	}
+	
+	return $valid;
+}
+ 
+/**
+ * validate expiration date
+ */ 
+function teligence_purchase_validate_expirationdate($element, &$form_state)
+{
+	date_default_timezone_set('America/Los_Angeles');
+	$expires = mktime(0,0,0,$element['month']['#value'], 1, $element['year']['#value']);
+	if ($expires <= time())
+	{
+		form_error($element, t('Invalid expiry date.'));
+	}
+	
+	// drupal_set_message('<pre>'.print_r($element,1).'</pre>');
+}
+ 
+/** 
+ * validate captcha
+ */
+function teligence_purchase_validate_captcha($element, &$form_state)
+{
+	if(ctype_digit($element['#value']))
+	{
+		db_set_active('paypal');
+		$CaptchaValue = db_result(db_query("SELECT CaptchaValue FROM {Captchas} WHERE ID = %d AND CaptchaHash = '%s' LIMIT 1", $form_state['values']['CaptchaID'], $form_state['values']['CaptchaHash']));
+		db_set_active();
+		if($element['#value'] <> $CaptchaValue)
+		{
+			form_error($element, t('Invalid captcha value.'));
+		}
+	}
+	else
+	{
+		form_error($element, t('Invalid captcha value.'));
+	}
+}
+		
+/**
+ * email
+ */
+function teligence_purchase_validate_email($element, &$form_state)
+{
+	$element['#value'] = trim($element['#value']);
+	if(!valid_email_address($element['#value']))
+	{
+		form_error($element, t('Invalid email address.'));
+	}
+}
+/**
+ * password
+ */
+function teligence_purchase_validate_password($element, &$form_state)
+{
+	if(strlen($element['#value']) < 6)
+	{
+		form_error($element, t('Password is too short. Must be 6 or more characters long.'));
+	}
+}
+/**
+ * passcode
+ */
+function teligence_purchase_validate_passcode($element, &$form_state)
+{
+	if(!ctype_digit($element['#value']))
+	{
+		form_error($element, t('Passcode must be only digits.'));
+	}
+	if(strlen($element['#value']) <> 4)
+	{
+		form_error($element, t('Passcode is too long. Must be exactly 4 digits long.'));
+	}
+}
+/**
+ * membership number
+ */
+function teligence_purchase_validate_membershipnumber($element, &$form_state)
+{
+	if(!ctype_digit($element['#value']))
+	{
+		form_error($element, t('Membership number must be only digits.'));
+	}
+	if(strlen($element['#value']) <> 5)
+	{
+		form_error($element, t('Membership number is too long. Must be exactly 5 digits long.'));
+	}
+}
+/**
+ * credit card number
+ */ 
+function teligence_purchase_validate_creditcard($element, &$form_state)
+{
+	if(teligence_cart_valid_card_number($element['#value']))
+	{
+		form_error($element, t('Credit Card Number is invalid.'));
+	}
+}
+
+
+
+ 
+/**********************************
+ * THEME FUNCTIONS
+ */
+
+/**
+ * theme paypal failure 
+ */
+function theme_teligence_purchase_paypalfailuremessage($ErrorCode = null)
+{
+	$output = '';
+	$output .= t('Your account has NOT been charged.');
+	$output .= '<br />';
+	switch ($ErrorCode) 
+	{
+		case 'PayPalPayerIdBelongsToOtherMember':
+			$output .= t('The PayPal credentials that you entered are already associated with another member.');
+			break;
+			
+		case 'NoSalesPaymentRestriction':
+		case 'DebtOrPaymentRestriction':
+			$output .= t('Please use a different payment method.');
+			break;
+			
+		case 'PayPayPayerIdLinkedToWebAccount':
+			$output .= t('The PayPal credentials that you entered are already associated with a web membership.');
+			$output .= '<br />';
+			$output .= t('Please !signin or !retrieve', array('!signin'=>l(t('Sign In'),'cart/login'),
+						'!retrieve'=>l(t('retrieve your email'),'cart/forgot-email')));
+			break;
+			
+		case 'DoVoid':
+		case 'RtmFailure':
+		case 'InvalidRequestParams':
+		case 'TechnicalError':
+		case 'PackageNotFound':
+		case 'DuplicateRequestGuid':
+		case 'ExistingMembershipBrandHub':
+		case 'MemberNotFound':
+		case 'TechnicalError':
+		default:
+			$output .= t('Please retry the purchase in a few minutes or use a different payment method.');
+			break;
+	}
+
+	return $output;
+}
+ 
+/**
+ * theme membeships list
+ */
+function theme_teligence_purchase_memberships($element)
+{
+	$name = 'memberships';
+	$output = '';
+	$rows = array();
+	foreach((array)$_SESSION['emsMemberships'] as $k => $v)
+	{
+		// prepare element for theme_radio
+		$radio['#parents'] = array($name);
+		$radio['#id'] = $name.'-'.$k;
+		$radio['#name'] = $name;
+		$radio['#return_value'] = $v->IvrMembershipNumber;
+		if ($element['#default_value'] == $radio['#return_value']) 
+		{
+			$radio['#value'] = $radio['#return_value'];
+		} 
+		
+		if($_SESSION['IvrMembershipNumber'] == $k && $element['#default_value'] <> 'newmarket') 
+		{
+			$radio['#value'] = $radio['#return_value'];
+		}
+		
+		$rows[] = array(
+			array(
+				'data'=>theme('radio',$radio),
+				'class'=>'membershipsOption',
+			),
+			array(
+				'data'=>$k,
+				'class'=>'membershipsNumber',
+			),
+			array(
+				'data'=>trim(str_replace("2","",$v->MarketName)),
+				'class'=>'membershipsCity',
+			),
+		);
+	}
+	$radio = array();
+	$radio['#parents'] = array($name);
+	$radio['#id'] = $name.'-newmarket';
+	$radio['#name'] = $name;
+	$radio['#return_value'] = 'newmarket';
+	if ($element['#default_value'] == $radio['#return_value']) 
+		$radio['#value'] = $radio['#return_value'];
+		
+	$rows[] = array(
+		array(
+			'data'=>theme('radio',$radio),
+			'class'=>'membershipsOption',
+		),
+		array(
+			'data'=>t('Create a membership in a different city'),
+			'colspan'=>2,
+			'class'=>'membershipsNumber',
+		),
+	);	
+	$output .= theme('table',array(),$rows,array('id'=>$name.'Table'));
+	
+	return $output;
+}
+ 
+/**
+ * theme credit cards list
+ */
+function theme_teligence_purchase_creditcardslist($element)
+{
+	$name = 'creditcardslist';
+	$output = '';
+	$headers = array(
+		array('data'=>t('Credit Card Number'),'colspan'=>2),
+		t('Type'),
+		t('Expiry Date'),
+	);
+	
+	// load list of credit cards
+	$rows = array();
+	$params = new stdClass ();
+    $params->emsMembershipId = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->EmsMembershipId;
+	$result = teligence_purchase_soap_call($params,'GetPaymethods',variable_get('teligence_purchase_wsdl_membermanagement',''));
+	switch ($result->GetPaymethodsResult->ResponseCode) 
+	{
+		case 'Success':
+			if(!is_array($result->GetPaymethodsResult->WebPaymethods->WebPaymethod)): 
+				$WebPaymethods = array($result->GetPaymethodsResult->WebPaymethods->WebPaymethod);
+			else:
+				$WebPaymethods = $result->GetPaymethodsResult->WebPaymethods->WebPaymethod;
+			endif;
+			foreach ((array)$WebPaymethods as $WebPaymethod) 
+			{
+				// prepare element for theme_radio
+				$radio['#parents'] = array($name);
+				$radio['#id'] = $name.'-'.$WebPaymethod->PaymethodId;
+				$radio['#name'] = $name;
+				$radio['#return_value'] = $WebPaymethod->PaymethodId.'|'.$WebPaymethod->AccountNo.'|'.$WebPaymethod->ExpiryDateMMYY;
+				if ($element['#default_value'] == $radio['#return_value']) 
+				{
+					$radio['#value'] = $radio['#return_value'];
+				} 
+				
+				$rows[] = array(
+					theme('radio',$radio),
+					$WebPaymethod->AccountNo,
+					$WebPaymethod->PaymethodType,
+					substr($WebPaymethod->ExpiryDateMMYY,0,2).'/'.substr($WebPaymethod->ExpiryDateMMYY,2,2),
+				);
+			}
+			break;
+			
+		default:
+			drupal_set_message(t('!error',array('!error'=>$result->GetPaymethodsResult->ErrMsg)),'error');
+			break;	
+	}
+	
+	if(count($rows))
+	{
+		$output .= theme('table',$headers,$rows,array('id'=>$name.'Table'));
+	}
+	// $output .= drupal_render($element);
+	
+	return $output;
+}
+
+/**
+ * theme packages radios 
+ */
+function theme_teligence_purchase_packagesradios($element)
+{
+	drupal_add_js(array('teligence_purchase' => array('widgets' => array('packagesWrapperId' => array($element['#id'].'Wrapper')))), 'setting');
+	
+	$headers = array(
+		'',
+		t('Minutes'),
+		t('Value')
+	);
+	$output = '';
+	$rows = array();
+	$middle = (int)ceil(count((array)$element['#options'])/2);
+	$c = 0;
+	foreach ((array)$element['#options'] as $k=>$v) 
+	{
+		$element['#options'][$k] = '';
+		$c++;
+		$favoritePackageCalss = '';
+		if($element['#default_value'] == $k.'|'.$v->Minutes.'|'.$v->PackagePriceCents)
+		{
+			$element[$k]['#value'] = $k.'|'.$v->Minutes.'|'.$v->PackagePriceCents;
+			$favoritePackageCalss = ' favoritePackage';
+		}
+		elseif($c == $middle)
+		{
+			$element[$k]['#value'] = $k.'|'.$v->Minutes.'|'.$v->PackagePriceCents;
+			$favoritePackageCalss = ' favoritePackage';
+		}
+		unset($element[$k]['#title']);
+		
+		// mark element as rendered 
+		// $void = drupal_render($element[$k]);
+		
+		// prepare element for theme_radio
+		$element[$k]['#parents'] = array($element['#name']);
+		$element[$k]['#id'] = $element['#name'].'-'.$k;
+		$element[$k]['#name'] = $element['#name'];
+		$element[$k]['#return_value'] = $k.'|'.$v->Minutes.'|'.$v->PackagePriceCents;
+		
+		// populate table row
+		$rows[] = array(
+			'data' => array(
+				theme('radio',$element[$k]), // output html for element
+				array ('data'=> t('@number minutes', array('@number' => $v->Minutes)), 'class'=>'time'),
+				array ('data'=> '$'. substr($v->PackagePriceCents, 0, strlen($v->PackagePriceCents)-2) . '.' . substr($v->PackagePriceCents, -2), 'class'=>'price'),
+			),
+			'class' => 'packagesOptionRow' . $favoritePackageCalss,
+		);
+	}
+	$output .= '<div id="'.$element['#id'].'Wrapper">';
+	
+	if(count($rows))
+	{
+		$output .= theme('table',$headers,$rows,array('class'=>'packagesTable', 'id'=>$element['#name'].'Table')); 
+	}
+	else
+	{
+		$output .= t('No Packages were found for this location. Please try a different location.');
+	}
+	
+	// $output .= drupal_render($element); 
+	$output .= '</div>';
+	
+	return $output;
+}
+ 
+/*
+ * theme expiration date field
+ */
+function theme_teligence_purchase_ccexpirationdate($form) 
+{
+	$form['day']['#type'] = 'hidden';
+	$form['day']['#value'] = 1;
+	$form['year']['#options'] = array();
+	$years = drupal_map_assoc(range(format_date(time(), 'custom', 'Y'), (int)format_date(time(), 'custom', 'Y') + 5));
+	foreach($years as $key => $val)
+	{
+		$form['year']['#options'][substr($key, 2, 2)] = $val;
+	}  
+  
+	return drupal_render($form);
+}
+/**
+ * theme credit card list
+ */
+function theme_teligence_purchase_addnewcclist($form)
+{
+	$output = '';	
+	foreach ((array)element_children($form) as $key) 
+	{
+		$rows[] = array(
+			drupal_render($form[$key]['cc_selected']),
+			drupal_render($form[$key]['AccountNo']),
+			drupal_render($form[$key]['cc_type']),
+			drupal_render($form[$key]['ExpiryDateMMYY']),
+			drupal_render($form[$key]['cc_delete']),
+		);
+	}
+	$headers = array(
+		'',
+		t('Credit Card Number'),
+		t('Type'),
+		t('Expiry Date'),
+		'',
+	);
+	$output .= theme('table', $headers, $rows, array('id' => 'creditCardsList'));
+	$output .= drupal_render($form); 
+
+	return $output;
+}
+
+/*******************************
+ * MISCELANEOUS FUNCTIONS
+ */
+  
+ /** 
+ * Flattens an array, or returns FALSE on fail. 
+ */ 
+function teligence_purchase_array_flatten($array) { 
+  if (!is_array($array)) { 
+    return FALSE; 
+  } 
+  $result = array(); 
+  foreach ($array as $key => $value) { 
+    if (is_array($value)) { 
+      $result = array_merge($result, teligence_purchase_array_flatten($value)); 
+    } 
+    else { 
+      $result[$key] = $value; 
+    } 
+  } 
+  return $result; 
+} 
+  
+/**
+ * store session values
+ * ivr and web after login
+ * 
+ * WebActiveMemberships	 		Collection of all the active memberships for the member, for the specified brand. Each record in the collection has the following structure:
+	EmsMembershipId	 			EMS Unique indentifier for the membership
+	IvrMembershipNumber	 		Membership number on the IVR system
+	IvrPasscode	 				IVR passcode
+	EmsBrandId	 				EMS Brand ID for the membership
+	EmsHubId	 				EMS Hub ID for the membership
+	HubName	 					Hub Name for the membership
+	MarketId	 				Market ID for the membership
+	MarketName	 				Market Name for the membership
+	LocalAccessNumbers	 		Collection of local access numbers. Each record in the collection has the following structure:
+		City	 				City
+		Region	 				Region
+		Ani	 					Local phone number (formatted as 999-999-9999)
+ */
+function teligence_purchase_setsessionvalues($params, $reset = FALSE)
+{
+	if($reset)
+	{
+		unset($_SESSION['emsMemberships']);
+		unset($_SESSION['IvrMembershipNumber']);
+		unset($_SESSION['emsMembershipId']);
+		unset($_SESSION['IvrPasscode']);
+		unset($_SESSION['EmsMemberId']);
+		unset($_SESSION['WebMemberId']);
+		unset($_SESSION['WebMemberPassword']);
+		unset($_SESSION['WebMemberEmail']);
+	}
+	
+	if(isset($params->WebActiveMemberships))
+	{
+		if(!is_array($params->WebActiveMemberships->WebActiveMembership)): 
+			$w = array($params->WebActiveMemberships->WebActiveMembership);
+		else:
+			$w = $params->WebActiveMemberships->WebActiveMembership;
+		endif;
+		foreach ((array)$w as $WebActiveMembership) 
+		{
+			$_SESSION['emsMemberships'][$WebActiveMembership->IvrMembershipNumber] = $WebActiveMembership;
+			$_SESSION['emsMemberships'][$WebActiveMembership->IvrMembershipNumber]->MarketName = trim(str_replace("2", "", $_SESSION['emsMemberships'][$WebActiveMembership->IvrMembershipNumber]->MarketName));
+		}
+		$_SESSION['IvrMembershipNumber'] = key($_SESSION['emsMemberships']);
+		
+		// temporary fix for legacy compatibility with teligence_cart module
+		$_SESSION['emsMembershipId'] = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->EmsMembershipId;
+		$_SESSION['IvrPasscode'] = $_SESSION['emsMemberships'][$_SESSION['IvrMembershipNumber']]->IvrPasscode;
+	}
+	
+	if(isset($params->EmsMemberId))
+		$_SESSION['EmsMemberId'] = $params->EmsMemberId;
+	
+	if(isset($params->WebMemberId))
+		$_SESSION['WebMemberId'] = $params->WebMemberId;
+	
+	if(isset($params->password))
+		$_SESSION['WebMemberPassword'] = md5($params->password);
+	
+	if(isset($params->email))
+		$_SESSION['WebMemberEmail'] = $params->email;
+}
+ 
+ 
+/**
+ * build drupal user
+ * void
+ */
+function teligence_purchase_drupaluser($form_state = array())
+{
+	// Default implementation of name generation
+    $namenew = preg_replace('/@.*$/', '', $form_state['values']['email']);
+    
+	// if username generated from email record already exists, append underscore and number eg:(chris_123)
+    if (db_result(db_query("SELECT count(*) FROM {users} WHERE LOWER(name) = LOWER('%s')", $namenew)) > 0)
+    {
+        // find the next number available to append to the name
+        $sql = "SELECT SUBSTRING_INDEX(name,'_',-1) FROM {users} WHERE name REGEXP '%s' 
+        		ORDER BY CAST(SUBSTRING_INDEX(name,'_',-1) AS UNSIGNED) DESC LIMIT 1";
+        $nameidx = db_result(db_query($sql, '^'.$namenew.'_[0-9]+$'));
+        $namenew .= '_'.($nameidx+1);
+    }
+	
+	// always set roles
+	$roles = array();
+	$rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'web_user'));
+	$roles[$rid] = 'web_user';
+	
+	// check whether user has an ivr account
+	if(isset($form_state['WebActiveMemberships']) && !empty($form_state['WebActiveMemberships']))
+	{
+		$roles = array();
+		$rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'ivr_user'));
+		$roles[$rid] = 'ivr_user'; 
+	}
+	
+	// check if drupal user account already exists or add new drupal user
+	if($account = user_load( array( 'mail' => $form_state['values']['email'] )))
+	{
+		// set roles to this user
+		$account->roles = $roles;
+		
+		// Update the user table timestamp noting user has logged in.
+    	// This is also used to invalidate one-time login links.
+    	$account->access = time();
+	
+		// save user
+		$account = user_save($account, (array)$account);	
+	}
+	elseif(valid_email_address($form_state['values']['email']) && isset($form_state['values']['password']))
+	{
+		$newuser = array(
+			'name' => $namenew,
+			'mail' => $form_state['values']['email'],
+			'status' => 1,
+			'pass' => $form_state['values']['password'],
+			'roles' => $roles,
+			'init' => $form_state['values']['email'],
+			'access' => time(),
+		);
+					
+		// create new user
+		$account = user_save("", $newuser);
+	}
+	else
+	{
+		$account = drupal_anonymous_user();
+	}			
+	
+	return $account;
+}
+ 
+ 
+/**
+ * tokens
+ */
+function teligence_purchase_tokens($key)
+{
+	$tokens['emailNewIvrAccount'] = array(
+		'[url]' => '',
+		'[IvrMembershipNumber]' => '',
+		'[IvrPasscode]' => '',
+	);
+	$tokens['emailPackagePurchase'] = array(
+		'[total]' => '',
+		'[minutes]' => '',
+		'[IvrMembershipNumber]' => '',
+		'[IvrPasscode]' => '',
+	);
+	$tokens['emailValidateAccount'] = array(
+		'[url]' => '',
+		'[password]' => '',
+		'[email]' => '',
+	);
+	$tokens['emailPasswordRecovery'] = array(
+		'[url]' => '',
+	);
+	$tokens['emailResetEmailId'] = array(
+		'[newemail]' => '',
+		'[url]' => '',
+	);
+	
+	return array_key_exists($key, $tokens) ? $tokens[$key] : '';
+}
+ 
+ 
+ /**
+ * function to return array from list of values from a textarea
+ * one value per line. 
+ * This will return a list to use in the #options element of a select input field.
+ */
+function teligence_purchase_valuelistoptions($values = null)
+{
+	$allowed_values = array();
+	
+	if(!is_null($values))
+	{
+		$list = explode("\n", $values);
+	    $list = array_map('trim', $list);
+	    $list = array_filter($list, 'strlen');
+	    foreach ((array)$list as $opt) 
+	    {
+	      // Sanitize the user input.
+	      $opt = filter_xss($opt, array());
+	      $allowed_values[$opt] = $opt;
+	    }
+	}
+	
+	return $allowed_values;
+}
+
+/**
+ * find sections of phone number
+ * return array with three values accordingly
+ */
+function teligence_purchase_npanxx($phonenumber) 
+{   	
+	$phonenumber = trim($phonenumber);
+	
+	// define regular expression   
+  	$regex = "/
+    ^\D*          # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    ([02-9]\d{2}) # capture area code       
+    \D*           # optional separator
+    (\d{3})       # capture 3-digit prefix
+    \D*           # optional separator
+    (\d{4})       # capture 4-digit line number                       
+    \D*           # optional separator
+    (\d*)         # capture optional extension                       
+    \D*$          # ignore trailing non-digits
+  	/x"; 
+    
+  	// get digits of phone number
+  	preg_match($regex, $phonenumber, $matches);
+
+    return array(
+    	$matches[1], // npa
+    	$matches[2], // nxx
+    	$matches[3] // number
+    );
+} 
+
+
+/*************************
+ * CAPTCHA IMAGE
+ */
+function teligence_purchase_getcaptchaimage($id, $hash, $auth)
+{
+	#
+    # This function generates a 3 digit captcha image using the GD library. You need
+    # the PHP GD library installed for it to work.
+    #
+    # Call it like this: <img src="/ctc/captcha/$id/$hash/$auth" />
+    # Pass in an $id + $hash from the database, and calculate the Auth MD5 hash
+    # using the secret password (below).
+    #
+
+    # Config variables here
+    $AuthSecret = "G3n3r4t3_1m4g3!";
+    $ImageX     = 59;
+    $ImageY     = 25;
+    $FontSize   = 15;
+    $FontPath   = drupal_get_path('module', 'teligence_ctc') . '/captcha/Vera.ttf';
+
+    # Start off declaring success as false. If it's still false after validation,
+    # we'll generate an image that says "ERR" rather than 3 digits
+    $Success = FALSE;
+
+    # Connect to the database
+    # We expect a table that looks like this:
+    # ID | CaptchaHash                      | CaptchaValue
+    #  1 | 6101cc746388bf0466ff6f8810768d6c | 347
+    #  2 | 03d675b5e31cb34e9ae6a7fe320ee941 | 739
+
+    # We generate an MD5 auth as extra protection against brute force attacks
+    # It has to match for us to go on and validate the captcha $id/$hash and
+    # get the details of which digits to generate in the image
+    $Auth = md5($AuthSecret . "_" . $id . "_" . $hash);
+    if ($Auth === $auth) 
+    {
+    	db_set_active('paypal');
+        if($CaptchaValue = db_result(db_query("SELECT CaptchaValue FROM {Captchas} WHERE ID = %d AND CaptchaHash = '%s' LIMIT 1", $id, $hash) ))
+        {
+        	$Success = TRUE;
+        }
+        db_set_active();    
+    }
+
+    if ($Success) {
+        # For success, output the 3 digits with semi-random placement (vertical and horizontal position differs)
+        header('Content-type: image/png');
+        $ImageHandle = @imagecreatetruecolor($ImageX, $ImageY) or die('Cannot Initialize new GD image stream');
+        $BackgroundColour = imagecolorallocate($ImageHandle, 187, 187, 187);
+        $TextColour       = imagecolorallocate($ImageHandle,   0,   0,   0);
+        imagefill($ImageHandle, 0, 0, $BackgroundColour);
+        imagettftext($ImageHandle, $FontSize, 0, rand(0, 10), rand($FontSize, $ImageY), $TextColour, $FontPath, substr($CaptchaValue, 0, 1));
+        imagettftext($ImageHandle, $FontSize, 0, rand(15, 20), rand($FontSize, $ImageY), $TextColour, $FontPath, substr($CaptchaValue, 1, 1));
+        imagettftext($ImageHandle, $FontSize, 0, rand(25, 40), rand($FontSize, $ImageY), $TextColour, $FontPath, substr($CaptchaValue, 2, 1));
+        imagepng($ImageHandle);
+        imagedestroy($ImageHandle);
+    } else {
+        # For success, output the 3 digits with semi-random placement (vertical and horizontal position differs)
+        header('Content-type: image/png');
+        $ImageHandle = @imagecreatetruecolor($ImageX, $ImageY) or die('Cannot Initialize new GD image stream');
+        $BackgroundColour = imagecolorallocate($ImageHandle, 187, 187, 187);
+        $TextColour       = imagecolorallocate($ImageHandle,   0,   0,   0);
+        imagefill($ImageHandle, 0, 0, $BackgroundColour);
+        imagettftext($ImageHandle, $FontSize, 0, rand(0, 10), rand($FontSize, $ImageY), $TextColour, $FontPath, "E");
+        imagettftext($ImageHandle, $FontSize, 0, rand(15, 20), rand($FontSize, $ImageY), $TextColour, $FontPath, "R");
+        imagettftext($ImageHandle, $FontSize, 0, rand(25, 40), rand($FontSize, $ImageY), $TextColour, $FontPath, "R");
+        imagepng($ImageHandle);
+        imagedestroy($ImageHandle);
+    }
+}
+
+
+/************************
+ * SOAP
+ */
+
+ /*
+ * SOAP send
+ * wrap the php soap function so we can handle any errors or exceptions
+ */
+function teligence_purchase_soap_call(&$params, $method_name, $wsdl, $renewGUID = null)
+{
+	$output = new stdClass();
+	
+	if(!class_exists('SoapClient'))
+	{
+		$output->{$method_name . "Result"}->ResponseCode = 'SoapClientMissing';
+		return $output;
+	}
+	
+	$params->sequenceId = teligence_cart_uuid($renewGUID);
+	
+    try
+    {
+    	// Create the stream context
+		$context = stream_context_create(array(
+		    'http' => array(
+		        'timeout' => 3      // Timeout in seconds
+		    )
+		));
+    	if(!@file_get_contents($wsdl,0,$context)) 
+    	{
+        	throw new SoapFault('Server', 'No WSDL found at ' . $wsdl);
+    	}
+		
+		// set up the service client using WSDL
+		if(variable_get('teligence_purchase_cachewsdl', 1))
+		{
+			$client = new SoapClient($wsdl);
+		}
+		else
+		{
+			$client = new SoapClient($wsdl, array('cache_wsdl'=>WSDL_CACHE_NONE));
+		}
+    	
+		// call soap method and pass parameters object
+        $output = $client->{ $method_name }($params);
+    } 
+	catch(SoapFault $e)
+    {
+    	$output = new stdClass();
+        if(check_plain(print_r($e->getMessage(), true)) == 'Error Fetching http headers')
+        {
+        	$output->{$method_name . "Result"}->ResponseCode = 'ErrorFetchingHttpHeaders';
+        	$output->{$method_name . "Result"}->ErrMsg = t('!message', array('!message' => $e->getMessage()));
+        }
+        else
+        {
+        	$output->{$method_name . "Result"}->ResponseCode = 'SoapFaultGetCode_' . $e->getCode();
+        	$output->{$method_name . "Result"}->ErrMsg = $method_name.' Soap Error Code: '.check_plain($e->getMessage());
+        }
+
+		watchdog('teligence_purchase',"@errorId - @cause - @resol - @methodName - @responseCode - @ErrMsg - !input - !output", 
+			array(
+				'@errorId' => 'BWTP001',
+				'@cause' => 'Cause: SOAP brand websites cannot connect to Back-end; Connection times out or response is invalid.',
+				'@resol' => "Resolution: open network connection on port 80 from webserver to $wsdl", 
+				'@methodName' => 'Method Name = '.$method_name,
+				'@responseCode' => 'SoapErrorCode = ' . $e->getCode(),
+				'@ErrMsg' => $output->{$method_name . "Result"}->ErrMsg,
+				'!input' => 'Input Parameters: <pre>'.print_r($params,1).'</pre>',
+				'!output' => 'Output Parameters: <pre>'.print_r($output->{$method_name . "Result"},1).'</pre>',
+			), WATCHDOG_ALERT);
+		
+		if(!variable_get('teligence_purchase_debug', 0))
+			$output->{$method_name . "Result"}->ErrMsg = t('There has been a technical problem with your transaction. !pleasecall', array('!pleasecall' => variable_get('teligence_purchase_customerservice', 'Please call customer service at 1-800-984-6889')));
+    }
+	
+	if($output->{$method_name . "Result"}->ResponseCode != 'Success')
+	{
+		watchdog('teligence_purchase','Not Success Back-end call. !method_name: !code, !error; Input Parameters: !input', 
+			array(
+				'!method_name' => $method_name, 
+				'!code' => $output->{$method_name . "Result"}->ResponseCode,
+				'!error' => $output->{$method_name . "Result"}->ErrMsg,
+				'!input' => '<pre>'.print_r($params,1).'</pre>',
+			)
+		);
+	}
+	
+    return $output;
+}

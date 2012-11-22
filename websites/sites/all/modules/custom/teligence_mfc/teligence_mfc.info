@@ -1,0 +1,9 @@
+; $Id$ 
+name = "Teligence Mens Free Chatline"
+description = "Handels templates and path aliases for Mens Free Chatline."
+package = "Teligence"
+version = "6.x"
+core = "6.x"
+
+dependencies[] = teligence_cart
+dependencies[] = path

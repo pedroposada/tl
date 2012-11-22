@@ -1,0 +1,391 @@
+<?php 
+
+/*
+ * Implementation of hook_menu()
+ */
+function teligence_ctc_embed_menu()
+{
+	$items = array();
+	
+	$items['admin/ctc/embed'] = array(
+		'title' => 'Embed',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_embed_new_form'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 12,
+	);
+	/*
+	$items['admin/ctc/embed/add-edit'] = array(
+		'title' => 'Add/Edit',
+		'type'=>MENU_DEFAULT_LOCAL_TASK,
+		'weight'=> 0,
+	);
+	$items['admin/ctc/embed/code'] = array(
+		'title' => 'Grab Code',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_embed_settings_form'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 1,
+	);
+	$items['admin/ctc/embed/edit'] = array(
+		'title' => 'Edit Forms',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_embed_edit_form'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 2,
+	);
+	*/
+	$items['ctc/embed/%'] = array(
+    	'page callback' => 'drupal_get_form',
+    	'page arguments' => array('teligence_ctc_embed_form', 2),
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);
+  	/*
+  	$items['ctc/embed-call'] = array(
+    	'page callback' => 'teligence_ctc_embed_response',
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);
+  	*/
+  	
+	return $items;
+}
+
+/*
+ * Implementation of hook_theme()
+ */
+function teligence_ctc_embed_theme($existing, $type, $theme, $path)
+{
+    return array (
+	    'teligence_ctc_embed_new_form'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+    );
+}
+
+/*
+ * EMBED
+ * Add or edit existing embed form 
+ */
+function teligence_ctc_embed_new_form($form_state)
+{
+	$form = array();
+	$form['#theme'] = 'teligence_ctc_embed_new_form';
+	
+	$form['right']['previewform'] = array(
+		'#type' => strlen($form_state['storage']['values']['previewform']) ? 'item' : 'markup',
+		'#title' => t('Preview'),
+		'#value' => $form_state['storage']['values']['previewform'],
+	);
+	$form['right']['embedcode'] = array(
+		'#type' => strlen($form_state['storage']['values']['previewform']) ? 'textarea' : 'markup',
+		'#title' => t('Embed Code'),
+		'#value' => $form_state['storage']['values']['previewform'],
+	);
+	
+	$options['add'] = t('Add new form');
+	if(db_table_exists('teligence_ctc_embed_forms'))
+	{	
+		drupal_add_js(drupal_get_path('module', 'teligence_ctc') . '/jquery.populate.js');
+		$result = db_query("SELECT form_id, name FROM {teligence_ctc_embed_forms} WHERE 1");
+		while($item = db_fetch_array($result))
+		{
+			$options[$item['form_id']] = $item['name'];
+		}
+	}
+	$form['left']['selectform'] = array(
+		'#type' => 'select',
+		'#options' => (array)$options,
+		'#title' => t('Select or add a Form'),
+		'#default_value' => $form_state['storage']['values']['selectform'],
+	);
+	
+	$form['left']['form_name'] = array(
+		'#title' => t('Form Name'),
+		'#type' => 'textfield',
+		'#default_value' => $form_state['storage']['values']['form_name'],
+		'#required' => true,
+	);
+	$form['left']['step1'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Step 1'),
+		'#default_value' => strlen($form_state['storage']['values']['step1']) ? $form_state['storage']['values']['step1'] : '[ctc-form-step-1]',
+		'#required' => true,
+		'#description' => t('Available tokens: [ctc-form-step-1]'),
+	);	
+	$form['left']['step2success'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Step 2 - Success'),
+		'#default_value' => strlen($form_state['storage']['values']['step2success']) ? $form_state['storage']['values']['step2success'] : '[go-back-button]',
+		'#required' => true,
+		'#description' => t('Available tokens: [go-back-button]'),
+	);	
+	$form['left']['step2failure'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Step 2 - Failure'),
+		'#default_value' => strlen($form_state['storage']['values']['step2failure']) ? $form_state['storage']['values']['step2failure'] : '[go-back-button]',
+		'#required' => true,
+		'#description' => t('Available tokens: [go-back-button]'),
+	);
+
+	$form['preview'] = array(
+		'#type' => 'submit',
+		'#value' => t('Preview'),
+	);
+	$form['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+	);
+	$form['delete'] = array(
+		'#type' => 'submit',
+		'#value' => t('Delete'),
+		'#disabled' => !db_table_exists('teligence_ctc_embed_forms'),
+	);
+		
+	return $form;
+}
+
+/*
+ * EMBED
+ * teligence_ctc_embed_new_form submit
+ */
+function teligence_ctc_embed_new_form_submit($form_state)
+{
+	$form_state['storage']['values'] = $form_state['values'];
+	
+	if($form_state['clicked_button']['#id'] == 'edit-preview')
+	{	
+		$form_state['storage']['values']['previewform'] = '<iframe src="http://'.$_SERVER['SERVER_NAME'].'/ctc/embed/0" frameborder="0" scrolling="no" width="100%" height="200"></iframe>';
+		$_SESSION['ctc_step1'] = '';
+	}
+	if($form_state['clicked_button']['#id'] == 'edit-save')
+	{
+		
+	}
+	if($form_state['clicked_button']['#id'] == 'edit-delete')
+	{
+		
+	}
+}
+
+
+
+/* 
+ * $output .= '<script type="text/javascript" src="/misc/jquery.js"></script>' . "\n\r";
+ * $output .= '<script type="text/javascript" src="/misc/drupal.js"></script>' . "\n\r";
+ * $output .= '<script type="text/javascript" src="/'.drupal_get_path('module', 'teligence_ctc').'/jquery.embed.js"></script>' . "\n\r";
+ * $output .= '<style type="text/css" media="all">'.variable_get('teligence_ctc_embedd_css','').'</style>' . "\n\r";
+ * $output .= '<div id="teligence-ctc-form-wrapper">'.drupal_get_form('teligence_ctc_form', $_REQUEST['language'], $_REQUEST['brand'], 'embed', true).'</div>';
+ *
+ * embedd form definition
+ */
+function teligence_ctc_embed_form($form_state, $embed_form_id = null)
+{
+	
+	$form['embed_form_id'] = array(
+		'#type' => 'hidden',
+		'#value' => $embed_form_id,
+	);
+
+	switch($form_state['storage']['step'])
+	{
+	default:
+	case 1:
+		drupal_add_js(drupal_get_path('module', 'teligence_ctc') . '/jquery.maskedinput.js');
+		drupal_add_js('$(document).ready(function(){$("#edit-full-phone-number").mask("(999) 999-9999");})', 'inline');
+		// make parameters case insensitive
+		$request = array();
+		foreach((array)$_REQUEST as $key => $value)
+		{
+			$request[strtolower($key)] = $value;
+		}
+	
+		$form['step1']['full_phone_number'] = array(
+			'#type' => 'textfield',
+			'#maxlength' => 14,
+			'#size' => 14,
+			'#default_value' => $form_state['storage']['values']['full_phone_number'],
+		);
+		$form['step1']['lookup_call_me_now'] = array(
+			'#type' => 'hidden',
+			'#name' => 'lookup_call_me_now',
+			'#value' => 'yes',
+		);
+		$form['step1']['partnerID'] = array(
+			'#type' => 'hidden',
+			'#name' => 'partnerID',
+			'#value' => $request['pid'],
+		);
+		$form['step1']['Keyword'] = array(
+			'#type' => 'hidden',
+			'#name' => 'Keyword',
+			'#value' => $request['keyword'],
+		);
+		$form['step1']['Campaign'] = array(
+			'#type' => 'hidden',
+			'#name' => 'Campaign',
+			'#value' => $request['campaign'],
+		);
+		$form['step1']['Source'] = array(
+			'#type' => 'hidden',
+			'#name' => 'Source',
+			'#value' => $request['source'],
+		);
+		$form['step1']['LandingPage'] = array(
+			'#type' => 'hidden',
+			'#name' => 'LandingPage',
+			'#value' => strlen($request['landingpage']) ? $request['landingpage'] : (strlen($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']),
+			//'#value' => "pedro",
+		);
+		$form['step1']['atid'] = array(
+			'#type' => 'hidden',
+			'#name' => 'atid',
+			'#value' => $request['atid'],
+		);
+		
+		// captcha field
+		if(user_access('show captcha'))
+		{
+			$form['step1']['captcha'] = array(
+				'#type' => 'fieldset',
+				//'#description' => t('Enter your 10-digit phone number'),
+				'#pre_render' => array('teligence_ctc_captcha_prerender'),
+			);
+			$form['step1']['captcha']['CaptchaValue'] = array(
+				'#type' => 'textfield',
+				'#size' => 3,
+				'#maxlength' => 3,
+			);
+			$form['step1']['captcha']['CaptchaHash'] = array(
+				'#type' => 'hidden',
+				'#name' => 'CaptchaHash',
+				//'#value' => $Result['CaptchaHash'],
+			);
+			$form['step1']['captcha']['CaptchaID'] = array(
+				'#type' => 'hidden',
+				'#name' => 'CaptchaID',
+				//'#value' => $Result['ID'],
+			);
+		}
+		
+		$form['step1']['call'] = array(
+			'#type' => 'submit',
+			'#value' => strlen($request['buttontext']) ? $request['buttontext'] : t('Call me now!'),
+			'#weight' => 100,
+			//'#name' => 'submit_call_me_now,'
+		);
+	break;
+	case 2:
+		$form['step2']['back'] = array(
+			'#type' => 'submit',
+			'#value' => t('Go Back'),
+			'#weight' => 100,
+		);
+	break;
+	}
+	
+	return $form;
+}
+
+/*
+ * teligence_ctc_embed_response handle embedded requests
+ */
+function teligence_ctc_embed_form_submit($form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-call')
+	{		
+		db_set_active('paypal');
+		$CaptchaValue = db_result(db_query("SELECT CaptchaValue FROM {Captchas} WHERE ID = %d AND CaptchaHash = '%s' LIMIT 1", $form_state['values']['CaptchaID'], $form_state['values']['CaptchaHash']));
+		db_set_active();
+		if($form_state['values']['CaptchaValue'] <> $CaptchaValue)
+		{
+			//$output['content'] = variable_get('teligence_ctc_' . $_REQUEST['language'] . '_message_failure', '');
+		}	
+		else
+		{
+			$phonesections = teligence_ctc_phone_number_sections($form_state['values']['full_phone_number']);
+			if(count($phonesections) == 2)
+			{
+				$responsecode = teligence_ctc_caller($phonesections['area_code'], $phonesections['phone_number'], 'en', $form_state['values']['brand'], $form_state['values']);	
+				if($responsecode == 200)
+				{
+					//$output['content'] = variable_get('teligence_ctc_' . $request['language'] . '_message_success', '');
+				}
+				else
+				{
+					//$output['content'] = variable_get('teligence_ctc_' . $request['language'] . '_message_failure', '');
+				}	
+			}
+			
+		}
+		
+		//$output['content'] .= '<div id="try-again">'.t('Go Back').'</div>';
+		
+		//return drupal_json($output);	
+	}	
+	if($form_state['clicked_button']['#id'] == 'edit-back')
+	{
+		
+	}
+}
+
+
+/*
+ * theme form teligence_ctc_embed_new_form
+ */
+function theme_teligence_ctc_embed_new_form($form)
+{
+	$output = '';
+
+	$rows[] = array(
+		array(
+			'data' => drupal_render($form['left']),
+			'valign' => 'top',
+			'width' => '50%',
+		),
+		array(
+			'data' => drupal_render($form['right']),
+			'valign' => 'top',
+		),
+	);
+	$output .= theme('table', array(), $rows, array('width' => '100%'));
+	$output .= drupal_render($form);
+	
+	return $output;
+}
+
+/*
+ * teligence_ctc_embedd_form 
+ * page to store embedd code. Code will be pasted in third partie's pages
+ */
+function teligence_ctc_embed_settings_form($form_state)
+{
+	$form = array();
+	
+	$form['teligence_ctc_embedd_css'] = array(
+		'#title' => t('Styles'),
+		'#type' => 'textarea',
+		'#rows' => 10,
+		'#default_value' =>  variable_get('teligence_ctc_embedd_css',''),
+		'#description' => t('These styles will be perpended to the CTC form. Do not include "style" tag'),
+	);
+	$form['teligence_ctc_embedd_code'] = array(
+		'#title' => t('Code to embed'),
+		'#type' => 'textarea',
+		'#rows' => 5,
+		'#default_value' =>  variable_get('teligence_ctc_embedd_code','<iframe src="http://'.$_SERVER['SERVER_NAME'].'/ctc/embed?language=en&brand=LLK" frameborder="0" scrolling="no" width="100%" height="200px"></iframe>'),
+		'#description' => t('Embed this code in third party page.'),
+	);
+	$form['teligence_ctc_sample_form'] = array(
+		'#type' => 'item',
+		'#title' => t('Sample embedded form'), 
+		'#value' => variable_get('teligence_ctc_embedd_code',''),
+		'#description' => t('This is how the CTC form will look like in the third parties page'),
+	);
+	
+	return system_settings_form($form);
+}

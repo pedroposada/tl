@@ -1,0 +1,90 @@
+.paypal-page {
+	padding:11px;
+	background: url(/sites/all/modules/teligence_paypal/images/promo_blank.jpg) bottom repeat-x;
+}
+
+.title {
+	text-align: left;
+	font-size:18px;
+	font-weight:bold;
+	margin-bottom:1em;
+	color:#737373;
+}
+
+.block-region {
+	margin-bottom:100px;
+}
+.message fieldset{
+	border:none;
+}
+.order-type-button {
+}
+.order-type-button input.form-submit{
+}
+.paypal-order-review label{
+	float:left;
+	width:250px;
+}
+.paypal-order-review {
+	padding:1em;
+}
+.paypal-package-selection{
+	padding:1em;
+}
+
+.steps li{
+	display:inline;
+}
+
+.steps td.active {
+	font-weight:bold;
+	background-color:#dfdfdf;
+	color:#000;
+}
+
+.steps td {
+	background-color:#dfdfdf;
+	color:#919191;
+}
+.packages table{
+	
+}
+.packages td{
+	padding:5px 8px 5px 8px;
+}
+.buttons {
+	width:250px;
+}
+.next-button {
+	width:100px;
+}
+.buttons .next-button {
+	width:100px;
+	float:right;
+}
+.buttons .next-button-place {
+	width:150px;
+}
+.buttons .back-button {
+	border:none;
+	background:none;
+	padding:0;
+	cursor: pointer;
+	cursor: hand;
+	float:left;
+	width:100px;
+}
+.package-table th{
+	text-align:right;
+	padding:8px;
+}
+
+.package-table td.time, .package-table td.price {
+	padding:5px 8px 5px 10em; 
+}
+.package-table .even {
+	background-color:#fff;
+}
+.package-table td.time {
+	text-align:right;
+}

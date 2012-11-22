@@ -1,0 +1,307 @@
+<?php
+
+
+/***********************
+ * DRUPAL HOOKS
+ */
+
+/**
+ * Implements hook_perm()
+ */
+function teligence_blog_perm()
+{
+	return array(
+		'access blog comment moderation page',		
+	);
+}
+ 
+ 
+/**
+ * Implements hook_menu()
+ */
+function teligence_blog_menu_alter(&$items)
+{
+	$items['blog/add/blog'] = $items['node/add/blog'];
+	// $items['blog/%node/view'] = $items['node/%node/view'];
+	$items['blog/%node/edit'] = $items['node/%node/edit'];
+}
+
+/**
+ * Implements hook_menu()
+ */
+function teligence_blog_menu()
+{
+	$items['blog/search/%'] = array(
+      'title' => 'Blog Search',
+      'page callback' => 'teligence_blog_search',
+      'page arguments' => array(2),
+      'access callback' => TRUE,
+      'file path' => drupal_get_path('module','search'),
+      'file' => 'search.pages.inc',
+    );
+	
+	return $items;
+}
+
+/**
+ * Implements hook_block()
+ */
+function teligence_blog_block($op = 'list', $delta = 0, $edit = array())
+{
+	if($op == 'list')
+	{
+		$blocks['teligence_blogSearch'] = array(
+			'info'=> t('Teligence Blog - Search Form'),
+			'weight'=>0,
+			'status'=>1,
+			'region'=>'right',
+		);
+		
+		$blocks['teligence_blogAdminLinks'] = array(
+			'info'=> t('Teligence Blog - Admin Links'),
+			'weight'=>-10,
+			'status'=>1,
+			'region'=>'right',
+		);
+		
+		return $blocks;
+	}
+	
+	if($op == 'view')
+	{
+		switch ($delta) 
+		{
+			case 'teligence_blogSearch':
+				$block = array(
+					'subject' => t('Blog Search'),
+					'content' => drupal_get_form('teligence_blog_searchform'),
+				);
+				break;
+			case 'teligence_blogAdminLinks':
+				$menuItems[] = l('Comment Moderation','blog/moderate-comments');
+				$menuItems[] = l('Create new blog entry','node/add/blog');
+				
+				if($blogCategoriesVid = variable_get('teligence_blog_categories_vid',NULL))
+					$menuItems[] = l('Manage Blog Categories','admin/content/taxonomy/' . $blogCategoriesVid);
+				
+				if($blogTagsVid = variable_get('teligence_blog_tags_vid',NULL))
+					$menuItems[] = l('Manage Blog Tags','admin/content/taxonomy/' . $blogTagsVid);
+					
+				$block = array(
+					'subject' => t('Admin Links'),
+					'content' => theme('item_list',$menuItems),
+				);
+				break;
+			
+			default:
+				
+				break;
+		}
+		return $block;
+	}
+	
+	if($op == 'configure')
+	{
+		switch ($delta) 
+		{
+			case 'teligence_blogAdminLinks':
+				$options = array();
+				foreach((array)taxonomy_get_vocabularies('blog') as $vid=>$voc)
+				{
+					$options[$vid] = $voc->name;
+				}
+				$form['teligence_blog_categories_vid'] = array(
+					'#type'=>'select',
+					'#options'=>$options,
+					'#title'=>t('Select Blog Categories Vocabulary'),
+				);
+				$form['teligence_blog_tags_vid'] = array(
+					'#type'=>'select',
+					'#options'=>$options,
+					'#title'=>t('Select Blog Tags Vocabulary'),
+				);
+				return $form;
+				break;
+		}
+	}
+
+	if($op == 'save')
+	{
+		switch ($delta) 
+		{
+			case 'teligence_blogAdminLinks':
+				variable_set('teligence_blog_categories_vid', $edit['teligence_blog_categories_vid']);
+				variable_set('teligence_blog_tags_vid', $edit['teligence_blog_tags_vid']);
+				break;
+		}
+	}
+}
+
+
+/**
+ * Implements MYMODULE_preprocess_page()
+ */
+function teligence_blog_preprocess_page(&$vars)
+{
+	// BLOG
+	if(substr(drupal_get_path_alias($_GET['q']), 0, 4) == 'blog')
+	{
+		$crumbs = array(
+			l(t('Home'),''),
+		);
+		if(drupal_get_path_alias($_GET['q']) <> 'blog')
+		{
+			$crumbs[] = l(t('Blog'),'blog');
+		}
+		$breadcrumb = theme('breadcrumb', $crumbs);
+		$vars['content'] = theme('teligence_blog_page',$vars['content'],$vars['right'],$vars['title'], $breadcrumb);
+		unset($vars['right']);
+	}
+	
+	if(arg(0) == 'comment')
+	{
+		$crumbs = array(
+			l(t('Home'),''),
+			l(t('Blog'),'blog'),
+		);
+		
+		if($comment = _comment_load(arg(2)))
+		{
+			// $node = db_fetch_object(db_query("SELECT * FROM {node} WHERE nid = %d", $comment->nid));
+			$node = node_load($comment->nid);
+			$crumbs[] = l("Back to '$node->title'",'node/'. $comment->nid);
+		}
+		$vars['content'] = node_teaser($node->body) . $vars['content'];
+		$breadcrumb = theme('breadcrumb', $crumbs);
+		$vars['content'] = theme('teligence_blog_page',$vars['content'],$vars['right'],$vars['title'], $breadcrumb);
+		unset($vars['right']);
+	}
+	
+	if($_GET['q'] == 'node/add/blog' || strstr($_GET['q'], 'admin/content/taxonomy'))
+	{
+		$crumbs = array(
+			l(t('Home'),''),
+			l(t('Blog'),'blog'),
+		);
+		$breadcrumb = theme('breadcrumb', $crumbs);
+		$vars['content'] = theme('teligence_blog_page',$vars['content'],$vars['right'],$vars['title'], $breadcrumb);
+		unset($vars['right']);
+	}
+}
+
+/**
+ * Implements MYMODULE_preprocess_node()
+ */
+function teligence_blog_preprocess_node(&$vars)
+{
+	
+}
+
+	
+/**
+ * Implements hook_theme()
+ */
+function teligence_blog_theme()
+{
+	return array(
+		'teligence_blog_searchform' => array(
+			'arguments' => array('form'=>NULL),
+			'template' => 'teligence_blog-searchform',
+		),
+		'teligence_blog_page' => array(
+			'arguments' => array('left'=>NULL,'right'=>NULL,'title'=>NULL,'breadcrumb'=>NULL),
+			'template' => 'teligence_blog-page',
+		),
+	);
+}
+
+
+/**
+ * Implements hook_link_alter()
+ */
+function teligence_blog_link_alter(&$links, $node) 
+{
+	// watchdog('teligence_blog','&$links <pre>'.check_plain(print_r($links,1)).'</pre>');
+	// watchdog('teligence_blog','$node <pre>'.check_plain(print_r($node,1)).'</pre>');	
+	if ($node->type == "blog") 
+	{
+	  foreach ($links as $module => $link) 
+	  {
+	    if (strstr($module, 'taxonomy_term')) 
+	    {
+	      // Link back to the blog and not the taxonomy term page
+	      $links[$module]['href'] = str_replace('taxonomy/term', 'blog/category', $link['href']);
+	    }
+	  }
+	}
+}
+
+
+/***********************
+ * CALLBACKS
+ */
+
+/**
+ * serach results page
+ */
+function teligence_blog_search($keys)
+{
+	$keys .= ' type:blog';
+	
+	$results = search_data($keys);
+	
+	if ($results) 
+	{
+		$results = theme('box', t('Search results'), $results);
+	}
+	else 
+	{
+		$results = theme('box', t('Your search yielded no results'), search_help('search#noresults', drupal_help_arg()));
+	}
+	
+	return $results;
+}
+
+
+/****************************
+ * FORMS
+ */
+function teligence_blog_searchform($form_state)
+{
+	$form['keywords'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Search Keywords'),
+		'#default_value' => (arg(0) == 'blog' && arg(1) == 'search' ? arg(2):NULL),
+	);
+	$form['search'] = array(
+		'#type' => 'submit',
+		'#value' => t('Go'),
+	);
+	
+	return $form;
+}
+function teligence_blog_searchform_validate($form, &$form_state)
+{
+	if(empty($form_state['values']['keywords']))
+	{
+		form_error($form['keywords'], t('Please enter some keywords.'));
+	}
+}
+function teligence_blog_searchform_submit($form, &$form_state)
+{
+	// The search form relies on control of the redirect destination for its
+  // functionality, so we override any static destination set in the request,
+  // for example by drupal_access_denied() or drupal_not_found()
+  // (see http://drupal.org/node/292565).
+  if (isset($_REQUEST['destination'])) 
+  {
+    unset($_REQUEST['destination']);
+  }
+  if (isset($_REQUEST['edit']['destination'])) 
+  {
+    unset($_REQUEST['edit']['destination']);
+  }
+
+  $form_id = $form['form_id']['#value'];
+  $form_state['redirect'] = 'blog/search/'. trim($form_state['values']['keywords']);
+}

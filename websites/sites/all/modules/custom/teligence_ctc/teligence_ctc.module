@@ -1,0 +1,2402 @@
+<?php 
+
+/****************
+ * DRUPAL HOOKS *
+ ****************/
+
+/*
+ * Implementation of hook_perm()
+ */
+function teligence_ctc_perm()
+{
+	return array(
+		'access ctc settings',
+		'show captcha',
+		'access ctc alerts',
+		'edit multivariant scripts',
+		'ignore multivariant sections',
+	);
+}
+
+
+/*
+ * Implementation of hook_menu()
+ */
+function teligence_ctc_menu()
+{		
+	$items = array();
+
+	$items['admin/ctc'] = array(
+		'title' => 'Teligence CTC',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_settings_form'),
+		'access arguments' => array('access ctc settings'),
+	);
+	$items['admin/ctc/general'] = array(
+		'title'=> 'General',
+    	'type'=>MENU_DEFAULT_LOCAL_TASK,
+		'weight'=> -10,
+	);
+	$items['admin/ctc/general/settings-export'] = array(
+		'title' => 'Export Settings',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_settings_export'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 10,
+	);
+	$items['admin/ctc/general/settings-import'] = array(
+		'title' => 'Import Settings',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_settings_import'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 11,
+	);
+	$items['admin/ctc/responses'] = array(
+		'title' => 'Response Messages',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_settings_responses_form'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+	);
+	$items['admin/ctc/tracking'] = array(
+		'title' => 'Tracking Codes',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_settings_tracking'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+	);
+	$items['admin/ctc/affiliates'] = array(
+		'title' => 'Affiliates',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_affiliates_settings_form'),
+		'access arguments' => array('access ctc settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> -9,
+	);		
+	$items['ctc/mobile'] = array(
+    	'page callback' => 'teligence_ctc_mobile',
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);
+	$items['ctc/call'] = array(
+    	'page callback' => 'teligence_ctc_mobile',
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);
+	$items['ctc/wapid'] = array(
+    	'page callback' => 'teligence_ctc_wapid',
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);
+	$items['ctc/captcha/%/%/%'] = array(
+    	'page callback' => 'teligence_ctc_get_image_captcha',
+		'page arguments' => array(2,3,4),
+    	'type' => MENU_CALLBACK,
+    	'access arguments' => array('access content'),
+  	);
+	
+	return $items;
+}
+
+
+/*
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function teligence_ctc_preprocess_page(&$vars)
+{
+	// watchdog('teligence_ctc','!vars',array('!vars'=>'<pre>'.check_plain(print_r($vars['head'],1)).'</pre>'));
+	if($vars['node']->type == 'ctc_landing_page' && !strstr(request_uri(),'/edit'))
+	{
+		// inject code in <header> tag for tracking/control script and conversion script.
+		// detect whether the ctc form is in second step or first step using session
+		if(strlen($vars['node']->trackingControlScript) && strlen($vars['node']->conversionScript) 
+			&& !user_access('ignore multivariant sections'))
+		{
+			$vars['head'] .= "\n<!-- Start tracking/control/conversion scripts //-->\n";
+			$vars['head'] .= $vars['node']->trackingControlScript;
+			if(strstr($vars['node']->content['body']['#value'],'ctcFormStep_success'))
+			{
+				$vars['head'] .= $vars['node']->conversionScript;
+			}
+			$vars['head'] .= "\n<!-- End tracking/control/conversion scripts //-->\n";
+		}		
+	}
+	// watchdog('teligence_ctc','!vars',array('!vars'=>'<pre>'.check_plain(print_r($vars['head'],1)).'</pre>'));
+}
+
+
+/**
+ * Implementation of hook_theme_registry_alter().
+ *
+ * Make jQuery Update's page preprocess function run *after* everything else's,
+ * so that a theme can't call drupal_get_js() and mess everything up.
+ */
+function teligence_ctc_theme_registry_alter(&$theme_registry) {
+  if (isset($theme_registry['page'])) {
+    if (count($theme_registry['page']['preprocess functions']) > 0) {
+      // If jquery_update's preprocess function is there already, remove it.
+      if ($key = array_search('teligence_ctc_preprocess_page', $theme_registry['page']['preprocess functions'])) {
+        unset($theme_registry['page']['preprocess functions'][$key]);
+      }
+    }
+    // Now tack it on at the end so it runs after everything else.
+    $theme_registry['page']['preprocess functions'][] = 'teligence_ctc_preprocess_page';
+  }
+}
+
+
+/*
+ * Implementation of hook_theme()
+ */
+function teligence_ctc_theme($existing, $type, $theme, $path)
+{
+    return array (
+	    'teligence_ctc_forms'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+	    'teligence_ctc_success'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+	    'teligence_ctc_failure'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+	    'teligence_ctc_hubnumbersimport_preview'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+    );
+}
+
+
+/*
+ * Implementation of hook_form_alter()
+ */
+function teligence_ctc_form_alter(&$form, &$form_state, $form_id)
+{
+	if($form_id == 'ctc_landing_page_node_form')
+	{
+		$form['body_field']['body']['#description'] = t('Available tokens: !tokens . ', array('!tokens' => '[ctc-form],[ctc-form-2]')) . $form['body']['#description'];
+		
+		$form['multivariant'] = array(
+			'#type'=>'fieldset',
+			'#title'=>t('Multivariant Settings'),
+			'#collapsed'=>TRUE,
+			'#collapsible'=>TRUE,
+			'#access'=>user_access('edit multivariant scripts'),
+		);
+		$form['multivariant']['trackingControlScript'] = array(
+			'#type'=>'textarea',
+			'#rows'=>5,
+			'#title'=>t('Control and Tracking Script'),
+			'#default_value'=>$form['#node']->trackingControlScript,
+			'#description'=>t("Paste here Control and Tracking Script from New Multivariate Experiment page in Google."),
+		);
+		$form['multivariant']['conversionScript'] = array(
+			'#type'=>'textarea',
+			'#rows'=>5,
+			'#title'=>t('Conversion Script'),
+			'#default_value'=>$form['#node']->conversionScript,
+			'#description'=>t("Paste here Conversion Script from New Multivariate Experiment page in Google."),
+		);
+	}
+	if($form_id == 'ctc_hub_number_node_form')
+	{
+		$form['buttons']['preview']['#type'] = 'hidden';
+		$form['#redirect'] = array($_GET['q'], drupal_query_string_encode($_GET, array('q')));
+	}
+	if(strstr($form_id, 'teligence_ctc_form'))
+	{
+		if(isset($form_state['storage']['step']))
+		{
+			$val = $form_state['storage']['step'];
+		}
+		if(isset($_GET['C2CSuccess']))
+		{
+			$val = 'success';
+		}
+		if($val)
+		{
+			$form['ctc_status'] = array(
+				'#type' => 'hidden',
+				'#default_value' => 'ctcFormStep_'.$val, 
+			);
+		}
+	}
+	
+	// PR 132413
+	if(in_array($form_id,array('teligence_ctc_form_2','teligence_ctc_form')))
+	{
+		
+	}
+}
+
+/*
+ * Implementation of hook_nodeapi()
+ */
+function teligence_ctc_nodeapi(&$node, $op, $a3 = null, $a4 = null)
+{
+	switch($op)
+	{
+		case 'load':
+			if($node->type == 'ctc_landing_page')
+			{
+				if(db_table_exists('teligence_ctc_multivariant') && 
+					($scripts = db_result(db_query("SELECT scripts FROM {teligence_ctc_multivariant} WHERE nid = %d",$node->nid))))
+				{
+					return unserialize($scripts);
+				}
+			}
+			break;
+			
+		case 'view':
+			if($node->type == 'ctc_landing_page')
+			{
+				// replace token with ctc form
+				if(isset($_GET['C2CSuccess']))
+				{
+					$node->content['body']['#value'] = str_replace('[ctc-form-2]', drupal_get_form('teligence_ctc_form_32', $node->language, $node->field_brand_code[0]['value']), $node->content['body']['#value']);
+				}
+				elseif($_GET['C2CFailure'])
+				{
+					$node->content['body']['#value'] = str_replace('[ctc-form-2]', drupal_get_form('teligence_ctc_form_33', $node->language, $node->field_brand_code[0]['value']), $node->content['body']['#value']);
+				}
+				else
+				{
+					if(strstr($node->content['body']['#value'],'[ctc-form]'))
+						$node->content['body']['#value'] = str_replace('[ctc-form]', drupal_get_form('teligence_ctc_form', $node->language, $node->field_brand_code[0]['value']), $node->content['body']['#value']);
+					
+					if(strstr($node->content['body']['#value'],'[ctc-form-2]'))
+						$node->content['body']['#value'] = str_replace('[ctc-form-2]', drupal_get_form('teligence_ctc_form_3', $node->language, $node->field_brand_code[0]['value']), $node->content['body']['#value']);
+					
+					// if(strstr($node->content['body']['#value'],'[ctc-form-3]'))
+						// $node->content['body']['#value'] = str_replace('[ctc-form-3]', drupal_get_form('teligence_ctc_form_3', $node->language, $node->field_brand_code[0]['value']), $node->content['body']['#value']);
+				}
+			}
+			break;
+		
+		//validate input for hubnumbers
+		case 'validate':
+			if($node->type == 'ctc_hub_number')
+			{
+				// check if phone number is in valid format
+				if(!teligence_ctc_valid_phone_number($node->field_ctc_number[0]['value']))
+				{
+					form_set_error('field_ctc_number', 'Invalid phone number.');
+				}
+				
+				//check for duplicates
+				$ctc_number = 1 . teligence_ctc_format_phonenumber($phonenumber);
+				$result = 	db_result(db_query("SELECT field_ctc_number_value FROM {content_type_ctc_hub_number} 
+							WHERE LOWER(field_brand_name_value) LIKE LOWER('%s') AND field_area_code_value = %d", 
+							$node->field_brand_name[0]['value'],  $node->field_area_code[0]['value']));
+				if($result)
+				{
+					form_set_error('field_brand_name', 'Combination of Brand/AreaCode already exists.');
+					form_set_error('field_area_code', 'Combination of Brand/AreaCode already exists.');
+					array_pop($_SESSION['messages']['error']);
+				}
+			}
+			break;
+		
+		case 'presave':
+			if($node->type == 'ctc_hub_number')
+			{
+				// prepend 1 to phone number
+				$node->field_ctc_number[0]['value'] = "1" . teligence_ctc_format_phonenumber($node->field_ctc_number[0]['value']);
+			}
+			if($node->type == 'ctc_landing_page')
+			{
+				// save or update script values in teligence_ctc_multivariant table
+				$o = new stdClass();
+				$o->nid = $node->nid;
+				$o->scripts = serialize(
+					array(
+						'trackingControlScript'=>$node->trackingControlScript,
+						'conversionScript'=>$node->conversionScript,
+					)	
+				);
+				if(db_table_exists('teligence_ctc_multivariant') && db_result(db_query("SELECT nid FROM {teligence_ctc_multivariant} WHERE nid = %d",$node->nid)))
+				{
+					drupal_write_record('teligence_ctc_multivariant', $o, array('nid'));
+				}
+				else
+				{
+					drupal_write_record('teligence_ctc_multivariant', $o);
+				}
+			}
+			break;
+		
+	}	
+}
+
+/********************
+ * HELPER FUNCTIONS *
+ ********************/
+
+/**
+ * generate wapid, multipurpose
+ */
+function teligence_ctc_get_wapid()
+{
+	if(variable_get('teligence_ctc_wapid_switch',0))
+	{
+		$params = new stdClass();
+		/**
+		 * attach url to affiliate request string
+		 */
+		if(strlen(drupal_query_string_encode($_GET, array('q'))))
+		{
+			$nvp = request_uri();
+		}
+		else
+		{
+			$nvp = '/' . $_GET['q'] . '?source=NONE';
+		}
+		global $base_root;
+		$params->affiliateRequest = $base_root . $nvp;
+		
+		$result = teligence_ctc_soap_call($params, 'GetWapId', variable_get('teligence_ctc_soap_wsdl_1',''));
+		
+		// log requests
+		if(variable_get('teligence_ctc_wapid_log',0))
+		{
+			watchdog('wapidMobile', "request: " . $params->affiliateRequest);
+			watchdog('wapidMobile', "wapid: " . $result['result']->GetWapIdResult);
+		}
+		
+		$wapid = $result['result']->GetWapIdResult;
+	}
+	else
+	{
+		$wapid = -11;
+	}
+	
+	return $wapid;
+}
+ 
+/*
+ * wapid handler to third parties
+ */
+function teligence_ctc_wapid()
+{
+	print (teligence_ctc_get_wapid());
+	exit();
+}
+
+/*
+ * settings page for affiliates debugging
+ */
+function teligence_ctc_affiliates_settings_form($form_state)
+{
+	$form = array();
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+	);
+	$form['group']['teligence_ctc_oldparameters_switch'] = array(
+		'#type' => 'select',
+		'#title' => t('Pass marketing parameters to CTC server'),
+		'#options' => array(0 => 'No', 1 => 'Yes'),
+		'#default_value' => variable_get('teligence_ctc_oldparameters_switch',1),
+		'#description' => t('LandingPage, Campaign, Source, Keyword, atid, pid.'),
+	);
+	$form['group']['teligence_ctc_wapid_switch'] = array(
+		'#type' => 'select',
+		'#title' => t('Pass WAPID to CTC server'),
+		'#options' => array(0 => 'No', 1 => 'Yes'),
+		'#default_value' => variable_get('teligence_ctc_wapid_switch',0),
+		'#description' => t('If set to Yes, wapid will be sent whenever there are GET parameters in url.'),
+	);
+	$form['group']['teligence_ctc_wapid_log'] = array(
+		'#type' => 'select',
+		'#title' => t('Log WAPID requests'),
+		'#options' => array(0 => 'No', 1 => 'Yes'),
+		'#default_value' => variable_get('teligence_ctc_wapid_log',0),
+		'#description' => t('If set to Yes, wapid WAPID requests will be logged in watchdog log.'),
+	);
+	$form['group']['teligence_ctc_soap_debug_mode'] = array(
+		'#type' => 'select',
+		'#title' => t('Debug Mode'),
+		'#options' => array(0 => 'Off', 1 => 'On'),
+		'#default_value' => variable_get('teligence_ctc_soap_debug_mode', 0),
+		'#description' => t('If set to ON, debug messages will be displayed.'),
+	);
+	$form['group']['teligence_ctc_cache_wsdl'] = array(
+		'#type' => 'select',
+		'#title' => t('Cache WSDL'),
+		'#options' => array(0 => 'Off', 1 => 'On'),
+		'#default_value' => variable_get('teligence_ctc_cache_wsdl', 1),
+		'#description' => t('If set to ON, WSDL will be down-loaded and cached for 24 hours.'),
+	);
+	$form['group']['wsdl1'] = array(
+		'#type' => 'fieldset',
+	);
+	$form['group']['wsdl1']['teligence_ctc_soap_wsdl_1'] = array(
+		'#type' => 'textfield',
+		'#title' => t('WSDL 1'),
+		'#default_value' => variable_get('teligence_ctc_soap_wsdl_1', $form_state['storage']['values']['teligence_ctc_soap_wsdl_1']),
+		'#required' => true,
+		'#description' => t('Type it in the form of http://xxxx.xx/xxx?wsdl'),
+	);
+	$form['group']['wsdl1']['affiliateRequest'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Parameters for method "GetWapId"'),
+		'#field_prefix' => t('affiliateRequest = '),
+		'#default_value' => $form_state['storage']['values']['affiliateRequest'],
+		'#description' => t('This field is only for testing purposes; Enter something like: areacode=xxx&phonenumber=xxxxxxx'),
+	);
+	$form['group']['wsdl1']['test_wsdl_1'] = array(
+		'#type' => 'submit',
+		'#value' => t('Test')
+	);
+	$form['group']['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save')
+	);
+	
+	return $form; 
+}
+
+/*
+ * submit wsdl
+ */
+function teligence_ctc_affiliates_settings_form_submit($form, &$form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-test-wsdl-1')
+	{
+		if(strlen($form_state['values']['teligence_ctc_soap_wsdl_1']))
+		{
+			$params = new stdClass();
+			$params->affiliateRequest = $form_state['values']['affiliateRequest'];
+			$result = teligence_ctc_soap_call($params, 'GetWapId', $form_state['values']['teligence_ctc_soap_wsdl_1']);
+			drupal_set_message('<pre>'.print_r($result, true).'</pre>');
+		}
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-save')
+	{
+		variable_set('teligence_ctc_wapid_switch',$form_state['values']['teligence_ctc_wapid_switch']);
+		variable_set('teligence_ctc_wapid_log',$form_state['values']['teligence_ctc_wapid_log']);
+		variable_set('teligence_ctc_soap_debug_mode', $form_state['values']['teligence_ctc_soap_debug_mode']);
+		variable_set('teligence_ctc_cache_wsdl', $form_state['values']['teligence_ctc_cache_wsdl']);
+		variable_set('teligence_ctc_soap_wsdl_1', $form_state['values']['teligence_ctc_soap_wsdl_1']);
+		drupal_set_message('Values have been saved.');
+	}
+	
+	$form_state['storage']['values'] = $form_state['values'];
+}
+
+/*
+ * MASS IMPORT OF CTC HUB NUMBERS
+ */
+function teligence_ctc_hubnumbersimport_form($form_state)
+{
+	if(!isset($form_state['storage']['step']))
+	{
+		$form_state['storage']['step'] = 1;
+	}
+	$form['#pre_render'] = array('teligence_ctc_hubnumbersimport_form_prerender');
+	$form['#attributes'] = array('enctype' => "multipart/form-data");
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#description' => t('Comma separated values file (CSV). Four columns: Brand Name, Hub Name, Area Code, CTC Number.'),
+		'#title' => t('Import CTC Numbers from CSV file'),
+		'#collapsible' => true,
+		'#collapsed' => true,
+	);
+	
+	switch($form_state['storage']['step'])
+	{
+		case 1:
+		default:
+			$form['group']['#description'] = t('Comma separated values file (CSV) with Brand Name, Hub Name, Area Code, CTC Number.');	
+			$form['group']['file_upload'] = array(
+				'#type' => 'file',
+				'#description' => t('Acceptable format: csv'),
+				'#title' => t('Browse for file'),
+			);
+			$form['group']['preview'] = array(
+				'#type' => 'submit',
+				'#value' => t('Preview'),
+			);
+		break;
+		
+		case 2:
+			$form['group']['#theme'] = 'teligence_ctc_hubnumbersimport_preview';
+			$form['group']['#collapsed'] = false;
+			$options = array(
+					'brand' => 'Brand Name',
+					'hub' => 'Hub Name',
+					'area' => 'Area Code',
+					'number' => 'CTC Number',
+				);
+			$form['group']['col1'] = array(
+				'#type' => 'select',
+				'#title' => 'Col1',
+				'#options' => $options,
+				'#default_value' => $form_state['values']['col1'],
+			);
+			$form['group']['col2'] = array(
+				'#type' => 'select',
+				'#title' => 'Col2',
+				'#options' => $options,
+				'#default_value' => $form_state['values']['col2'],
+			);
+			$form['group']['col3'] = array(
+				'#type' => 'select',
+				'#title' => 'Col3',
+				'#options' => $options,
+				'#default_value' => $form_state['values']['col3'],
+			);
+			$form['group']['col4'] = array(
+				'#type' => 'select',
+				'#title' => 'Col4',
+				'#options' => $options,
+				'#default_value' => $form_state['values']['col4'],
+			);
+			$form['group']['table'] = array(
+				'#value' => $form_state['storage']['table'],
+			);
+			$form['group']['back'] = array(
+				'#type' => 'submit',
+				'#value' => t('Back'),
+			);
+			$form['group']['import'] = array(
+				'#type' => 'submit',
+				'#value' => t('Import'),
+			);
+		break;
+	}
+	
+	return $form;
+}
+
+/*
+ * pre render
+ */
+function teligence_ctc_hubnumbersimport_form_prerender($form)
+{
+	drupal_add_js(drupal_get_path('module', 'teligence_ctc').'/js/jquery.button.js');
+	return $form;
+}
+
+/*
+ * validate file upload
+ */
+function teligence_ctc_hubnumbersimport_form_validate($form, &$form_state)
+{
+	if($form_state['storage']['step'] == 2 && $form_state['clicked_button']['#id'] == 'edit-import')
+	{
+		$filtered = array_unique(array(
+			$form_state['values']['col1'], 
+			$form_state['values']['col2'], 
+			$form_state['values']['col3'], 
+			$form_state['values']['col4']
+		));
+		if(count($filtered) < 4)
+		{
+			form_set_error('col1', 'Invalid selection of columns. Selection has to be unique for every column.');
+			form_set_error('col2', 'Invalid selection of columns.');
+			form_set_error('col3', 'Invalid selection of columns.');
+			form_set_error('col4', 'Invalid selection of columns.');
+			array_pop($_SESSION['messages']['error']);
+			array_pop($_SESSION['messages']['error']);
+			array_pop($_SESSION['messages']['error']);
+		}
+	}
+}
+/*
+ * submit file upload
+ */
+function teligence_ctc_hubnumbersimport_form_submit($form, &$form_state)
+{
+	if($form_state['storage']['step'] == 1 && $form_state['clicked_button']['#id'] == 'edit-preview')
+	{
+		$validators = array(
+			'file_validate_extensions' => array('csv'),
+		);
+ 
+		// Save new file uploads.
+		if ($file = file_save_upload('file_upload', $validators, file_directory_path())) 
+		{
+			// Do something with $file here.	  
+			ini_set("auto_detect_line_endings", 1);
+			if($fcontents = file($file->filepath))
+			{
+				if(count((array)explode(",",$fcontents[0])) != 4)
+				{
+					form_set_error('file_upload', 'Invalid file. It has to be exactly 4 columns.');
+				}
+				else
+				{
+					$form_state['storage']['table'] = $fcontents;
+					$form_state['storage']['step'] = 2;
+				}
+			}
+		}
+		else
+		{
+			form_set_error('file_upload', 'Invalid file.');
+		} 
+	}
+	
+	if($form_state['storage']['step'] == 2 && $form_state['clicked_button']['#id'] == 'edit-back')
+	{
+		$form_state['storage']['step'] = 1;
+		unset($form_state['storage']['table']);		
+	}
+	
+	if($form_state['storage']['step'] == 2 && $form_state['clicked_button']['#id'] == 'edit-import')
+	{
+		$errors = array();
+		foreach($form_state['storage']['table'] as $line)
+		{
+			$line_values = explode(",", $line);
+			$map[$form_state['values']['col1']] = $line_values[0];
+			$map[$form_state['values']['col2']] = $line_values[1];
+			$map[$form_state['values']['col3']] = $line_values[2];
+			$map[$form_state['values']['col4']] = $line_values[3];
+			(teligence_ctc_hubnumber_node_save($map) ? $errors[] = teligence_ctc_hubnumber_node_save($map) : null);	
+		}
+		
+		if(count($errors))
+		{
+			drupal_set_message(count($errors).' records could not be imported.', 'error');
+			watchdog('CTC Import', ' ------------------------------------------------- <pre>'.print_r($errors, true).'</pre>');
+		}
+		
+		drupal_set_message((count($form_state['storage']['table']) - count($errors)).' records successfully imported.');
+	}
+}
+
+/*
+ * theme column mapping
+ */
+function theme_teligence_ctc_hubnumbersimport_preview($form)
+{	
+	$header = array(drupal_render($form['col1']), drupal_render($form['col2']), drupal_render($form['col3']), drupal_render($form['col4']));
+	$rows[] = (array)explode(",",$form['table']['#value'][0]);
+	$rows[] = (array)explode(",",$form['table']['#value'][1]);
+	$rows[] = (array)explode(",",$form['table']['#value'][2]);
+	$output  = t("Total rows: !rows", array('!rows' => count($form['table']['#value']) - 1)) . "<br />";
+	$output .= t("Display first three rows:") . "<br />";
+	$output .= theme('table', $header, $rows) . "<br />";
+	unset($form['table']['#value']);
+	$output .= drupal_render($form);
+
+	return $output;	
+}
+
+/**
+ * drupal execute create ctc_hub_number node
+ */
+function teligence_ctc_hubnumber_node_save($values)
+{
+	/*********************************************
+	 * programmatically create hubnumbers node
+	 */
+	global $user;
+	$node = new StdClass();
+	$node->type = 'ctc_hub_number';
+	$node->status = 1;
+	$node->uid = $user->uid;
+	
+	// fields
+	$node->title = 'ctc hub number imported from csv file';
+	$node->field_brand_name[0]['value'] = $values['brand'];
+	$node->field_hub_name[0]['value'] = $values['hub'];
+	$node->field_area_code[0]['value'] = $values['area'];
+	$node->field_ctc_number[0]['value'] = $values['number'];
+
+	//save it and give it the rest of the attributes
+	teligence_ctc_nodeapi($node, 'validate');
+	if(count(drupal_get_messages('error')))
+	{
+		unset($node);
+		return "Brand:".$values['brand']."; Area Code:".$values['area'].'; Hub Name:'.$values['hub'].'; Number:'.$values['number'];
+	}
+	else
+	{
+		node_save($node);
+		unset($node);
+	}
+}
+
+
+/*
+ * settings form for ctc
+ */
+function teligence_ctc_settings_form($form_state)
+{
+	$form = array();
+	
+	$form['teligence_ctc_debug_mode'] = array(
+		'#type' => 'select',
+		'#title' => t('Debug Mode'),
+		'#default_value' => variable_get('teligence_ctc_debug_mode', 0),
+		'#options' => array(0 => 'True', 1 => 'False'),
+	);
+	$form['teligence_ctc_url'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Call Request URL'),
+		'#default_value' => variable_get('teligence_ctc_url', ''),
+		'#maxlength' => 500,
+		'#description' => t("Enter url of call request handler from http:// up to but NOT including '?'."),
+		'#required' => TRUE,
+	);
+	$form['teligence_ctc_time_limit'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Time Limit'),
+	    '#default_value' => variable_get('teligence_ctc_time_limit', '600'),
+	    '#description' => t("How many seconds the call should be limited to. Minimum value of 60."),
+	    '#required' => TRUE,
+	);
+	$form['teligence_ctc_requestor_cid'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Requestor CID'),
+	    '#default_value' => variable_get('teligence_ctc_requestor_cid', '0000000000'),
+	    '#description' => t("The default caller ID to present when calling the requestor. Default to '0000000000'"),
+	    '#required' => TRUE,
+	);
+	$form['teligence_ctc_requestor_cid'] = array(
+	    '#type' => 'textfield',
+	    '#title' => t('Requestor CID'),
+	    '#default_value' => variable_get('teligence_ctc_requestor_cid', '0000000000'),
+	    '#description' => t("The default caller ID to present when calling the requestor. Default to '0000000000'"),
+	    '#required' => TRUE,
+	);
+	$form['teligence_ctc_destination_cid'] = array(
+    	'#type' => 'textfield',
+    	'#title' => t('DestinationCID'),
+    	'#default_value' => variable_get('teligence_ctc_destination_cid', 'PASSTHROUGH'),
+    	'#description' => t("Specify the default Destination CID to play to callers. The caller ID to present when calling the requestor. Use the value 'PASSTHROUGH' to use RequestorPhone for DestinationCID."),
+    	'#required' => TRUE,
+  	);
+	$form['teligence_ctc_admin_logging'] = array(
+    	'#type' => 'textfield',
+    	'#title' => t('Logging RUL for CTC missing area codes'),
+    	'#default_value' => variable_get('teligence_ctc_admin_logging', 'http://ctc.teligence.net/ctc/logging'),
+  	);
+	
+	return system_settings_form($form);
+}
+
+/*
+ * teligence_ctc_mobile handle mobile requests, block blacklisted numbers
+ * will also handle other third party requests
+ */
+function teligence_ctc_mobile()
+{
+	// make parameters case insensitive
+	$request = array();
+	foreach((array)$_REQUEST as $key => $value)
+	{
+		$request[strtolower($key)] = check_plain(filter_xss(str_replace(',','',$value), array()));
+	}
+	
+	// make LLK the default brand code/promt set
+	$brand_code = 'LLK';
+	
+	/**
+	 * specific for ctc forms for third parties
+	 * not specific for IAMOTA
+	 */
+	$brands = array(
+		'livelinks' => 'LLK',
+		'interactivemale' => 'IML',
+		'redhotdateline' => 'RDL',
+		'lavenderline' => 'LBL',
+		'fonochatlatino' => 'FON',
+		'vibeline' => 'VBL',
+		'tango' => 'TGO',
+	);
+	global $base_root; 
+	foreach($brands as $key => $value)
+	{
+		if(strstr($base_root, $key))
+		{
+			$brand_code = $value;
+			break;
+		}
+	}
+
+	// populate partnerID
+	if(empty($request['partnerid']) || !isset($request['partnerid']))
+	{
+		if(empty($request['pid']) || !isset($request['pid']))
+		{
+			$params['partnerID'] = $brand_code . '_mobile_site';
+		}
+		else
+		{
+			$params['partnerID'] = $request['pid'];
+		}
+	}
+	else
+	{
+		$params['partnerID'] = $request['partnerid'];
+	}
+	
+	// populate landingpage parameter if empty or not there
+	if(empty($request['landingpage']) || !isset($request['landingpage']))
+	{
+		if(!empty($_SERVER['HTTP_REFERER']))
+		{
+			$params['LandingPage'] = $_SERVER['HTTP_REFERER'];
+		}
+		else
+		{
+			$params['LandingPage'] = $base_root;
+		}
+	}
+	else
+	{
+		$params['LandingPage'] = $request['landingpage'];
+	}
+	
+	// populate the rest of the parameters	
+	$params['Source'] = $request['source'];
+	$params['Campaign'] = $request['campaign'];
+	$params['Keyword'] = $request['keyword'];
+	$params['atid'] = $request['atid'];
+	$params['wapid'] = $request['wapid'];
+	
+	// log requests
+	if(variable_get('teligence_ctc_wapid_log',0))
+	{
+		watchdog('ctcCall', 'Brand code: ' . $brand_code);
+		watchdog('ctcCall', 'Parameters passed to the teligence_ctc_caller function: <pre>' . print_r($params, true) . '</pre>');
+	}
+	
+	print teligence_ctc_caller($request['area_code'], $request['phone_number'], null, $brand_code, $params);
+	exit();
+}
+
+/*
+ * settings form for ctc EXPORT
+ */
+function teligence_ctc_settings_export($form_state)
+{
+	$output = '$settings = array();' . "\n\r";
+	$result = db_query('SELECT name FROM {variable} WHERE name LIKE "%teligence_ctc%" ');
+	while($name = db_fetch_array($result))
+	{
+		$output .= '$settings["' . $name['name'] . '"] = \'' . addslashes (variable_get($name['name'],'')) . '\';' . "\n\r";
+	}
+	
+	$form['settings_export'] = array(
+		'#type' => 'textarea',
+		'#title' => t('CTC Export all settings'),
+		'#default_value' => $output,
+		'#description' => t("Copy this script. It contains all the settings for teligence_ctc module"),
+		'#rows' => 50,
+  	);
+  	
+  	return $form;
+}
+
+/*
+ * settings form import
+ */
+function teligence_ctc_settings_import($form_state)
+{
+	$form['settings_import'] = array(
+		'#type' => 'fieldset',
+	);	
+
+	$form['settings_import']['script'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Paste CTC settings here'),
+		'#description' => t("Paste script here."),
+		'#required' => true,
+		'#rows' => 20,
+		'#description' => t("Don't wrap in php tags."),
+  	);
+
+	$form['settings_import']['button'] = array(
+		'#type' => 'submit',
+		'#value' => t('Import Settings'),
+	);
+	
+	return $form;
+}
+
+/*
+ * submit form for settings import
+ */
+function teligence_ctc_settings_import_submit($form, &$form_state)
+{
+	//$output = drupal_eval($form_state['values']['script']);
+	$settings = null;	
+
+	//extract variables from pasted script text
+	@eval($form_state['values']['script']);
+	
+	// Preliminary error trapping, must have valid arrays to work with.
+  	if ( !isset($settings) || !is_array($settings) ) 
+  	{
+    	form_set_error('script', t('The import data is not valid import text.'));
+    	return;
+	}
+	
+	foreach((array)$settings as $key => $value)
+	{
+		variable_set($key, stripslashes ($value));
+	}
+	
+	drupal_set_message(t("Settings successfully saved. !count variables saved.", array('!count' => count($settings))));
+}
+
+/*
+ * settings form for ctc
+ */
+function teligence_ctc_settings_responses_form($form_state)
+{
+	$form['en'] = array('#type' => 'fieldset', '#title' => 'English');
+	$form['en']['teligence_ctc_en_invalid_number'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Invalid phone number'),
+		'#default_value' => variable_get('teligence_ctc_en_invalid_number', 'Invalid phone number'),
+		'#description' => t('This messages appears as a system error message when the user submits the form without entering a number or when entering letters/numbers mixed'),
+	);
+	$form['en']['teligence_ctc_en_captha'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Wrong captcha answer'),
+		'#default_value' => variable_get('teligence_ctc_en_captha', 'Wrong captcha answer'),
+		'#description' => t('This messages appears as a system error message when the user submits the form without or not answering the captcha.'),
+	);
+	$form['en']['teligence_ctc_en_message_success'] = array(
+		'#type' => 'textarea',
+		'#title' => t('CTC Success Message'),
+		'#default_value' => variable_get('teligence_ctc_en_message_success', ''),
+		'#description' => t("Enter message when call is successfull."),
+		'#required' => true,
+  	);
+  	$form['en']['teligence_ctc_en_message_failure'] = array(
+		'#type' => 'textarea',
+		'#title' => t('CTC Failure Message'),
+		'#default_value' => variable_get('teligence_ctc_en_message_failure', ''),
+		'#description' => t("Enter message when call is successfull."),
+		'#required' => true,
+  	);
+  	
+  	$form['es'] = array('#type' => 'fieldset', '#title' => 'Spanish');
+  	$form['es']['teligence_ctc_es_invalid_number'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Invalid phone number'),
+		'#default_value' => variable_get('teligence_ctc_es_invalid_number', 'Numero de telefono invelido'),
+		'#description' => t('This messages appears as a system error message when the user submits the form without entering a number or when entering letters/numbers mixed'),
+	);
+	$form['es']['teligence_ctc_es_captha'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Wrong captcha answer'),
+		'#default_value' => variable_get('teligence_ctc_es_captha', 'Captcha invalido'),
+		'#description' => t('This messages appears as a system error message when the user submits the form without or not answering the captcha.'),
+	);
+  	$form['es']['teligence_ctc_es_message_success'] = array(
+		'#type' => 'textarea',
+		'#title' => t('CTC Mensaje Exitoso'),
+		'#default_value' => variable_get('teligence_ctc_es_message_success', ''),
+		'#description' => t("Enter message when call is successfull."),
+		'#required' => true,
+  	);
+  	$form['es']['teligence_ctc_es_message_failure'] = array(
+		'#type' => 'textarea',
+		'#title' => t('CTC Mensaje Fallido'),
+		'#default_value' => variable_get('teligence_ctc_es_message_failure', ''),
+		'#description' => t("Enter message when call is successfull."),
+		'#required' => true,
+  	);
+	
+	return system_settings_form($form);
+}
+
+/*
+ * pre render
+ */
+function teligence_ctc_settings_tracking_pre_render($form)
+{
+	$rows = array();
+	foreach($form as $key => $value)
+	{
+		if(strstr($key, 'teligence_ctc_tracking_'))
+		{
+			$form[$key]['#title'] = $form[$key]['#title'] . ' (' . $key . ')';
+			$rows[] = array("variable_get('" . $key . "', '')");
+		}
+	}
+	
+	$form['form_array']['variables']['#value'] = theme('table', array('Variable'), $rows);
+
+	return $form;
+}
+
+/*
+ * tracking code per brand
+ */
+function teligence_ctc_settings_tracking($form_state)
+{
+	$form['#pre_render'] = array('teligence_ctc_settings_tracking_pre_render');
+
+	$form['teligence_ctc_tracking_rules'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Rules'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_rules', ''),
+	    '#description' => t("Enter php code without the php tags. Available variables are \$form_state, \$form and \$_REQUEST. Use \$form_state['storage']['values']['append'] .= form item to add tracking scripts to success response."),
+	);
+	$form['form_array'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Available variables'),
+		'#collapsible' => true,
+		'#collapsed' => true,
+		'#description' => t('Items available for rules.'),
+	);
+	$form['form_array']['variables'] = array(
+		'#title' => t('teligence_ctc_form'),
+	);
+	$form['form_array']['form'] = array(
+		'#title' => t('teligence_ctc_form'),
+		'#value' => '<pre>' . print_r(teligence_ctc_form($form_state), true) . '</pre>',
+	);
+	$form['teligence_ctc_tracking_myyearbook'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('MyYearBook'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_myyearbook', ''),
+	    '#description' => t("Only 'my yearbook' code for all sites."),
+	);
+	$form['teligence_ctc_tracking_linkconnector'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('LinkConnector'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_linkconnector', ''),
+	    '#description' => t("For all sites."),
+	);
+	$form['teligence_ctc_tracking_llk'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Livelinks'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_llk', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_iml'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Interactivemale EN'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_iml', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_iml_es'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Interactivemale ES'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_iml_es', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_rdl'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('RedHotDateLine'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_rdl', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_lbl'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Lavenderline'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_lbl', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_vbl'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('VibeLine'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_vbl', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_foe_es'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Fonochat SP'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_foe_es', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	$form['teligence_ctc_tracking_fon'] = array(
+	    '#type' => 'textarea',
+	    '#title' => t('Fonochat EN'),
+	    '#default_value' => variable_get('teligence_ctc_tracking_fon', ''),
+	    '#description' => t("Place here the script tags or image tags. Google, Yahoo, BING. These tags will be inserted in the page when success."),
+	);
+	
+	return system_settings_form($form);
+}
+
+/*
+ * theme ctc form
+ */
+function theme_teligence_ctc_forms($form)
+{
+	return drupal_render($form);
+}
+
+/*
+ * theme ctc success message form
+ */
+function theme_teligence_ctc_success($form)
+{
+	// build message
+	$message  = variable_get('teligence_ctc_' . $form['vals']['#value']['language'] . '_message_success', '');
+	$message .= variable_get('teligence_ctc_tracking_' . strtolower ($form['vals']['#value']['brand']) . ($form['vals']['#value']['language'] == 'es'?'_es':''), '');
+	$message .= $form['vals']['#value']['append'];
+	
+	$form['vals']['#value'] = $message;
+	
+	// render all form elements
+	$output = drupal_render($form);
+	return $output;		
+}
+
+/*
+ * theme ctc failure message form
+ */
+function theme_teligence_ctc_failure($form)
+{
+	$form['vals']['#value']  = variable_get('teligence_ctc_' . $form['vals']['#value']['language'] . '_message_failure', '');
+	$output = drupal_render($form);
+	return $output;		
+}
+
+/*
+ * ctc click to call form
+ */
+function teligence_ctc_form($form_state, $language = 'en', $brand = 'LLK', $mode = null, $captcha = true) 
+{	
+	$form['#theme'] = 'teligence_ctc_forms';
+
+	if ( empty($form_state['storage']['step']) )
+    {
+        // we are coming in without a step, so default to step 1
+        $form_state['storage']['step'] = 1;
+    }
+
+	switch($form_state['storage']['step'])
+	{
+		default:
+		case 1:
+		
+			// make parameters case insensitive
+			$request = array();
+			foreach((array)$_REQUEST as $key => $value)
+			{
+				$request[strtolower($key)] = check_plain(filter_xss(str_replace(',','',$value), array()));
+			}
+		
+			$form['ctc_form'] = array(
+				'#type' => 'fieldset',
+				'#description' => t('Enter your 10-digit phone number'),
+				'#pre_render' => array('teligence_ctc_form_prerender'),
+			);
+			$form['ctc_form']['area_code'] = array(
+				'#type' => 'textfield',
+				'#maxlength' => 3,
+				'#size' => 4,
+				'#pre_render' => array('teligence_ctc_form_pre_render'),
+				'#default_value' => isset($request['area_code']) ? $request['area_code'] : $form_state['storage']['values']['area_code'],
+			);
+			$form['ctc_form']['phone_number'] = array(
+				'#type' => 'textfield',
+				'#maxlength' => 7,
+				'#size' => 7,
+				'#pre_render' => array('teligence_ctc_form_pre_render'),
+				'#default_value' => isset($request['phone_number']) ? $request['phone_number'] : $form_state['storage']['values']['phone_number'],
+			);
+			$form['ctc_form']['lookup_call_me_now'] = array(
+				'#type' => 'hidden',
+				'#name' => 'lookup_call_me_now',
+				'#value' => 'yes',
+			);
+			
+			/*
+			 * request parameters pre wapid era
+			 * still need them to trigger track pixel images from partners
+			 */
+			$form['ctc_form']['partnerID'] = array(
+				'#type' => 'hidden',
+				'#name' => 'partnerID',
+				'#value' => $request['pid'],
+			);
+			$form['ctc_form']['Keyword'] = array(
+				'#type' => 'hidden',
+				'#name' => 'Keyword',
+				'#value' => $request['keyword'],
+			);
+			$form['ctc_form']['Campaign'] = array(
+				'#type' => 'hidden',
+				'#name' => 'Campaign',
+				'#value' => $request['campaign'],
+			);
+			$form['ctc_form']['Source'] = array(
+				'#type' => 'hidden',
+				'#name' => 'Source',
+				'#value' => $request['source'],
+			);
+			$form['ctc_form']['LandingPage'] = array(
+				'#type' => 'hidden',
+				'#name' => 'LandingPage',
+				'#value' => strlen($request['landingpage']) ? $request['landingpage'] : (strlen($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']),
+			);
+			$form['ctc_form']['atid'] = array(
+				'#type' => 'hidden',
+				'#name' => 'atid',
+				'#value' => $request['atid'],
+			);
+			
+			/*
+			 * wapid affiliates project
+			 */
+			$form['ctc_form']['wapid'] = array(
+				'#type' => 'hidden',
+			);
+			
+			// captcha field
+			if(user_access('show captcha') && $captcha)
+			{
+				$form['ctc_form']['captcha'] = array(
+					'#type' => 'fieldset',
+					'#pre_render' => array('teligence_ctc_captcha_prerender'),
+				);
+				$form['ctc_form']['captcha']['CaptchaValue'] = array(
+					'#type' => 'textfield',
+					'#size' => 3,
+					'#maxlength' => 3,
+				);
+				$form['ctc_form']['captcha']['CaptchaHash'] = array(
+					'#type' => 'hidden',
+					'#name' => 'CaptchaHash',
+				);
+				$form['ctc_form']['captcha']['CaptchaID'] = array(
+					'#type' => 'hidden',
+					'#name' => 'CaptchaID',
+				);
+			}
+			
+			$form['ctc_form']['submit'] = array(
+				'#type' => 'submit',
+				'#value' => t('Call me now!'),
+				'#weight' => 100,
+			);
+		break;
+		
+		case 'success':
+			$form['ctc_success'] = array(
+				'#type' => 'fieldset',
+				'#theme' => 'teligence_ctc_success',
+			);
+			$form['ctc_success']['vals'] = array(
+				'#type' => 'item',
+				'#value' => $form_state['storage']['values'],
+			);
+			$form['ctc_success']['try_again'] = array(
+				'#type' => 'submit',
+				'#value' => t('Go Back'),
+				'#weight' => 100,
+			);
+		break;
+		
+		case 'failure':
+			$form['ctc_failure'] = array(
+				'#type' => 'fieldset',
+				'#theme' => 'teligence_ctc_failure',
+			);
+			$form['ctc_failure']['vals'] = array(
+				'#type' => 'item',
+				'#value' => $form_state['storage']['values'],
+			);
+			$form['ctc_failure']['try_again'] = array(
+				'#type' => 'submit',
+				'#value' => t('Go Back'),
+				'#weight' => 100,
+			);
+		break;
+	}
+	$form['language'] = array('#type' => 'hidden', '#value' => $language);
+	$form['brand'] = array('#type' => 'hidden', '#value' => $brand);
+	
+	return $form;
+}
+
+
+/*
+ * ctc click to call form 2
+ */
+function teligence_ctc_form_2($form_state, $language = 'en', $brand = 'LLK', $mode = null, $captcha = true) 
+{	
+	if ( empty($form_state['storage']['step']) )
+    {
+        // we are coming in without a step, so default to step 1
+        $form_state['storage']['step'] = 1;
+    }
+
+	switch($form_state['storage']['step'])
+	{
+		default:
+		case 1:
+		
+			// make parameters case insensitive
+			$request = array();
+			foreach((array)$_REQUEST as $key => $value)
+			{
+				$request[strtolower($key)] = check_plain(filter_xss(str_replace(',','',$value), array()));
+			}
+		
+			$form['ctc_form'] = array(
+				'#type' => 'fieldset',
+				'#pre_render' => array('teligence_ctc_form_prerender'),
+			);
+			
+			$form['ctc_form']['ani'] = array(
+				'#title' => t('Enter your phone number'),
+				'#type' => 'textfield',
+				'#pre_render' => array('teligence_ctc_form_pre_render','teligence_ctc_phone_prerender'),
+			);
+			
+			$form['ctc_form']['lookup_call_me_now'] = array(
+				'#type' => 'hidden',
+				'#name' => 'lookup_call_me_now',
+				'#value' => 'yes',
+			);
+			
+			/*
+			 * request parameters pre wapid era
+			 * still need them to trigger track pixel images from partners
+			 */
+			$form['ctc_form']['partnerID'] = array(
+				'#type' => 'hidden',
+				'#name' => 'partnerID',
+				'#value' => $request['pid'],
+			);
+			$form['ctc_form']['Keyword'] = array(
+				'#type' => 'hidden',
+				'#name' => 'Keyword',
+				'#value' => $request['keyword'],
+			);
+			$form['ctc_form']['Campaign'] = array(
+				'#type' => 'hidden',
+				'#name' => 'Campaign',
+				'#value' => $request['campaign'],
+			);
+			$form['ctc_form']['Source'] = array(
+				'#type' => 'hidden',
+				'#name' => 'Source',
+				'#value' => $request['source'],
+			);
+			$form['ctc_form']['LandingPage'] = array(
+				'#type' => 'hidden',
+				'#name' => 'LandingPage',
+				'#value' => strlen($request['landingpage']) ? $request['landingpage'] : (strlen($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']),
+			);
+			$form['ctc_form']['atid'] = array(
+				'#type' => 'hidden',
+				'#name' => 'atid',
+				'#value' => $request['atid'],
+			);
+			
+			/*
+			 * wapid affiliates project
+			 */
+			$form['ctc_form']['wapid'] = array(
+				'#type' => 'hidden',
+			);
+			
+			// captcha field
+			if(user_access('show captcha') && $captcha)
+			{
+				$form['ctc_form']['captcha'] = array(
+					'#type' => 'fieldset',
+					'#pre_render' => array('teligence_ctc_captcha_prerender_2'),
+				);
+				$form['ctc_form']['captcha']['CaptchaImage'] = array(
+					'#type' => 'item',
+					'#title' => t('Enter these numbers'),
+					'#attributes' => array('id' => 'captchaImage'),
+				);
+				$form['ctc_form']['captcha']['CaptchaValue_1'] = array(
+					'#type' => 'textfield',
+					'#size' => 3,
+					'#maxlength' => 3,
+					'#title' => t('in this box'),
+				);
+				$form['ctc_form']['captcha']['CaptchaHash'] = array(
+					'#type' => 'hidden',
+					'#name' => 'CaptchaHash',
+				);
+				$form['ctc_form']['captcha']['CaptchaID'] = array(
+					'#type' => 'hidden',
+					'#name' => 'CaptchaID',
+				);
+			}
+			
+			$form['ctc_form']['submit_1'] = array(
+				'#type' => 'submit',
+				'#value' => t('Call me now!'),
+				'#weight' => 100,
+			);
+		break;
+		
+		case 'success':
+			$form['ctc_success'] = array(
+				'#type' => 'fieldset',
+				'#theme' => 'teligence_ctc_success',
+			);
+			$form['ctc_success']['vals'] = array(
+				'#type' => 'item',
+				'#value' => $form_state['storage']['values'],
+			);
+			$form['ctc_success']['try_again'] = array(
+				'#type' => 'submit',
+				'#value' => t('Go Back'),
+				'#weight' => 100,
+			);
+		break;
+		
+		case 'failure':
+			$form['ctc_failure'] = array(
+				'#type' => 'fieldset',
+				'#theme' => 'teligence_ctc_failure',
+			);
+			$form['ctc_failure']['vals'] = array(
+				'#type' => 'item',
+				'#value' => $form_state['storage']['values'],
+			);
+			$form['ctc_failure']['try_again'] = array(
+				'#type' => 'submit',
+				'#value' => t('Go Back'),
+				'#weight' => 100,
+			);
+		break;
+	}
+
+	$form['language'] = array('#type' => 'hidden', '#value' => $language);
+	$form['brand'] = array('#type' => 'hidden', '#value' => $brand);
+	$form['#submit'] = array('teligence_ctc_form_submit');
+	
+	return $form;
+}
+
+/**
+ * conversion tracking
+ */
+function teligence_ctc_form_3($form_state, $language = 'en', $brand = 'LLK', $mode = null, $captcha = true)
+{
+	// make parameters case insensitive
+	$request = array();
+	foreach((array)$_REQUEST as $key => $value)
+	{
+		$request[strtolower($key)] = check_plain(filter_xss(str_replace(',','',$value), array()));
+	}
+
+	$form['ctc_form'] = array(
+		'#type' => 'fieldset',
+		'#pre_render' => array('teligence_ctc_form_prerender'),
+	);
+	
+	$form['ctc_form']['ani'] = array(
+		'#title' => t('Enter your phone number'),
+		'#type' => 'textfield',
+		'#pre_render' => array('teligence_ctc_form_pre_render','teligence_ctc_phone_prerender'),
+	);
+	
+	$form['ctc_form']['lookup_call_me_now'] = array(
+		'#type' => 'hidden',
+		'#name' => 'lookup_call_me_now',
+		'#value' => 'yes',
+	);
+	
+	/*
+	 * request parameters pre wapid era
+	 * still need them to trigger track pixel images from partners
+	 */
+	$form['ctc_form']['partnerID'] = array(
+		'#type' => 'hidden',
+		'#name' => 'partnerID',
+		'#value' => $request['pid'],
+	);
+	$form['ctc_form']['Keyword'] = array(
+		'#type' => 'hidden',
+		'#name' => 'Keyword',
+		'#value' => $request['keyword'],
+	);
+	$form['ctc_form']['Campaign'] = array(
+		'#type' => 'hidden',
+		'#name' => 'Campaign',
+		'#value' => $request['campaign'],
+	);
+	$form['ctc_form']['Source'] = array(
+		'#type' => 'hidden',
+		'#name' => 'Source',
+		'#value' => $request['source'],
+	);
+	$form['ctc_form']['LandingPage'] = array(
+		'#type' => 'hidden',
+		'#name' => 'LandingPage',
+		'#value' => strlen($request['landingpage']) ? $request['landingpage'] : (strlen($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : $_SERVER['SERVER_NAME'] . $_SERVER['REQUEST_URI']),
+	);
+	$form['ctc_form']['atid'] = array(
+		'#type' => 'hidden',
+		'#name' => 'atid',
+		'#value' => $request['atid'],
+	);
+	
+	/*
+	 * wapid affiliates project
+	 */
+	$form['ctc_form']['wapid'] = array(
+		'#type' => 'hidden',
+	);
+	
+	// captcha field
+	if(user_access('show captcha') && $captcha)
+	{
+		$form['ctc_form']['captcha'] = array(
+			'#type' => 'fieldset',
+			'#pre_render' => array('teligence_ctc_captcha_prerender_2'),
+		);
+		$form['ctc_form']['captcha']['CaptchaImage'] = array(
+			'#type' => 'item',
+			'#title' => t('Enter these numbers'),
+			'#attributes' => array('id' => 'captchaImage'),
+		);
+		$form['ctc_form']['captcha']['CaptchaValue_1'] = array(
+			'#type' => 'textfield',
+			'#size' => 3,
+			'#maxlength' => 3,
+			'#title' => t('in this box'),
+		);
+		$form['ctc_form']['captcha']['CaptchaHash'] = array(
+			'#type' => 'hidden',
+			'#name' => 'CaptchaHash',
+		);
+		$form['ctc_form']['captcha']['CaptchaID'] = array(
+			'#type' => 'hidden',
+			'#name' => 'CaptchaID',
+		);
+	}
+	
+	$form['ctc_form']['submit_1'] = array(
+		'#type' => 'submit',
+		'#value' => t('Call me now!'),
+		'#weight' => 100,
+	);
+	
+	$form_state['storage']['step'] = 1;		
+	$form['language'] = array('#type' => 'hidden', '#value' => $language);
+	$form['brand'] = array('#type' => 'hidden', '#value' => $brand);
+	$form['#submit'] = array('teligence_ctc_form_submit','teligence_ctc_conversionTrackingSubmit');
+	
+	return $form;
+}
+function teligence_ctc_form_32($form_state,$language = 'en', $brand = 'LLK', $mode = null, $captcha = true)
+{
+	$form_state['storage']['values']['language'] = $language;
+	$form_state['storage']['values']['brand'] = $brand;
+	$form['ctc_success'] = array(
+		'#type' => 'fieldset',
+		'#theme' => 'teligence_ctc_success',
+	);
+	// extract variables from pasted script text
+	@eval( variable_get('teligence_ctc_tracking_rules', '') );
+	$form['ctc_success']['vals'] = array(
+		'#type' => 'item',
+		'#value' => $form_state['storage']['values'],
+	);
+	$form['ctc_success']['try_again'] = array(
+		'#type' => 'submit',
+		'#value' => t('Go Back'),
+		'#weight' => 100,
+	);
+	$form['#submit'] = array('teligence_ctc_form_submit','teligence_ctc_conversionTrackingGoBackSubmit');
+	
+	return $form;
+}
+function teligence_ctc_form_33($form_state,$language = 'en', $brand = 'LLK', $mode = null, $captcha = true)
+{
+	$form_state['storage']['values']['language'] = $language;
+	$form['ctc_failure'] = array(
+		'#type' => 'fieldset',
+		'#theme' => 'teligence_ctc_failure',
+	);
+	$form['ctc_failure']['vals'] = array(
+		'#type' => 'item',
+		'#value' => $form_state['storage']['values'],
+	);
+	$form['ctc_failure']['try_again'] = array(
+		'#type' => 'submit',
+		'#value' => t('Go Back'),
+		'#weight' => 100,
+	);
+	$form['#submit'] = array('teligence_ctc_form_submit','teligence_ctc_conversionTrackingGoBackSubmit');
+	
+	return $form;
+}
+
+/**
+ * phone number
+ */
+function teligence_ctc_phone_prerender($element)
+{
+	drupal_add_js(drupal_get_path('module','teligence_ctc') . '/js/jquery.maskedinput-1.3.min.js');
+	$script = '	$(document).ready(function(){
+					$("#'.$element['#id'].'").mask("(999) 999-9999");
+				});';
+	drupal_add_js($script, 'inline');
+	// $element['#description'] = t('Enter phone in the form of (xxx) xxx-xxxx');
+	
+	return $element;
+}
+
+/*
+ * pre render to genereta WAP ID
+ */
+function teligence_ctc_form_prerender($form)
+{
+	if(variable_get('teligence_ctc_wapid_switch',0))
+	{
+		/**
+		 * prepend URL to affiliate request string
+		 */
+		if(strlen(drupal_query_string_encode($_GET, array('q'))))
+		{
+			$nvp = request_uri();
+		}
+		else
+		{
+			$nvp = '/' . $_GET['q'] . '?source=NONE';
+		}
+		$params = new stdClass();
+		global $base_root;		
+		$params->affiliateRequest = $base_root . $nvp;
+		
+		// check for wapid in the session
+		$form['wapid']['#name'] = 'wapid';
+		if(isset($_SESSION['ctc']['wapid'][md5(request_uri())]))
+		{
+			$wapid = $_SESSION['ctc']['wapid'][md5(request_uri())];
+		}
+		else
+		{
+			$result = teligence_ctc_soap_call($params, 'GetWapId', variable_get('teligence_ctc_soap_wsdl_1',''));		
+			$wapid = $_SESSION['ctc']['wapid'][md5(request_uri())] = $result['result']->GetWapIdResult;
+		}
+		$form['wapid']['#value'] = $wapid;
+		
+		// log requests
+		if(variable_get('teligence_ctc_wapid_log',0))
+		{
+			watchdog('wapidGWparams', '<pre>'.print_r($params, true).'</pre>');
+			watchdog('wapidGWresult', '<pre>'.print_r($result, true).'</pre>');
+		}
+	}
+	
+	return $form;
+}
+
+
+/*
+ * captcha field pre render
+ */
+function teligence_ctc_captcha_prerender($element)
+{
+	/*
+	 * captcha image
+	 */
+	$AuthSecret = "G3n3r4t3_1m4g3!";
+	if(db_set_active('paypal'))
+	{
+		if(db_table_exists("Captchas"))
+		{
+			$CaptchaID = rand(1,1000);
+			$Result = db_fetch_array(db_query("SELECT ID, CaptchaHash FROM {Captchas} WHERE ID = %d ", $CaptchaID));
+			db_set_active();
+			$Auth = md5($AuthSecret . "_" . $Result['ID'] . "_" . $Result['CaptchaHash']);
+			$element['CaptchaValue']['#field_prefix'] = '<img src="/ctc/captcha/' . $Result['ID'] . '/' . $Result['CaptchaHash'] . '/' . $Auth .'" />';
+			$element['CaptchaID']['#value'] = $Result['ID'];
+			$element['CaptchaHash']['#value'] = $Result['CaptchaHash'];
+		}
+		else
+		{
+			unset($element['CaptchaValue']);
+			drupal_set_message("Captchas table doesn't exist. Re-enable teligence_ctc module.");
+			db_set_active();
+		}
+	}
+	
+	return $element;		
+}
+
+
+/*
+ * captcha field pre render
+ */
+function teligence_ctc_captcha_prerender_2($element)
+{
+	/*
+	 * captcha image
+	 */
+	$AuthSecret = "G3n3r4t3_1m4g3!";
+	if(db_set_active('paypal'))
+	{
+		if(db_table_exists("Captchas"))
+		{
+			$CaptchaID = rand(1,1000);
+			$Result = db_fetch_array(db_query("SELECT ID, CaptchaHash FROM {Captchas} WHERE ID = %d ", $CaptchaID));
+			db_set_active();
+			$Auth = md5($AuthSecret . "_" . $Result['ID'] . "_" . $Result['CaptchaHash']);
+			$element['CaptchaImage']['#value'] = '<img src="/ctc/captcha/' . $Result['ID'] . '/' . $Result['CaptchaHash'] . '/' . $Auth .'" />';
+			$element['CaptchaID']['#value'] = $Result['ID'];
+			$element['CaptchaHash']['#value'] = $Result['CaptchaHash'];
+		}
+		else
+		{
+			unset($element['CaptchaValue']);
+			drupal_set_message("Captchas table doesn't exist. Re-enable teligence_ctc module.");
+			db_set_active();
+		}
+	}
+	
+	return $element;		
+}
+
+/*
+ * ctc form prerender
+ */
+function teligence_ctc_form_pre_render($element)
+{
+	if(count(drupal_get_messages('error', false)))
+	{
+		$element['#attributes']['class'] .= ' error';
+	}
+
+	return $element;
+}
+
+/*
+ * ctc click to call submit
+ */
+function teligence_ctc_form_submit($form, &$form_state)
+{
+	// check for single field
+	if(isset($form_state['values']['ani']) && strlen($form_state['values']['ani']))
+	{
+		$ani = teligence_ctc_phone_number_sections($form_state['values']['ani']);
+		$form_state['values']['area_code'] = $ani['area_code'];
+		$form_state['values']['phone_number'] = $ani['phone_number'];
+		$form_state['clicked_button']['#id'] = 'edit-submit';
+		$form_state['values']['CaptchaValue'] = $form_state['values']['CaptchaValue_1'];
+	}
+	
+	// 
+	$form_state['storage']['values']['area_code'] = $form_state['values']['area_code'];
+	$form_state['storage']['values']['phone_number'] = $form_state['values']['phone_number'];
+	
+	// action when "call me now" button is pressed
+	if($form_state['clicked_button']['#id'] == 'edit-submit' && $form_state['storage']['step'] === 1 )
+	{
+		// avoid duplicate wapid from desktop submissions
+		if(isset($_SESSION['ctc'][md5($_GET['q'].$form_state['values']['form_id'])]))
+		{
+			unset($form_state['storage']);
+			$form_state['storage']['step'] = 1;
+			unset($_SESSION['ctc'][md5($_GET['q'].$form_state['values']['form_id'])]);
+			drupal_goto($_GET['q'], drupal_query_string_encode($_GET, array('q')));
+			exit();
+		}
+		
+		// validate phone number
+		if(!teligence_ctc_valid_phone_number($form_state['values']['area_code'].$form_state['values']['phone_number']))
+		{
+			drupal_set_message(variable_get('teligence_ctc_'. $form_state['values']['language'] .'_invalid_number', ''), 'error');
+			return;
+		}
+		
+		// validate captcha
+		if(user_access('show captcha'))
+		{
+			if(is_numeric($form_state['values']['CaptchaValue']))
+			{
+				db_set_active('paypal');
+				$CaptchaValue = db_result(db_query("SELECT CaptchaValue FROM {Captchas} WHERE ID = %d AND CaptchaHash = '%s' LIMIT 1", $form_state['values']['CaptchaID'], $form_state['values']['CaptchaHash']));
+				db_set_active();
+				if($form_state['values']['CaptchaValue'] <> $CaptchaValue)
+				{
+					drupal_set_message(variable_get('teligence_ctc_'. $form_state['values']['language'] .'_captha', 'Captcha invalido'), 'error');
+					return;
+				}
+			}
+			else
+			{
+				drupal_set_message(variable_get('teligence_ctc_'. $form_state['values']['language'] .'_captha', 'Captcha invalido'), 'error');
+				return;
+			}
+		}
+		
+		// prepare request to click to call server
+		$form_state['storage']['values']['language'] = $form_state['values']['language'];	
+		$form_state['storage']['values']['brand'] = $brand_code = $form_state['values']['brand'];
+		
+		// make actual request to click to call server	
+		$content = teligence_ctc_caller($form_state['values']['area_code'], 
+			$form_state['values']['phone_number'], $form_state['values']['language'], 
+			$brand_code, $form_state['values']);
+		
+		// evaluate response from click to call server	
+	    if($content == 200)
+	    {
+	    	$form_state['storage']['step'] = 'success';
+	    	
+	    	// extract variables from pasted script text
+			@eval( variable_get('teligence_ctc_tracking_rules', '') );
+	    }
+	    else
+	    {
+	    	$form_state['storage']['step'] = 'failure';
+	    }
+		
+		// set session to avoid multiple calls with same wapid
+		$_SESSION['ctc'][md5($_GET['q'].$form_state['values']['form_id'])] = true;
+	}	
+	
+	// action when "go back" button is pressed
+	if($form_state['clicked_button']['#id'] == 'edit-try-again' 
+		&& in_array($form_state['storage']['step'], array('success', 'failure')))
+	{
+		unset($form_state['storage']);
+		$form_state['storage']['step'] = 1;
+		unset($_SESSION['ctc'][md5($_GET['q'].$form_state['values']['form_id'])]);
+	}	
+	
+	// watchdog
+	watchdog('teligence_ctc', "ctc form 3 submit !form",array('!form'=>'<pre>'.print_r($form_state,true).'</pre>'));
+}
+
+/**
+ * submit handler to append "C2CSuccess" GET parameter to URL and redirect to self
+ */
+function teligence_ctc_conversionTrackingSubmit($form, &$form_state)
+{
+	if($form_state['storage']['step'] == 'success')
+	{
+		$query = array_merge($_GET,array('C2CSuccess'=>1));
+	}
+	else 
+	{
+		$query = array_merge($_GET,array('C2CFailure'=>1));
+	}
+	
+	$qs = drupal_query_string_encode($query,array('q'));
+	drupal_goto($_GET['q'],$qs);
+}
+/**
+ * submit handler to append "C2CSuccess" GET parameter to URL and redirect to self
+ */
+function teligence_ctc_conversionTrackingGoBackSubmit($form, &$form_state)
+{
+	unset($_SESSION['ctc'][md5($_GET['q'].'teligence_ctc_form_3')]);
+	drupal_goto($_GET['q']);
+}
+
+
+/*
+ * functio to call click to call server
+ * if success returns 200
+ * if failure returns 400
+ */
+function teligence_ctc_caller($area_code, $phone_number, $language, $brand_code, $params)
+{
+	$language = !is_null($language) ? $language : 'en';	
+
+	//prepare values
+	if(!teligence_ctc_valid_areacode($area_code))
+	{
+		drupal_set_message(variable_get('teligence_ctc_'. $language .'_invalid_number',''), 'error');
+		return 400;
+	}
+	
+	if(!teligence_ctc_valid_phone_number($area_code . $phone_number))
+	{
+		drupal_set_message(variable_get('teligence_ctc_'. $language .'_invalid_number',''), 'error');
+		return 400;
+	}
+	$strrequestorphone = '1' . $area_code . $phone_number; //  callers phone number
+	
+	
+	if(db_set_active('paypal'))
+	{
+		// find local hub number
+		$brands = teligence_ctc_brands();
+		$strdestinationphone = 	db_result(db_query(' SELECT ct.field_ctc_number_value AS strdestinationphone 
+								FROM {content_type_ctc_hub_number} ct 
+								WHERE ct.field_area_code_value = %d 
+								AND ct.field_brand_name_value = "%s"', 
+								$area_code, $brands[strtoupper($brand_code)]));
+		
+		if(!$strdestinationphone)
+		{
+			drupal_set_message(variable_get('teligence_ctc_'. $language .'_invalid_number',''), 'error');
+			
+			/*
+			 * call ctc.teligence.net page to do the logging of missing areacodes
+			 */
+			$url = variable_get('teligence_ctc_admin_logging', 'http://ctc.teligence.net/ctc/logging');
+			$result = drupal_http_request($url . '/' . $brand_code . '/' .$area_code . '/' . $strrequestorphone );
+			db_set_active();
+			return 400;	
+		}
+		else
+		{
+			// check for blacklisted numbers in the database
+			$result = 	db_result(db_query('SELECT cfpn.field_phone_number_value AS blacklist_number 
+						FROM {content_field_phone_number} AS cfpn, {content_type_black_list_number} AS bl 
+						WHERE cfpn.nid = bl.nid AND cfpn.field_phone_number_value = %d ', 
+						$area_code . $phone_number));
+			
+			if($result)
+			{
+				drupal_set_message(variable_get('teligence_ctc_'. $language .'_invalid_number',''), 'error');
+				db_set_active();
+				return 400;	
+			}
+		}
+		db_set_active();
+	}
+	
+	$strmd5hash = md5('SimonSays'. $strrequestorphone . $strdestinationphone);
+	
+	// build click to call server URL with parameters
+	$qstring = array();
+	$qstring['RequestorPhone'] = $strrequestorphone;
+	$qstring['RequestorCID'] = substr($strdestinationphone, -10);
+	$qstring['DestinationPhone'] = $strdestinationphone;
+	$qstring['DestinationCID'] = variable_get('teligence_ctc_destination_cid', 'PASSTHROUGH');
+	$qstring['PromptSet'] = $brand_code;
+	$qstring['TimeLimit'] = variable_get('teligence_ctc_time_limit', '600');
+	$qstring['Auth'] = $strmd5hash;
+	
+	/*
+	 * pass old parameters
+	 */
+	if(variable_get('teligence_ctc_oldparameters_switch',1))
+	{
+		$qstring['PartnerID'] = substr($params['partnerID'], 0, 40);
+		
+		$lp = parse_url($params['LandingPage']);
+		$qstring['LandingPage'] = $lp['host'] . $lp['path'];
+		
+		$qstring['Source'] = substr($params['Source'], 0, 50);
+		$qstring['Campaign'] = substr($params['Campaign'], 0, 50);
+		$qstring['Keyword'] = substr($params['Keyword'], 0, 50);
+		$qstring['atid'] = substr($params['atid'], 0, 120);
+	}
+	
+	// wapid switch
+	if(variable_get('teligence_ctc_wapid_switch',0))
+	{
+		// make sure we allways pass a wapid
+		if(isset($params['wapid']) && ctype_digit($params['wapid']))
+		{
+			$qstring['WAP_Request_ID'] = $params['wapid'];
+		}
+		else
+		{
+			$qstring['WAP_Request_ID'] = teligence_ctc_get_wapid();
+		}
+	}
+	
+	// build string to pass to click to call server
+	$qs = '';
+	foreach($qstring as $key => $val)
+	{
+		$qs .= $key . '=' . filter_xss($val, array()) . '&';
+	}
+	
+	// Create the stream context
+	$context = stream_context_create(array(
+	    'http' => array(
+	        'timeout' => 3      // Timeout in seconds
+	    )
+	));
+	// make call to click to call server
+	if($content = @file_get_contents(variable_get('teligence_ctc_url','') . '?' . $qs)) 
+	{
+	    if(strstr($content, '200'))
+	    {
+	    	// phone call was successful
+	    	if(isset($qstring['WAP_Request_ID']) && variable_get('teligence_ctc_wapid_switch',0))
+	    	{
+		    	$params = new stdClass();
+				$params->wapId = $qstring['WAP_Request_ID'];
+				$params->statusCode = 2;
+				
+				// new method in same call to back-end  
+				// pass query string with all click to call parameters
+				$params->click2TalkData = urldecode(drupal_query_string_encode(array_filter(array_merge($_GET, $qstring)), array('q')));
+				$result = teligence_ctc_soap_call($params, 'StatusUpdate', variable_get('teligence_ctc_soap_wsdl_1',''));
+				
+				// unset wapid from the session
+				if(isset($_SESSION['ctc']['wapid'][md5(request_uri())]))
+				{
+					unset($_SESSION['ctc']['wapid'][md5(request_uri())]);
+				}
+				
+				// log requests
+				if(variable_get('teligence_ctc_wapid_log',0))
+				{
+					watchdog('teligence_ctc', 'wapidSUparams <pre>'.print_r($params, true).'</pre>');
+					watchdog('teligence_ctc', 'wapidSUresult <pre>'.print_r($result, true).'</pre>');
+				}
+	    	}
+	    	
+	    	return 200;
+	    }
+	    else
+	    {
+		    // phone call failed
+	    	return 400;
+	    }
+	}
+	else
+	{
+		// error logging and alerts
+		watchdog("teligence_ctc","@errorId - @cause - @resol", 
+		array(
+			"@errorId" => "BWTCTC002", // Brand Websites teligence click to call
+			"@cause" => "Cause: file_get_contents cannot connect to ".variable_get('teligence_ctc_url','').'?'.$qs."; Connection times out or response is invalid.",
+			"@resol" => "Resolution: open network connection on port 80 from webserver to ".variable_get('teligence_ctc_url','').'?'.$qs . '.  Try telnet to CTC server from webserver.', 
+		), WATCHDOG_ALERT);
+	}
+    
+}
+
+/**
+ * VALIDATE AREA CODE with IVR rules
+ */
+function teligence_ctc_valid_areacode($areacode)
+{
+	if(!ctype_digit($areacode))return false;
+	if(strlen($areacode) != 3)return false;
+	if(strpos($areacode, "1") === 0)return false;
+	if(strpos($areacode, "99") === 0)return false;
+	if(in_array($areacode, array(800, 855, 866, 877, 888, 900)))return false;
+	
+	return true;
+}
+
+/**  
+ * Verifies that $phonenumber is a valid ten-digit North American phone number
+ *
+ * @param string $phonenumber
+ * @return boolean Returns boolean FALSE if the phone number is not valid. 
+ */
+function teligence_ctc_valid_phone_number($phonenumber) {
+   	
+  $phonenumber = trim($phonenumber);
+   
+  if(empty($phonenumber)){
+	return '';
+  }
+  // define regular expression
+  $regex = "/
+    \D*           # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    [02-9]\d{2}   # area code (can't start with 1)
+    \D*           # optional separator
+    [02-9]\d{2}   # 3-digit prefix (can't start with 1)    
+    \D*           # optional separator
+    \d{4}         # 4-digit line number
+    \D*           # optional separator
+    \d*           # optional extension
+    \D*           # ignore trailing non-digits
+    /x";
+  // return true if valid, false otherwise
+  return (bool) preg_match($regex, $phonenumber); 
+} 
+function teligence_ctc_phone_number_sections($phonenumber) 
+{   	
+	$phonenumber = trim($phonenumber);
+	
+	if(empty($phonenumber)){
+		return '';
+	}
+	
+	// define regular expression   
+  	$regex = "/
+    ^\D*          # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    ([02-9]\d{2}) # capture area code       
+    \D*           # optional separator
+    (\d{3})       # capture 3-digit prefix
+    \D*           # optional separator
+    (\d{4})       # capture 4-digit line number                       
+    \D*           # optional separator
+    (\d*)         # capture optional extension                       
+    \D*$          # ignore trailing non-digits
+  	/x"; 
+    
+  	// get digits of phone number
+  	preg_match($regex, $phonenumber, $matches);
+
+    return array(
+    	'area_code' => $matches[1], 
+    	'phone_number' => $matches[2].$matches[3]
+    );
+} 
+
+/*
+ * format phone number
+ */
+function teligence_ctc_format_phonenumber($phonenumber)
+{	
+	$phonenumber = trim($phonenumber);
+	
+	if(empty($phonenumber)){
+		return '';
+	}
+	
+	// define regular expression   
+  	$regex = "/
+    ^\D*          # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    ([02-9]\d{2}) # capture area code       
+    \D*           # optional separator
+    (\d{3})       # capture 3-digit prefix
+    \D*           # optional separator
+    (\d{4})       # capture 4-digit line number                       
+    \D*           # optional separator
+    (\d*)         # capture optional extension                       
+    \D*$          # ignore trailing non-digits
+  	/x"; 
+    
+  	// get digits of phone number
+  	preg_match($regex, $phonenumber, $matches);
+    
+    return $matches[1].$matches[2].$matches[3];
+}
+
+/*
+ * brand short to long
+ */
+function teligence_ctc_brands()
+{
+	return array(
+		'IML' => 'Interactivemale',
+		'IMLS' => 'Interactivemale ES',
+		'LLK' => 'Livelinks',
+		'FON' => 'Fonochat EN',
+		'FOE' => 'Fonochat SP',
+		'RDL' => 'Redhotdateline',
+		'VBL' => 'Vibeline',
+		'LBL' => 'Lavenderline',
+		'TGO' => 'Tango',
+		'BLP' => 'Black Planet',
+		'MGT' => 'Migente SP',
+		'MGE' => 'Migente EN',
+	);
+}
+
+/*
+ * teligence brand ids
+ */
+function teligence_ctc_brand_ids()
+{
+	return array (
+        'LLK'=>001,
+        'IML'=>002,
+        'TGO'=>003,
+        'RDL'=>004,
+        'VBL'=>007,
+        'FON'=>008,
+        'LBL'=>012,
+        'BLP'=>063,
+        'MGT'=>061,
+    );
+}
+
+/******************************
+ * captcha functions 
+ ***************************/
+
+/*
+ * generate captcha image
+ */
+function teligence_ctc_get_image_captcha($id, $hash, $auth)
+{
+	#
+    # This function generates a 3 digit captcha image using the GD library. You need
+    # the PHP GD library installed for it to work.
+    #
+    # Call it like this: <img src="/ctc/captcha/$id/$hash/$auth" />
+    # Pass in an $id + $hash from the database, and calculate the Auth MD5 hash
+    # using the secret password (below).
+    #
+
+    # Config variables here
+    $AuthSecret = "G3n3r4t3_1m4g3!";
+    $ImageX     = 59;
+    $ImageY     = 25;
+    $FontSize   = 15;
+    $FontPath   = drupal_get_path('module', 'teligence_ctc') . '/captcha/Vera.ttf';
+
+    # Start off declaring success as false. If it's still false after validation,
+    # we'll generate an image that says "ERR" rather than 3 digits
+    $Success = FALSE;
+
+    # Connect to the database
+    # We expect a table that looks like this:
+    # ID | CaptchaHash                      | CaptchaValue
+    #  1 | 6101cc746388bf0466ff6f8810768d6c | 347
+    #  2 | 03d675b5e31cb34e9ae6a7fe320ee941 | 739
+
+    # We generate an MD5 auth as extra protection against brute force attacks
+    # It has to match for us to go on and validate the captcha $id/$hash and
+    # get the details of which digits to generate in the image
+    $Auth = md5($AuthSecret . "_" . $id . "_" . $hash);
+    if ($Auth === $auth) 
+    {
+    	db_set_active('paypal');
+        if($CaptchaValue = db_result(db_query("SELECT CaptchaValue FROM {Captchas} WHERE ID = %d AND CaptchaHash = '%s' LIMIT 1", $id, $hash) ))
+        {
+        	$Success = TRUE;
+        }
+        db_set_active();    
+    }
+
+    if ($Success) {
+        # For success, output the 3 digits with semi-random placement (vertical and horizontal position differs)
+        header('Content-type: image/png');
+        $ImageHandle = @imagecreatetruecolor($ImageX, $ImageY) or die('Cannot Initialize new GD image stream');
+        $BackgroundColour = imagecolorallocate($ImageHandle, 187, 187, 187);
+        $TextColour       = imagecolorallocate($ImageHandle,   0,   0,   0);
+        imagefill($ImageHandle, 0, 0, $BackgroundColour);
+        imagettftext($ImageHandle, $FontSize, 0, rand(0, 10), rand($FontSize, $ImageY), $TextColour, $FontPath, substr($CaptchaValue, 0, 1));
+        imagettftext($ImageHandle, $FontSize, 0, rand(15, 20), rand($FontSize, $ImageY), $TextColour, $FontPath, substr($CaptchaValue, 1, 1));
+        imagettftext($ImageHandle, $FontSize, 0, rand(25, 40), rand($FontSize, $ImageY), $TextColour, $FontPath, substr($CaptchaValue, 2, 1));
+        imagepng($ImageHandle);
+        imagedestroy($ImageHandle);
+    } else {
+        # For success, output the 3 digits with semi-random placement (vertical and horizontal position differs)
+        header('Content-type: image/png');
+        $ImageHandle = @imagecreatetruecolor($ImageX, $ImageY) or die('Cannot Initialize new GD image stream');
+        $BackgroundColour = imagecolorallocate($ImageHandle, 187, 187, 187);
+        $TextColour       = imagecolorallocate($ImageHandle,   0,   0,   0);
+        imagefill($ImageHandle, 0, 0, $BackgroundColour);
+        imagettftext($ImageHandle, $FontSize, 0, rand(0, 10), rand($FontSize, $ImageY), $TextColour, $FontPath, "E");
+        imagettftext($ImageHandle, $FontSize, 0, rand(15, 20), rand($FontSize, $ImageY), $TextColour, $FontPath, "R");
+        imagettftext($ImageHandle, $FontSize, 0, rand(25, 40), rand($FontSize, $ImageY), $TextColour, $FontPath, "R");
+        imagepng($ImageHandle);
+        imagedestroy($ImageHandle);
+    }
+}
+
+
+
+/**************************************************
+ * SOAP send
+ * wrap the php soap function so we can handle any errors or exceptions
+ **************************************************/
+function teligence_ctc_soap_call($params, $method_name, $wsdl)
+{
+	$output = array ();
+	
+	if(!class_exists('SoapClient')){
+		$output['result'] = 'SoapClient Missing';
+		$output['debug'] = 'We are having technical problems. Plase try again later.';
+		return $output;
+	}
+	
+	//$params->sequenceId = teligence_cart_uuid($renewGUID);
+	
+    // send xml
+    try
+    {
+    	// Create the stream context
+		$context = stream_context_create(array(
+		    'http' => array(
+		        'timeout' => 3      // Timeout in seconds
+		    )
+		));
+    	if(!@file_get_contents($wsdl)) 
+    	{
+        	throw new SoapFault('Server', 'No WSDL found at ' . $wsdl);
+    	}
+		
+		// set up the service client using WSDL
+		// TODO: remove/add array('cache_wsdl'=>WSDL_CACHE_NONE) as parameter for live/dev
+		if(variable_get('teligence_ctc_cache_wsdl', 1))
+		{
+			$client = new SoapClient($wsdl);
+		}
+		else
+		{
+			$client = new SoapClient($wsdl, array('cache_wsdl'=>WSDL_CACHE_NONE));
+		}
+		
+        $result = $client->{ $method_name }($params);
+
+        $output['debug'] = 'Response Code for '.$method_name.': '.$result->{ $method_name.'Result' }->ResponseCode;		
+		$output['result'] = $result;
+    } 
+	catch(SoapFault $e)
+    {
+    	// error logging
+    	watchdog('teligence_ctc',"@errorId - @cause - @resol - @methodName - @responseCode - @ErrMsg - !input - !output", 
+			array(
+				'@errorId' => 'BWTCTC001',
+				'@cause' => "Cause: SOAP brand websites cannot connect to Back-end $wsdl; Connection times out or response is invalid.",
+				'@resol' => "Resolution: check network connection on port 80 from webserver to $wsdl. Try telnet to WSDL from webserver.", 
+				'@methodName' => 'Method Name = '.$method_name,
+				'@responseCode' => 'SoapFault = ' . $e->getMessage(),
+				'@ErrMsg' => $output->{$method_name . "Result"}->ErrMsg,
+				'!input' => 'Input Parameters: <pre>'.print_r($params,1).'</pre>',
+				'!output' => 'Output Parameters: <pre>'.print_r($output->{$method_name . "Result"},1).'</pre>',
+			), WATCHDOG_ALERT);
+		
+        $output['error'] = $method_name.' <pre>'.check_plain(print_r($e->getMessage(), true)).'</pre>';
+        
+        if(check_plain(print_r($e->getMessage(), true)) == 'Error Fetching http headers')
+        {
+        	$output['debug'] = t('There has been a technical problem with your transaction. Please call our customer service: @message', array('@message' => variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')));
+        	drupal_set_message($output['debug']);
+        	return;
+        }
+        else
+        {
+        	$output['debug'] = $method_name.' Soap Error Code: '.check_plain(print_r($e->getMessage(), true));
+        }
+    }
+	
+    $output['debug'] = (variable_get('teligence_ctc_soap_debug_mode', 0) ? $output['debug'] : t('This operation could not be completed. Please try again later.'));
+	    
+    return $output;
+}
+
+/*
+ * GUID global universal identifier generator.
+ * One per session.
+ */
+function teligence_ctc_uuid($renewGUID = null)
+{
+
+    // The field names refer to RFC 4122 section 4.1.2
+    if ( isset($_SESSION['guid']) && !$renewGUID )
+    {
+        return $_SESSION['guid'];
+    }
+    else
+    {
+        $_SESSION['guid'] = sprintf('%04x%04x-%04x-%03x4-%04x-%04x%04x%04x',
+        mt_rand(0, 65535), mt_rand(0, 65535), // 32 bits for "time_low"
+        mt_rand(0, 65535), // 16 bits for "time_mid"
+        mt_rand(0, 4095), // 12 bits before the 0100 of (version) 4 for "time_hi_and_version"
+        bindec(substr_replace(sprintf('%016b', mt_rand(0, 65535)), '01', 6, 2)),
+        // 8 bits, the last two of which (positions 6 and 7) are 01, for "clk_seq_hi_res"
+        // (hence, the 2nd hex digit after the 3rd hyphen can only be 1, 5, 9 or d)
+        // 8 bits for "clk_seq_low"
+        mt_rand(0, 65535), mt_rand(0, 65535), mt_rand(0, 65535) // 48 bits for "node"
+        );
+        return $_SESSION['guid'];
+    }
+}

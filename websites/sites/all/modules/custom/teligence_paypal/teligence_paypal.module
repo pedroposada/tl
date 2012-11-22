@@ -1,0 +1,1457 @@
+<?php
+
+/**
+ * Implementation of hook_user()
+ */
+function teligence_paypal_user($op, &$edit, &$account, $category = NULL) {
+	
+	if($account->uid > 0){
+		$roles = array_values($account->roles);
+	}
+	
+	if($op == "login" && in_array("helpdesk",$roles)){
+		
+		drupal_goto('paypal/orders');
+		
+	}
+	
+}
+
+
+
+/**
+ * Implementation of hook_perm()
+ * @return 
+ */
+function teligence_paypal_perm(){
+	return array(
+		'access paypal app',
+		'administer paypal settings',
+		'process orders',
+	);
+}
+
+
+/**
+ * Implementation of hook_form_alter()
+ */
+function teligence_paypal_form_alter(&$form, $form_state, $form_id){
+	global $user;	
+	
+	/*
+	 * alter "order edit" form
+	 */
+	if($form_id == 'paypal_order_node_form'){
+		
+		/*
+		if(1){
+			
+			foreach($form as $key => $value){
+				if(strstr($key, 'field_')){
+					if(!in_array($key, array('field_order_status', 'field_notes'))){
+						$form['#field_info'][$key]['active'] = 0;
+						//$debugg['#field_info'][$key] = $form['#field_info'][$key];
+					}
+				}
+			}
+			//drupal_set_message('<pre>'.print_r($debugg,true).'</pre>');
+		}
+		*/
+		unset($form['taxonomy']);
+		$form['buttons']['preview']['#type'] = 'hidden';
+		$form['buttons']['cancel'] =  array(
+			'#value' => l(' Cancel',$_GET['destination']), 
+			'#weight' => 100,
+			);
+	}
+	
+	/*
+	 * alter "package selection" form
+	 */
+	if($form_id == 'teligence_paypal_package_selection_form'){
+		//$phonefield = content_fields('field_phone_number');
+		//$form['validate_this']['paypal_phone_number'] = phone_widget($form, $form_state, $phonefield, $form['validate_this']['paypal_phone_number'] );
+		//drupal_set_message('<pre>'.print_r($form,true).'</pre>');
+	}
+}
+
+/**
+ * Implementation of hook_menu_alter()
+ */
+function teligence_paypal_menu_alter(&$items){
+	
+}
+
+/**
+ * Implementation of hook_nodeapi()
+ * @return 
+ */
+function teligence_paypal_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL){
+	if($op == 'view'){
+		if($node->type == 'paypal_order'){
+			//drupal_set_message('<pre>'.print_r($node->content,true).'</pre>');
+		}
+	}
+	if($op == 'prepare'){
+		if($node->type == 'paypal_order'){
+			//drupal_set_message('<pre>'.print_r($node->taxonomy,true).'</pre>');
+		}
+	}
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function teligence_paypal_menu() {
+  $items = array();
+  
+  $items['paypal/buy'] = array(
+  	//'title' => 'Buy with Paypal',
+	'page callback' => 'teligence_paypal_page',
+	'access arguments' => array('access paypal app'),
+  );
+  
+  $items['paypal/expresscheckout'] = array(
+  	//'title' => 'Paypal Express Checkout',
+	'page callback' => 'teligence_paypal_expresscheckout',
+	'access arguments' => array('access paypal app'),
+	'type' => MENU_CALLBACK,
+  );
+  
+  $items['paypal/get'] = array(
+  	//'title' => 'Review Your Order Information',
+	'page callback' => 'teligence_paypal_getexpresscheckout',
+	'access arguments' => array('access paypal app'),
+	'type' => MENU_CALLBACK,
+  );
+  
+  $items['paypal/first'] = array(
+  	//'title' => 'Review Your Order Information',
+	'page callback' => 'teligence_paypal_return_page',
+	'page arguments' => array('first'),
+	'access callback' => true,
+	'type' => MENU_CALLBACK,
+  );
+  
+  $items['paypal/order/%node/process'] = array(
+  	//'title' => 'Process Order',
+	'page callback' => 'teligence_paypal_order_process',
+	'page arguments' => array(2),
+	'access arguments' => array('process orders'),
+	'type' => MENU_CALLBACK,
+  );
+  
+  $items['paypal/ipn'] = array(
+	'page callback' => 'teligence_paypal_ipn_handler',
+	'access callback' => true,
+	'type' => MENU_CALLBACK,
+  );
+  
+  
+  $items['paypal/return/%'] = array(
+	'page callback' => 'teligence_paypal_return_page',
+	'page arguments' => array(2),
+	'access callback' => true,
+	'type' => MENU_CALLBACK,
+  );
+  
+  $items['admin/settings/paypal'] = array(
+  	'title' => 'Paypal',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings'),
+	'access arguments' => array('administer paypal settings'),
+  );
+  
+  $items['admin/settings/paypal/general'] = array(
+	'title' => 'General Settings',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'weight' => -10,
+  );
+  
+  $items['admin/settings/paypal/failed'] = array(
+  	'title' => 'Failed',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings',3),
+	'access arguments' => array('administer paypal settings'),
+	'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/paypal/success'] = array(
+  	'title' => 'Successful',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings',3),
+	'access arguments' => array('administer paypal settings'),
+	'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/paypal/technical'] = array(
+  	'title' => 'Tech Problem',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings',3),
+	'access arguments' => array('administer paypal settings'),
+	'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/paypal/footer'] = array(
+  	'title' => 'Footer',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings',3),
+	'access arguments' => array('administer paypal settings'),
+	'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/paypal/email'] = array(
+  	'title' => 'Email',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings',3),
+	'access arguments' => array('administer paypal settings'),
+	'type' => MENU_LOCAL_TASK,
+  );
+  
+  $items['admin/settings/paypal/first'] = array(
+  	'title' => 'First Screen',
+	'page callback' => 'drupal_get_form',
+	'page arguments' => array('teligence_paypal_admin_settings',3),
+	'access arguments' => array('administer paypal settings'),
+	'type' => MENU_LOCAL_TASK,
+  );
+  
+  
+  return $items;
+}
+
+/**
+ * Implementation of MODULE_preprocess_HOOK(&$variables)
+ * @return 
+ * @param object $variables
+ */
+function teligence_paypal_preprocess_node(&$variables){
+	if($variables['type'] == 'paypal_order'){
+		$variables['terms'] = '';
+		$variables['title'] = '';
+		//$variables['template_files'][0] = 'teligence-paypal-node-paypal-order';
+		//drupal_set_message('<pre>'.print_r($variables,true).'</pre>');
+	}
+}
+
+// process order page
+function teligence_paypal_order_process($node){
+	
+	// load required functions
+	if( !function_exists("node_object_prepare")) {
+	   include_once(drupal_get_path('module', 'node') . '/node.pages.inc');
+	}
+	
+	$output  = node_view($node, $teaser = FALSE, $page = FALSE, $links = FALSE);
+	$output .= drupal_get_form($node->type .'_node_form', $node);
+	
+	return $output;
+}
+
+// save node with values and taxonomy
+// then redirects to expresscheckout
+function teligence_paypal_package_selection_form_submit($form, &$form_state){
+	global $base_url;
+	
+	$package = menu_get_object('node',1,'node/'.$form_state['values']['paypal_minutes_packages']);
+	
+	$_SESSION['paypal_order']['payment_amount'] = $package->field_price[0]['value'];
+	
+	// put all paypal related values inside the session
+	foreach($form_state['values'] as $key => $value){
+		if(strstr($key, 'paypal_')){
+			$_SESSION['paypal_order'][$key] = $value;
+		}	
+	}
+	
+	if (!isset($form_state['values']['paypal_membership_number'])) {
+		unset($_SESSION['paypal_order']['paypal_membership_number']);
+	}
+	
+	//drupal_set_message('<pre>'.print_r($_SESSION['paypal_order'],true).'</pre>');
+	
+	// set value of fields
+	$fields['values']['ip_address'] = ip_address();
+	$fields['values']['brand'] = $base_url;
+	//$node->field_paypal_token[0]['value'] = $form_state['values']['paypal_token'];
+	$fields['values']['price_of_package'] = $package->field_price[0]['value'];
+	$fields['values']['minutes_of_package'] = $package->field_time[0]['value'];
+	$fields['values']['user_membership_number'] = $form_state['values']['paypal_membership_number'];
+	$fields['values']['user_phone'] = $form_state['values']['paypal_phone_number'];
+	//$node->field_email[0]['value'] = $form_state['values']['paypal_user_email'];
+	$fields['values']['order_type'] = $_SESSION['paypal_order']['order_type'];
+	
+	$_SESSION['paypal_order']['nid'] = teligence_paypal_record_order($fields, $status = 'New', $nid = null);
+	
+	$form_state['redirect'] = 'paypal/expresscheckout';	
+}
+
+/*
+ * page to review order
+ */ 
+function teligence_paypal_getexpresscheckout(){
+	drupal_add_css($path = drupal_get_path('module','teligence_paypal').'/css/return-page.css', $type = 'module', $media = 'all', $preprocess = TRUE);
+	
+	/*
+	 * hide buttons on click to avoid errors
+	 */
+	teligence_paypal_hide_buttons();
+		
+	$steps = teligence_paypal_page_steps($activekey = 'review-order-info');
+	
+	// array $httpParsedResponseAr gets created
+	//include_once (drupal_get_path('module','teligence_paypal').'/includes/teligence_paypal.GetExpressCheckout.inc');
+	
+		/** GetExpressCheckoutDetails NVP example; last modified 08MAY23.
+	 *
+	 *  Get information about an Express Checkout transaction. 
+	*/
+	
+	/**
+	 * This example assumes that this is the return URL in the SetExpressCheckout API call.
+	 * The PayPal website redirects the user to this page with a token.
+	 */
+	
+	// Obtain the token from PayPal.
+	if(!array_key_exists('token', $_REQUEST)) {
+		//exit('Token is not received.');
+		drupal_set_message('Token is not received.');
+		drupal_goto('paypal/return/technical');
+	}
+	
+	// Set request-specific fields.
+	$token = urlencode(htmlspecialchars($_REQUEST['token']));
+	
+	// Add request-specific fields to the request string.
+	$nvpStr = "&TOKEN=$token";
+	
+	// Execute the API operation; see the PPHttpPost function above.
+	$httpParsedResponseAr = PPHttpPost('GetExpressCheckoutDetails', $nvpStr, $environment = variable_get('paypal_api_environment','sandbox'));
+	
+	if("Success" == $httpParsedResponseAr["ACK"]) {
+		// Extract the response details.
+		$payerID = $httpParsedResponseAr['PAYERID'];
+		$street1 = $httpParsedResponseAr["SHIPTOSTREET"];
+		if(array_key_exists("SHIPTOSTREET2", $httpParsedResponseAr)) {
+			$street2 = $httpParsedResponseAr["SHIPTOSTREET2"];
+		}
+		$city_name = $httpParsedResponseAr["SHIPTOCITY"];
+		$state_province = $httpParsedResponseAr["SHIPTOSTATE"];
+		$postal_code = $httpParsedResponseAr["SHIPTOZIP"];
+		$country_code = $httpParsedResponseAr["SHIPTOCOUNTRYCODE"];
+		
+		$form = drupal_get_form('teligence_paypal_review_order_form', $httpParsedResponseAr);
+		
+		
+		return theme('teligence_paypal_single_type', $form, 'Review Order Info', $steps, variable_get('teligence_paypal_footer_message',''));
+		
+		
+	} else  {
+		//exit('GetExpressCheckoutDetails failed: ' . print_r($httpParsedResponseAr, true));
+		drupal_set_message(urldecode($httpParsedResponseAr['L_LONGMESSAGE0']));
+		drupal_goto('paypal/return/technical');
+	}
+	
+
+	
+	//drupal_set_message('<pre>'.print_r($httpParsedResponseAr,true).'</pre>');
+}
+
+/*
+ * review order form
+ */
+function teligence_paypal_review_order_form($form_state, $values = array()){
+	global $base_url;
+	
+	//$package = menu_get_object('node', 1, 'node/'.urldecode($_SESSION['paypal_order']['paypal_minutes_packages']));
+	if(!function_exists('db_set_active')){
+			include_once './includes/database.inc';
+		}
+	db_set_active('paypal');
+	$order = menu_get_object('node', 1, 'node/'.$values['INVNUM']);
+	db_set_active('default');
+	//$order->status = 1;
+	//node_save(&$order);
+	//$order_type = taxonomy_get_term($_SESSION['paypal_order']['order_type']);
+	//drupal_set_message('<pre>'.print_r($values['INVNUM'],true).'</pre>');
+	$form = array();
+	$form['first_name'] = array(
+		'#type' => 'hidden',
+		'#value' => $values['FIRSTNAME'],
+		'#disabled' => true,
+	);
+	$form['last_name'] = array(
+		'#type' => 'hidden',
+		'#value' => $values['LASTNAME'],
+		'#disabled' => true,
+	);
+	$form['address'] = array(
+		'#type' => 'hidden',
+		'#value' => urldecode($values['SHIPTOSTREET'].', '.$values['SHIPTOCITY'].', '.$values['SHIPTOSTATE'].', '.$values['SHIPTOZIP'].', '.$values['SHIPTOCOUNTRYNAME']),
+		'#disabled' => true,
+	);
+	$form['ref'] = array(
+		'#type' => 'hidden',
+		'#value' => $values['INVNUM'],
+		'#disabled' => true,
+	);
+	$form['ip_address'] = array(
+		'#type' => 'hidden',
+		'#value' => ip_address(),
+		'#disabled' => true,
+	);
+	$form['brand'] = array(
+		'#type' => 'hidden',
+		'#value' => $base_url,
+		'#disabled' => true,
+	);
+	$form['order_type'] = array(
+		'#type' => 'hidden',
+		'#value' => key($order->taxonomy), //$_SESSION['paypal_order']['order_type'],
+		'#disabled' => true,
+	);
+	$form['paypal_payer_id'] = array(
+		'#type' => 'hidden',
+		'#value' => urldecode($values['PAYERID']),
+		'#disabled' => true,
+	);
+	$form['paypal_token'] = array(
+		'#type' => 'hidden',
+		'#value' => urldecode($values['TOKEN']),
+		'#disabled' => true,
+	);
+	$form['user_phone'] = array(
+		'#type' => 'textfield',
+		'#value' => $order->field_phone_number[0]['value'], //$_SESSION['paypal_order']['paypal_phone_number'],
+		'#disabled' => true,
+		'#title' => t('Phone Number'),
+	);
+	$form['paypal_user_email'] = array(
+		'#type' => 'textfield',
+		'#value' => urldecode($values['EMAIL']),
+		'#disabled' => true,
+		'#title' => t('Email Address'),
+	);
+	if(isset($order->field_membership_number[0]['value'])){
+		$form['user_membership_number'] = array(
+			'#type' => 'textfield',
+			'#value' => $order->field_membership_number[0]['value'], //$_SESSION['paypal_order']['paypal_membership_number'],
+			'#disabled' => true,
+			'#title' => t('Membership Number'),
+		);
+	}
+	$form['minutes_of_package'] = array(
+		'#type' => 'textfield',
+		'#value' => number_format($order->field_time[0]['value'],0).' minutes',
+		'#disabled' => true,
+		'#title' => t('Package'),
+	);
+	$form['price_of_package'] = array(
+		'#type' => 'textfield',
+		'#value' => '$'.$order->field_price[0]['value'],
+		'#disabled' => true,
+		'#title' => t('Price @countrycode',array('@countrycode' => variable_get('paypal_api_currency','CAD'))),
+	);
+	
+	// buttons
+	$form['next'] = array('#type' => 'submit', 
+		'#value' => t('PLACE YOUR ORDER'),
+		'#submit' => array('teligence_paypal_review_order_form_submit'),
+		'#prefix' => '<div class="buttons">',
+		'#attributes' => array('class' => 'next-button-place'),
+		
+		);
+	/*
+	$form['back'] = array(
+		'#type' => 'submit', 
+		'#value' => t('Back to Packages'), 
+		'#submit' => array('teligence_paypal_review_order_form_submit_back'),
+		'#validate' => array(false),
+		'#attributes' => array('class' => 'back-button'),
+		'#suffix' => '</div>'
+		);
+	*/
+	
+	return $form;
+}
+
+/*
+ * submit function for review order form
+ * payment gets done here
+ * if response is successful then email gets sent out
+ * order record gets always updated no matter response failed or successfull 
+ */
+function teligence_paypal_review_order_form_submit($form, &$form_state){
+	$form_state['values']['minutes_of_package'] = str_replace(' minutes', '', $form_state['values']['minutes_of_package']);
+	
+	//drupal_set_message('<pre>'.print_r($form_state['values'],true).'</pre>');
+	
+	// TODO: add code to calculate taxes here
+	
+	/*
+	 * make request to paypal api and get response
+	 */
+	$httpParsedResponseAr = teligence_paypal_do_express_checkout(
+			$payerID = $form_state['values']['paypal_payer_id'],
+			$token = $form_state['values']['paypal_token'], 
+			$paymentAmount = str_replace('$', '', $form_state['values']['price_of_package']), 
+			$currencyID = variable_get('paypal_api_currency','CAD')
+		);
+	
+	/*
+	 * evaluate paypal api response
+	 */
+	if("Success" == $httpParsedResponseAr["ACK"]) {
+		
+		$nid = teligence_paypal_record_order($form_state, 'Pending', $form_state['values']['ref'], 0);
+		
+		/*
+		 * send email to client
+		 */
+		drupal_mail($module = 'teligence_paypal', 
+					$key = 'teligence_paypal_notice', 
+					$to = $form_state['values']['paypal_user_email'], 
+					$language = language_default($property = NULL), 
+					$params = $form_state['values'], 
+					$from = NULL, 
+					$send = TRUE
+					);
+		
+		/*
+		 * redirect to success page
+		 */ 
+		$form_state['redirect'] = array("paypal/return/success", 'ref='.sprintf("1%04d", $nid));
+		
+		
+		
+	} else  {
+		
+		$nid = teligence_paypal_record_order($form_state, $status = 'Cancelled', $nid = $form_state['values']['ref'], 0);
+			
+		/*
+		 * redirect to failure page
+		 */
+		$form_state['redirect'] = 'paypal/return/failed';
+	}
+	
+	/*
+	 * clear sessions variables
+	 */
+	unset($_SESSION['paypal_order']);
+}
+
+/**
+ * Implementation of hook_mail()
+ */
+function teligence_paypal_mail($key, &$message, $params){
+	if($key == 'teligence_paypal_notice'){
+		$message['headers']['Bcc'] = variable_get('paypal_cc_emails','');
+		$message['subject'] = variable_get('teligence_paypal_email_subject','');
+		$message['body'][] = teligence_paypal_tokenize(
+			$string = variable_get('teligence_paypal_email_message',''), 
+			$values = array(
+				'[name]' => urldecode($params['first_name']),
+				'[package-minutes]' => $params['minutes_of_package'], 
+				'[package-price]' => $params['price_of_package'], 
+				'[order-reference-number]' => sprintf("1%04d", $params['ref']), 
+				'[customer-service-number]' => variable_get('paypal_site_customer_service_number',''),
+				), 
+			$tokens = teligence_paypal_tokens());	
+	}
+}
+
+
+/*
+ * helper function to save order to database
+ */
+function teligence_paypal_record_order($form_state, $status, $nid = null, $publish = 1){
+	
+		if(!function_exists('db_set_active')){
+			include_once './includes/database.inc';
+		}
+		db_set_active('paypal');
+	
+		include_once './includes/bootstrap.inc';
+		drupal_bootstrap(DRUPAL_BOOTSTRAP_FULL);
+		module_load_include('inc', 'node', 'node.pages'); 
+		
+		if(is_numeric($nid) && $nid > 0){
+			// load existing node
+			$node = menu_get_object('node',1,'node/'.$nid);
+			//$node->nid = $nid;
+		}else{
+			// Create a new node
+			$node->type = 'paypal_order';
+			node_object_prepare($node);
+	    	$node->uid = 0;
+			$node->title = 'Paypal Order';
+			$node->body = "";
+	    	$node->teaser = "";
+			$node->filter = variable_get('filter_default_format', 1);
+		    $node->format = FILTER_FORMAT_DEFAULT;
+		    $node->language = '';
+		    $node->revision = 0;
+		    $node->promote = 0;
+		    $node->created = time();
+		    $node->comment= 0;
+			$node->status = 0;
+		}
+		
+		// set value of fields
+		$node->field_paypal_address[0]['value'] = $form_state['values']['address'];
+		$node->field_paypal_name[0]['value'] = $form_state['values']['first_name'].' '.$form_state['values']['last_name'];
+		$node->field_ip_address[0]['value'] = $form_state['values']['ip_address'];
+		$node->field_brand[0]['value'] = $form_state['values']['brand'];
+		$node->field_paypal_token[0]['value'] = $form_state['values']['paypal_token'];
+		$node->field_price[0]['value'] = str_replace('$', '', $form_state['values']['price_of_package']);
+		$node->field_time[0]['value'] = $form_state['values']['minutes_of_package'];
+		$node->field_membership_number[0]['value'] = $form_state['values']['user_membership_number'];
+		$node->field_phone_number[0]['value'] = $form_state['values']['user_phone'];
+		$node->field_email[0]['value'] = $form_state['values']['paypal_user_email'];
+		$node->field_order_status[0]['value'] = $status;
+		
+		// save node first time
+		$node->status = $publish;
+		node_save($node);
+    	$nid = $node->nid;
+		taxonomy_node_save($node, $terms = array($form_state['values']['order_type']));
+		
+		// add padded ref number and resave node
+		//sprintf("%0" . $n . "d", $s);
+		$node->field_order_reference[0]['value'] = sprintf("1%04d", $nid);
+		node_save($node);
+		
+    	//drupal_set_message('<pre>'.print_r($node,true).'</pre>');
+		unset($node);
+		
+		db_set_active('default');
+		
+		return $nid;
+}
+
+/*
+ * submit function for back button on review order form
+ */
+function teligence_paypal_review_order_form_submit_back($form, &$form_state){
+	
+	//$order = menu_get_object('node', 1, 'node/'.$form_state['values']['ref']);
+	teligence_paypal_record_order($form_state, $status = 'Cancelled', $nid = $form_state['values']['ref'], 0);
+	
+	$form_state['redirect'] = 'paypal/buy';
+}
+
+function teligence_paypal_do_express_checkout($payerID, $token, $paymentAmount, $currencyID){
+	/** DoExpressCheckoutPayment NVP example; last modified 08MAY23.
+	 *
+	 *  Complete an Express Checkout transaction. 
+	*/
+	
+	/**
+	 * This example assumes that a token was obtained from the SetExpressCheckout API call.
+	 * This example also assumes that a payerID was obtained from the SetExpressCheckout API call
+	 * or from the GetExpressCheckoutDetails API call.
+	 */
+	// Set request-specific fields.
+	$payerID = urlencode($payerID);
+	$token = urlencode($token);
+	
+	$paymentType = urlencode("Sale");			// or 'Sale' or 'Order' or 'Authorization'
+	$paymentAmount = urlencode($paymentAmount);
+	$currencyID = urlencode($currencyID);						// or other currency code ('GBP', 'EUR', 'JPY', 'CAD', 'AUD')
+	
+	// Add request-specific fields to the request string.
+	$nvpStr = "&TOKEN=$token&PAYERID=$payerID&PAYMENTACTION=$paymentType&AMT=$paymentAmount&CURRENCYCODE=$currencyID";
+	
+	// Execute the API operation; see the PPHttpPost function above.
+	$httpParsedResponseAr = PPHttpPost('DoExpressCheckoutPayment', $nvpStr, $environment = variable_get('paypal_api_environment','sandbox'));
+	
+	return $httpParsedResponseAr;
+}
+
+/*
+ * send request to paypal api to start the express checkout process
+ * if sucessful, redirects user to paypal login page
+ */
+function teligence_paypal_expresscheckout(){
+	include_once (drupal_get_path('module','teligence_paypal').'/includes/teligence_paypal.SetExpressCheckout.inc');
+}
+
+
+/*
+ * Tokens
+ */
+function teligence_paypal_tokens(){
+	return array('[package-minutes]', '[package-price]', '[order-reference-number]', '[customer-service-number]', '[name]');
+}
+
+/*
+ * replace tokens for values
+ */
+function teligence_paypal_tokenize($string, $values = array(), $tokens = array()){
+	
+	foreach($values as $key => $value){
+		if(in_array($key,$tokens)){
+			$string = str_replace($key, $value, $string);
+		}
+	}
+	
+	return $string;
+}
+
+function teligence_paypal_admin_settings($form_state, $op = null){
+	global $base_url;
+	
+	$form = array();
+	
+	switch($op){
+		case 'success':
+			$form['teligence_paypal_success_title'] = array(
+				'#title' => 'Page Title',
+				'#type' => 'textfield',
+				'#default_value' => variable_get('teligence_paypal_success_title',''),
+				'#required' => true,
+			);
+			$form['teligence_paypal_success_message'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Page Body',
+				'#default_value' => variable_get('teligence_paypal_success_message',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.'
+			);
+			$form['view_page_here'] = array(
+				'#type' => 'item',
+				'#title' => 'Page URL',
+				'#value' => l($base_url.'/paypal/return/'.$op,$base_url.'/paypal/return/'.$op,array('attributes'=>array('target' => '_blank'))),
+			);
+		break;
+		
+		case 'failed':
+			$form['teligence_paypal_failed_title'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Page Title',
+				'#default_value' => variable_get('teligence_paypal_failed_title',''),
+				'#required' => true,
+			);
+			$form['teligence_paypal_failed_message'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Page Body',
+				'#default_value' => variable_get('teligence_paypal_failed_message',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.'
+			);
+			$form['view_page_here'] = array(
+				'#type' => 'item',
+				'#title' => 'Page URL',
+				'#value' => l($base_url.'/paypal/return/'.$op,$base_url.'/paypal/return/'.$op,array('attributes'=>array('target' => '_blank'))),
+			);
+		break;
+		
+		case 'technical':
+			$form['teligence_paypal_technical_title'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Page Title',
+				'#default_value' => variable_get('teligence_paypal_technical_title',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.'
+			);
+			$form['teligence_paypal_technical_message'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Page Body',
+				'#default_value' => variable_get('teligence_paypal_technical_message',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.'
+			);
+			$form['view_page_here'] = array(
+				'#type' => 'item',
+				'#title' => 'Page URL',
+				'#value' => l($base_url.'/paypal/return/'.$op,$base_url.'/paypal/return/'.$op,array('attributes'=>array('target' => '_blank'))),
+			);
+		break;
+		
+		case 'footer':
+			$form['teligence_paypal_footer_message'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Footer',
+				'#default_value' => variable_get('teligence_paypal_footer_message',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.'
+			);
+		break;
+		
+		case 'email':
+			$form['teligence_paypal_email_subject'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Email Subject',
+				'#default_value' => variable_get('teligence_paypal_email_subject',''),
+				'#required' => true,
+			);
+			$form['teligence_paypal_email_message'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Email',
+				'#default_value' => variable_get('teligence_paypal_email_message',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.'
+			);
+		break;
+		
+		case 'first':
+			$form['teligence_paypal_first_title'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Page Title',
+				'#default_value' => variable_get('teligence_paypal_first_title',''),
+				'#required' => true,
+			);
+			$form['teligence_paypal_first_message'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Body',
+				'#default_value' => variable_get('teligence_paypal_first_message',''),
+				'#required' => true,
+				'#description' => 'Available tokens: '.implode(', ',teligence_paypal_tokens()).'. You can place these tokens within your message and they will be replaced dynamically.',
+			);
+			$form['teligence_paypal_first_buttons'] = array(
+				'#type' => 'textarea',
+				'#title' => 'Buttons',
+				'#default_value' => variable_get('teligence_paypal_first_buttons',''),
+				'#required' => true,
+			);
+			$form['view_page_here'] = array(
+				'#type' => 'item',
+				'#title' => 'Page URL',
+				'#value' => l($base_url.'/paypal/'.$op, $base_url.'/paypal/'.$op, array('attributes'=>array('target' => '_blank'))),
+			);
+		break;
+		
+		default:
+			$form['paypal_page_style_name'] = array(
+			  '#type' => 'select', 
+			  '#title' => t('PayPal Page Style Name'), 
+			  '#default_value' => variable_get('paypal_page_style_name','Paypal'),
+			  '#options' => array(
+			    'Paypal' => t('None'),
+				'Livelinks' => t('Livelinks'),
+			  ),
+			  '#description' => t('Select the name of PayPal Page Style'),
+			);
+			$form['paypal_api_environment'] = array(
+			  '#type' => 'select', 
+			  '#title' => t('PayPal API Environment'), 
+			  '#default_value' => variable_get('paypal_api_environment','sandbox'),
+			  '#options' => array(
+			    'sandbox' => t('sandbox'), 
+			    'beta-sandbox' => t('beta-sandbox'), 
+			    'live' => t('live'),
+			  ),
+			  '#description' => t('Select the type of PayPal server. Select sandbox'),
+			);
+			$form['paypal_api_currency'] = array(
+			  '#type' => 'select', 
+			  '#title' => t('PayPal Currency'), 
+			  '#default_value' => variable_get('paypal_api_currency','CAD'),
+			  '#options' => array(
+			  		'GBP' => 'GBP', 
+				  	'EUR' => 'EUR', 
+				  	'JPY' => 'JPY', 
+				  	'CAD' => 'CAD', 
+				  	'AUD' => 'AUD',
+					'USD' => 'USD',
+			  ),
+			);
+			$form['paypal_api_return_url'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Paypal API Return URL',
+				'#default_value' => variable_get('paypal_api_return_url',''),
+				'#required' => true,
+			);
+			$form['paypal_api_cancel_url'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Paypal API Cancel URL',
+				'#default_value' => variable_get('paypal_api_cancel_url',''),
+				'#required' => true,
+			);			
+			$form['paypal_api_username'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Paypal API Username',
+				'#default_value' => variable_get('paypal_api_username',''),
+				'#required' => true,
+			);
+			$form['paypal_api_password'] = array(
+				'#type' => 'password',
+				'#title' => 'Paypal API Password',
+				'#default_value' => variable_get('paypal_api_password',''),
+				'#required' => true,
+			);
+			$form['paypal_api_signature'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Paypal API Signature',
+				'#default_value' => variable_get('paypal_api_signature',''),
+				'#required' => true,
+			);
+			$form['paypal_site_customer_service_number'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Customer Service Number',
+				'#default_value' => variable_get('paypal_site_customer_service_number',''),
+				'#required' => true,
+				'#description' => t('Enter here the 1-800-xxx-xxx number for this brand\'s customer service.'), 
+			);
+			$form['paypal_cc_emails'] = array(
+				'#type' => 'textfield',
+				'#title' => 'Bcc all emails to',
+				'#default_value' => variable_get('paypal_cc_emails',''),
+				'#required' => false,
+				'#description' => t('You can enter multiple emails addresses like: email1@email.com, email2@email.com and so on.'), 
+			);
+		break;
+	}
+	
+	return system_settings_form($form);
+}
+
+/*
+ * output pages
+ */ 
+function teligence_paypal_return_page($op = null){
+	drupal_add_css($path = drupal_get_path('module','teligence_paypal').'/css/return-page.css', $type = 'module', $media = 'all', $preprocess = TRUE);
+	
+	$steps = teligence_paypal_page_steps($activekey = 'result', $link = array('key' => 'select-membership', 'link' => 'paypal/buy'));
+	
+	switch($op){
+		
+		case 'success':
+			$tokens = teligence_paypal_tokens();
+			$title = variable_get('teligence_paypal_'.$op.'_title','');
+			//$message = str_replace($tokens, array('',$_GET['price'],$_GET['ref'],variable_get('paypal_site_customer_service_number','')), variable_get('teligence_paypal_'.$op.'_message',''));
+			$message = teligence_paypal_tokenize(
+				$string = variable_get('teligence_paypal_'.$op.'_message',''), 
+				$values = array(
+					'[name]' => '',
+					'[package-minutes]' => '', 
+					'[package-price]' => $_GET['price'], 
+					'[order-reference-number]' => $_GET['ref'], 
+					'[customer-service-number]' => variable_get('paypal_site_customer_service_number',''),
+					), 
+				$tokens = teligence_paypal_tokens());
+			return theme('teligence_paypal_'.$op.'_page', $message, $title, $steps, variable_get('teligence_paypal_footer_message',''));
+		break;
+			
+		case 'failed':
+			$tokens = teligence_paypal_tokens();
+			$title = variable_get('teligence_paypal_'.$op.'_title','');
+			//$message = str_replace($tokens, array('','','',variable_get('paypal_site_customer_service_number','')), variable_get('teligence_paypal_'.$op.'_message',''));
+			$message = teligence_paypal_tokenize(
+				$string = variable_get('teligence_paypal_'.$op.'_message',''), 
+				$values = array(
+					'[customer-service-number]' => variable_get('paypal_site_customer_service_number',''),
+					), 
+				$tokens = teligence_paypal_tokens());
+			return theme('teligence_paypal_'.$op.'_page', $message, $title, $steps, variable_get('teligence_paypal_footer_message',''));
+		break;
+		
+		case 'technical':
+			$tokens = teligence_paypal_tokens();
+			$title = variable_get('teligence_paypal_'.$op.'_title','');
+			//$message = str_replace($tokens, array('','','',variable_get('paypal_site_customer_service_number','')), variable_get('teligence_paypal_'.$op.'_message',''));
+			$message = teligence_paypal_tokenize(
+				$string = variable_get('teligence_paypal_'.$op.'_message',''), 
+				$values = array(
+					'[customer-service-number]' => variable_get('paypal_site_customer_service_number',''),
+					), 
+				$tokens = teligence_paypal_tokens());
+			return theme('teligence_paypal_'.$op.'_page', $message, $title, $steps, variable_get('teligence_paypal_footer_message',''));
+		break;
+		
+		case 'first':
+			$tokens = teligence_paypal_tokens();
+			$title = variable_get('teligence_paypal_'.$op.'_title','');
+			$message = variable_get('teligence_paypal_'.$op.'_message','');
+			$buttons = variable_get('teligence_paypal_first_buttons','');
+			return theme('teligence_paypal_'.$op.'_page', $message, $title, '', variable_get('teligence_paypal_footer_message',''), $buttons);
+		break;
+		
+		default:
+			return t('null');
+		break;
+	}
+}
+
+/**
+ * Implementation of hook_theme()
+ */
+function teligence_paypal_theme($existing, $type, $theme, $path) {
+  return array(
+    'teligence_paypal_single_type' => array(
+      'arguments' => array('form' => null, 'title' => null, 'steps' => null, 'block_region' => null),
+	  'template' => 'teligence-paypal-page',
+    	),
+	'teligence_paypal_package_selection' => array(
+      'arguments' => array('form' => null, 'title' => null, 'steps' => null, 'block_region' => null),
+	  'template' => 'teligence-paypal-page',
+    	),
+	'teligence_paypal_success_page' => array(
+      'arguments' => array('form' => null, 'title' => null, 'steps' => null, 'block_region' => null),
+	  'template' => 'teligence-paypal-page',
+    	),
+	'teligence_paypal_failed_page' => array(
+      'arguments' => array('form' => null, 'title' => null, 'steps' => null, 'block_region' => null),
+	  'template' => 'teligence-paypal-page',
+    	),
+	'teligence_paypal_technical_page' => array(
+      'arguments' => array('form' => null, 'title' => null, 'steps' => null, 'block_region' => null),
+	  'template' => 'teligence-paypal-page',
+    	),
+	'teligence_paypal_first_page' => array(
+      'arguments' => array('form' => null, 'title' => null, 'steps' => null, 'block_region' => null, 'buttons' => null),
+	  'template' => 'teligence-paypal-page',
+    	),
+	'radios_paypal' => array(
+	  'arguments' => array('form' => null),
+		),
+	);
+}
+
+/*
+ * Handle the IPN calls from PayPal. Good for Website Payments Standard
+ */
+function teligence_paypal_ipn_handler(){
+    // PHP 4.1
+    // read the post from PayPal system and add 'cmd'
+    $req = 'cmd=_notify-validate';
+    
+	if(isset($_POST)){
+		foreach ($_POST as $key=>$value)
+    	{
+        	$value = urlencode(stripslashes($value));
+        	$req .= "&$key=$value";
+    	}
+	}else{
+		$req = '';
+	}
+    
+    
+    // post back to PayPal system to validate
+    $header .= "POST /cgi-bin/webscr HTTP/1.0\r\n";
+    $header .= "Content-Type: application/x-www-form-urlencoded\r\n";
+    $header .= "Content-Length: ".strlen($req)."\r\n\r\n";
+    $fp = fsockopen('ssl://www.paypal.com', 443, $errno, $errstr, 30);
+    
+    // assign posted variables to local variables
+    $item_name = $_POST['item_name'];
+    $item_number = $_POST['item_number'];
+    $payment_status = $_POST['payment_status'];
+    $payment_amount = $_POST['mc_gross'];
+    $payment_currency = $_POST['mc_currency'];
+    $txn_id = $_POST['txn_id'];
+    $receiver_email = $_POST['receiver_email'];
+    $payer_email = $_POST['payer_email'];
+    
+    if (!$fp)
+    {
+        // HTTP ERROR
+    } else
+    {
+        fputs($fp, $header.$req);
+        while (!feof($fp))
+        {
+            $res = fgets($fp, 1024);
+            if (strcmp($res, "VERIFIED") == 0)
+            {
+                // check the payment_status is Completed
+                // check that txn_id has not been previously processed
+                // check that receiver_email is your Primary PayPal email
+                // check that payment_amount/payment_currency are correct
+                // process payment
+				watchdog($type = 'paypal', $message = 'Transaction ID: @txn_id', $variables = array('@txn_id' => $txn_id), $severity = WATCHDOG_NOTICE, $link = NULL);
+				
+            }
+            else if (strcmp($res, "INVALID") == 0)
+            {
+                // log for manual investigation
+				watchdog($type = 'paypal', $message = 'Transaction ID: @txn_id', $variables = array('@txn_id' => $txn_id), $severity = WATCHDOG_ERROR, $link = NULL);
+				
+            }
+        }
+        fclose($fp);
+    }
+}
+
+
+function teligence_paypal_page_steps($activekey, $link = array()){
+	$output = '';
+	
+	$items['select-membership'] = t('Select Membership Status');
+	$items['select-package'] = t('Select Package');
+	$items['paypal-login'] = t('PayPal Payment Info');
+	//$items['review-paypal-address'] = t('Review your shipping address in PayPal');
+	$items['review-order-info'] = t('Confirm');
+	$items['result'] = t('Order Summary');
+	
+	$i = 1;
+	foreach($items as $key => $value){
+		if($activekey == $key){
+			$items[$key] = array('data' => "STEP $i<br />".$value, 'class' => 'active', 'valign' => 'top', 'align' => 'center', 'width' => '16.66%');
+		}
+		elseif($link['key'] == $key){
+			$items[$key] = array('data' => l("STEP $i<br />".$value, $link['link'], array('html' => true)), 'class' => 'active', 'valign' => 'top', 'align' => 'center', 'width' => '16.66%');
+		}
+		else{
+			$items[$key] = array('data' => "STEP $i<br />".$value, 'valign' => 'top', 'align' => 'center', 'width' => '16.66%');
+		}
+		$i++;
+	}
+	$rows[] = $items;
+	
+	return theme('table', array(), $rows, array('width' => '100%', 'cellpadding' => '5', 'class' => 'steps-table'));
+}
+
+/*************************************************************
+ * package selection page or buttons for membership options
+ */
+function teligence_paypal_page(){
+	drupal_add_css($path = drupal_get_path('module','teligence_paypal').'/css/return-page.css', $type = 'module', $media = 'all', $preprocess = TRUE);
+	
+	/*
+	 * hide buttons after clicking to avoid errors
+	 */
+	teligence_paypal_hide_buttons();
+	
+	$output = '';
+	//unset($_SESSION['paypal_order']);
+	if(isset($_SESSION['paypal_order']['order_type'])){
+		// radiobuttons and phone
+		$steps = teligence_paypal_page_steps($activekey = 'select-package');
+		$term = taxonomy_get_term($_SESSION['paypal_order']['order_type']);
+		$form = drupal_get_form('teligence_paypal_package_selection_form',$_SESSION['paypal_order']['order_type']);
+		$output .= theme('teligence_paypal_single_type',$form, 'Select a Package', $steps, variable_get('teligence_paypal_footer_message',''));
+	}else{
+		// radiobuttons only
+		if($terms = taxonomy_get_tree($vid = 2, $parent = 0, $depth = -1, $max_depth = NULL)){
+			//foreach($terms as $term){
+			$steps = teligence_paypal_page_steps($activekey = 'select-membership');
+			$forms .= drupal_get_form('teligence_paypal_single_type_form',$terms);
+			//}
+			$output .= theme('teligence_paypal_single_type',$forms, 'Select Membership Status', $steps, variable_get('teligence_paypal_footer_message',''));
+		}
+	}
+	
+	return $output;
+}
+
+/*
+ * button mini form
+ */
+function teligence_paypal_single_type_form($form_state, $terms = null){
+	$form = array();
+	
+	foreach($terms as $term){
+		$options[$term->tid] = $term->name;
+	}
+	
+	$form['group_fields'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Please select your membership status below.'),
+	);
+	
+	$form['group_fields']['order_type_id'] = array(
+		'#type' => 'radios',
+		'#title' => t('I am a'),
+		'#options' => $options,
+		'#default_value' => '',
+		'#required' => true,
+	);
+	
+	//$form['order_type_name'] = array('#type' => 'hidden', '#value' => $term->name);
+	//$form['order_type_id'] = array('#type' => 'hidden', '#value' => $term->tid);
+	$form['submit'] = array(
+		'#type' => 'submit', 
+		'#value' => t('Next'), 
+		'#attributes' => array('class' => 'next-button'),
+		);
+	
+	$form['#submit'] = array('teligence_paypal_single_type_form_submit');
+	
+	return $form;
+}
+
+/*
+ * button mini form submit function
+ */
+function teligence_paypal_single_type_form_submit($form, &$form_state){
+	$_SESSION['paypal_order']['order_type'] = $form_state['values']['order_type_id'];	
+}
+
+/*
+ * Package selection form
+ */
+function teligence_paypal_package_selection_form($form_state, $tid = null){
+	
+	$form = array();
+	if($term = taxonomy_get_term($tid)){
+		
+		if($view = views_get_view('minutes_packages')){
+			$view->set_arguments( array( $tid ) );
+			$view->execute();
+			foreach($view->result as $package){
+				$options[$package->nid] = '';//number_format($package->node_data_field_time_field_time_value, 0).'minutes at $'.$package->node_data_field_price_field_price_value;
+			}
+		}else{
+			$options = array(t('There was a problem listing the packages.'));
+		}
+		
+		$form['validate_this'] = array(
+			'#type' => 'fieldset',
+		);
+		
+		$form['validate_this']['paypal_minutes_packages'] = array(
+  			'#type' => 'radios', 
+  			'#title' => $term->name.' Packages', 
+  			'#default_value' => in_array($_SESSION['paypal_order']['paypal_minutes_packages'], array_keys($options)) ? $_SESSION['paypal_order']['paypal_minutes_packages']:null, 
+  			'#options' => count($options) ? $options : array( 0 => t('No packages available for the moment.') ),
+			'#theme' => 'radios_paypal',
+		);
+		
+		$form['validate_this']['paypal_phone_number'] = array(
+			'#type' => 'textfield', 
+			'#title' => t('Phone Number'), 
+			'#default_value' => $_SESSION['paypal_order']['paypal_phone_number'],
+			'#size' => 10, 
+			'#maxlength' => 10, 
+			'#description' => t('10 digits with no spaces, hyphens or brackets, e.g. 1234567890'),
+			//'#required' => TRUE,
+		);
+		
+		
+		switch($tid){
+			case 8: //Membership Renewal Purchase
+				$form['validate_this']['paypal_membership_number'] = array(
+					'#type' => 'textfield', 
+  					'#title' => t('Membership Number'), 
+  					'#default_value' => $_SESSION['paypal_order']['paypal_membership_number'], 
+  					'#size' => 5, 
+  					'#maxlength' => 5, 
+					'#description' => t('5 digits, e.g. 12345'),
+  					//'#required' => TRUE,
+				);
+			break;
+		}
+		
+		// buttons
+		$form['next'] = array(
+			'#type' => 'submit', 
+			'#value' => t('Next'),
+			'#submit' => array('teligence_paypal_package_selection_form_submit'),
+			'#attributes' => array('class' => 'next-button'),
+			'#prefix' => '<div class="buttons">',
+			);
+		
+		$form['back'] = array(
+			'#type' => 'submit', 
+			'#value' => t('Back'), 
+			'#submit' => array('teligence_paypal_package_selection_form_back'),
+			'#validate' => array('teligence_paypal_package_selection_form_back_validate'),
+			'#attributes' => array('class' => 'back-button'),
+			'#suffix' => '</div>',
+			);
+			
+			
+		
+		
+	}
+	
+	return $form;
+}
+
+/*
+ * theme function for radios
+ */
+function theme_radios_paypal($form){
+	//drupal_set_message('<pre>'.print_r($form,true).'</pre>');
+	$output  = '';
+	foreach($form['#options'] as $key => $value){
+		$package = menu_get_object('node', 1, 'node/'.$key);
+		$rows[] = array('data' => array(
+			array('data' => drupal_render($form[$key])), 
+			array('data' => number_format($package->field_time[0]['value'], 0).' minutes', 'class' => 'time'),
+			array('data' => '$'.$package->field_price[0]['value'], 'class' => 'price'),
+		));
+	}
+	
+	$output .= theme('table', array('', 'Time Package', 'Price '.variable_get('paypal_api_currency','CAD')), $rows, array('class' => 'package-table'));
+	$output .= drupal_render($form);
+	
+	return $output;
+}
+
+/*
+ * validate back button
+ */
+function teligence_paypal_package_selection_form_back_validate($form, &$form_state){
+	return true;
+}
+
+/*
+ * validate function for next button
+ */
+function teligence_paypal_package_selection_form_validate($form, &$form_state){
+	//drupal_set_message("<pre>".print_r($form_state['values'],true)."</pre>");
+	
+	if($form_state['values']['paypal_minutes_packages'] == ''){
+		form_set_error('paypal_minutes_packages', $message = 'Please select your package', $reset = FALSE);	
+	}
+	
+	
+	if(strlen($form_state['values']['paypal_phone_number']) != 10){
+		form_set_error('paypal_phone_number','10 digits with no spaces, hyphens or brackets, e.g. 1234567890');
+	}
+	
+	if(isset($form_state['values']['paypal_membership_number'])){
+		if(strlen($form_state['values']['paypal_membership_number']) != 5){
+			form_set_error('paypal_membership_number','5 digits, e.g. 12345');
+		}
+	}
+	
+}
+
+/*
+ * submit function for back button
+ */ 
+function teligence_paypal_package_selection_form_back($form, &$form_state){
+	
+	unset($_SESSION['paypal_order']['order_type']);
+	
+	foreach($form_state['values'] as $key => $value){
+		if(strstr($key, 'paypal_')){
+			$_SESSION['paypal_order'][$key] = $value;
+		}	
+	}
+	
+	//drupal_set_message("<pre>".print_r($form_state,true)."</pre>");
+	
+	//$form_state['redirect'] = 'paypal/buy';
+	
+}
+
+/**
+ * Implementation of hook_forms()
+ * @return 
+ */
+function teligence_paypal_forms(){
+	
+	$args = func_get_args();
+	$form_id = $args[0];
+	
+	//drupal_set_message("<pre>".print_r($args,true)."</pre>");
+  
+	$forms = array();
+
+	if(strpos($form_id, "teligence_paypal_single_type_form") === 0){
+		$forms[$form_id] = array(
+		    'callback' => 'teligence_paypal_single_type_form',
+		);	
+	}
+	
+	return $forms;
+}
+
+/**
+ * Send HTTP POST Request
+ *
+ * @param	string	The API method name
+ * @param	string	The POST Message fields in &name=value pair format
+ * @return	array	Parsed HTTP Response body
+ */
+function PPHttpPost($methodName_, $nvpStr_, $environment = 'sandbox') {
+	//global $environment;
+	
+
+	// Set up your API credentials, PayPal end point, and API version.
+	$API_UserName = urlencode(variable_get('paypal_api_username',''));
+	$API_Password = urlencode(variable_get('paypal_api_password',''));
+	$API_Signature = urlencode(variable_get('paypal_api_signature',''));
+	$API_Endpoint = "https://api-3t.paypal.com/nvp";
+	
+	if("sandbox" === $environment || "beta-sandbox" === $environment) {
+		$API_Endpoint = "https://api-3t.$environment.paypal.com/nvp";
+		//$API_Endpoint = "https://api.$environment.paypal.com/nvp";
+	}
+	$version = urlencode('52.0');
+	//$version = urlencode('3.0');
+
+	// Set the curl parameters.
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, $API_Endpoint);
+	curl_setopt($ch, CURLOPT_VERBOSE, 1);
+
+	// Turn off the server and peer verification (TrustManager Concept).
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_POST, 1);
+
+	// Set the API operation, version, and API signature in the request.
+	$nvpreq = "METHOD=$methodName_&VERSION=$version&PWD=$API_Password&USER=$API_UserName&SIGNATURE=$API_Signature$nvpStr_";
+
+	// Set the request as a POST FIELD for curl.
+	curl_setopt($ch, CURLOPT_POSTFIELDS, $nvpreq);
+
+	// Get response from the server.
+	$httpResponse = curl_exec($ch);
+
+	if(!$httpResponse) {
+		drupal_set_message("$methodName_ failed: ".curl_error($ch).'('.curl_errno($ch).')');
+		return;
+	}
+
+	// Extract the response details.
+	$httpResponseAr = explode("&", $httpResponse);
+
+	$httpParsedResponseAr = array();
+	foreach ($httpResponseAr as $i => $value) {
+		$tmpAr = explode("=", $value);
+		if(sizeof($tmpAr) > 1) {
+			$httpParsedResponseAr[$tmpAr[0]] = $tmpAr[1];
+		}
+	}
+
+	if((0 == sizeof($httpParsedResponseAr)) || !array_key_exists('ACK', $httpParsedResponseAr)) {
+		drupal_set_message("Invalid HTTP Response for POST request($nvpreq) to $API_Endpoint.");
+		return;
+	}
+	
+	//debugging
+	$httpParsedResponseAr['request'] = explode("&", $nvpreq);
+	$httpParsedResponseAr['request'][] = $API_Endpoint;
+
+	return $httpParsedResponseAr;
+}
+
+function teligence_paypal_hide_buttons(){
+	$data = '
+	var touched;
+	var t;
+	
+	function disabler(){
+		touched.attr("disabled","disabled");
+		clearTimeout(t);
+	}
+	
+	$(document).ready(function() {
+	       $("input[@type=submit]").mouseup(function() {
+	          $(this).siblings("input[@type=submit]").hide();
+	          touched = $(this);          
+	          t = setTimeout("disabler()", 10);
+			  $(this).after("<span>Loading...</span>");
+	        });
+			$("form > input").keypress(function (e){
+				if(e.which == 32){
+					$("edit-next").siblings("input[@type=submit]").hide();
+	          		touched = $("edit-next");          
+	          		t = setTimeout("disabler()", 10);
+			  		$("edit-next").after("<span>Loading...</span>");
+				}
+	          
+	        });       
+	});';
+	
+	// don't allow users to post content more than once
+	drupal_add_js( $data, 'inline');
+}

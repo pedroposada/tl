@@ -1,0 +1,5 @@
+; $Id$
+name = Teligence NTF Number
+description = "Automatically replaces __NTF__ in blocks with the value in the cck feild -> feild_ntf"
+core = 6.x
+package = "Teligence"

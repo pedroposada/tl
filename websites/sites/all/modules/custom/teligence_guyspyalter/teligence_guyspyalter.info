@@ -1,0 +1,9 @@
+; $Id$ 
+name = "GuySpy Form Alter - Form Theme Modification"
+description = "This is to modify GuySpy theme for webform and simplenews implementation"
+package = "Teligence"
+core = 6.x
+version = "6.x-1.0"
+core = "6.x"
+dependencies[] = simplenews
+dependencies[] = webform

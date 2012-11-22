@@ -1,0 +1,10 @@
+; $Id$ 
+name = "Paypal"
+description = "Allows purchase of packages through paypal."
+package = "Teligence"
+core = 6.x
+version = "6.x-1.0"
+core = "6.x"
+dependencies[] = content
+dependencies[] = views
+dependencies[] = altermail

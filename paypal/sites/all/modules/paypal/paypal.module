@@ -1,0 +1,1480 @@
+<?php 
+
+/***
+ * 
+ * 200781 PayPal � Automated Integration of Web sites
+ * http://wiki.teligence.net/doku.php?id=ep:nbi:200781
+ * 
+ ***/
+
+include_once('inc/paypal_api.inc');
+include_once('inc/simplexml.inc');
+
+
+/*********************************************************************************
+ ******* DRUPAL HOOKS ************************************************************
+ *********************************************************************************/
+
+ /*
+  * Implementation of hook_perm()
+  */
+function paypal_perm()
+{
+    return array (
+    	'administer paypal settings',
+    );
+}
+
+
+/*
+ * Implementation of hook_menu()
+ */
+function paypal_menu()
+{
+	$items['admin/paypal'] = array (
+		'title'=>'Paypal',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('paypal_settings_form'),
+	    'access arguments'=> array ('administer paypal settings'),
+    );
+    $items['admin/paypal/settings'] = array (
+	    'title'=>'Paypal Settings',
+	    'type'=> MENU_DEFAULT_LOCAL_TASK,
+    	'weight' => 0,
+    );
+    $items['admin/paypal/add-new-vendor'] = array (
+	    'title'=>'Add New Vendor',
+    	'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('paypal_add_new_vendor_form'),
+	    'access arguments'=> array ('create new vendor'),
+	    'type'=> MENU_LOCAL_TASK,
+    	'weight' => 1,
+    );
+    $items['admin/paypal/logs'] = array (
+	    'title'=>'Logs',
+    	'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('paypal_logs_form'),
+	    'access arguments'=> array ('administer paypal settings'),
+	    'type'=> MENU_LOCAL_TASK,
+    	'weight' => 2,
+    );
+    
+    /*
+     * paypal DoVoid handler
+     */
+    $items['paypal/refund/%'] = array (
+	    'page callback'=> 'paypal_refund',
+	    'page arguments'=> array (2),
+	    'access callback'=> true,
+	    'type'=> MENU_CALLBACK,
+    );
+    
+    /*
+     * handler to get session-data to vendor
+     */
+    $items['paypal/getsessiondata/%'] = array (
+	    'page callback'=> 'paypal_get_session_data',
+	    'page arguments'=> array (2),
+	    'access callback'=> true,
+	    'type'=> MENU_CALLBACK,
+    );
+    /*
+     * handler to set session-data from vendor
+     */
+    $items['paypal/setsessiondata/%'] = array (
+	    'page callback'=> 'paypal_set_session_data',
+	    'page arguments'=> array (2),
+	    'access callback'=> true,
+	    'type'=> MENU_CALLBACK,
+    );
+    /*
+     * handler to process IPN notifications from PAYPAL
+     */
+    $items['paypal/ipn'] = array (
+	    'page callback'=> 'paypal_ipn_listener',
+	    'access callback'=> true,
+	    'type'=> MENU_CALLBACK,
+    );
+    /*
+     * handler to process IPN notifications from PAYPAL
+     */
+    $items['paypal/ipn/simulator'] = array (
+	    'page callback'=> 'paypal_ipn_simulator',
+	    'access callback'=> true,
+	    'type'=> MENU_CALLBACK,
+    );
+    
+    /*
+     * handler to have user wait with nice animation while back-end does transactions
+     */
+    $items['paypal/buffer/%'] = array (
+	    'page callback'=> 'paypal_output_buffer',
+    	'page arguments' => array(2),
+	    'access callback'=> true,
+	    'type'=> MENU_CALLBACK,
+    );
+    
+    /*
+     * flush cache
+     */
+    $items['paypal/cache'] = array (
+	    'page callback'=> 'paypal_flush_cache',
+	    'access arguments'=> array ('administer paypal settings'),
+	    'type'=> MENU_CALLBACK,
+    );
+    
+    /*
+     * test page for cancel and return urls
+     */
+    $items['paypal/testurl'] = array (
+	    'page callback'=> 'paypal_test_url',
+	    'access callback'=> true,
+    );
+    
+    /*
+     * PAYPAL return URL
+     * it expects the vendor id at the end
+     */
+    $items['paypal/return/%'] = array (
+	    'page callback'=> 'paypal_return_url',
+    	'page arguments' => array(2),
+	    'access callback'=> true,
+    );
+    
+    /*
+     * present package details
+     * show button to continue to paypal
+     */
+    $items['paypal/package-details'] = array (
+    	'title' => 'PAY WITH PAYPAL - PRICE CONFIRMATION',
+	    'page callback'=> 'drupal_get_form',
+	    'page arguments'=> array('paypal_show_package_details_form'),
+	    'access callback'=> true,
+    );
+    
+	return $items;
+}
+
+/*
+ * Implementation of hook_theme()
+ */
+function paypal_theme($existing, $type, $theme, $path)
+{
+	return array (
+	    'paypal_show_package_details'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    	//'template'=>'paypal-package-details',
+	    	'function'=>'theme_paypal_show_package_details',
+	    ),
+	    'paypal_logs_filters'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    	'function'=>'theme_paypal_logs_filters',
+	    ),
+	);
+}
+
+/**
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function paypal_preprocess_page(&$variables) 
+{
+	
+}
+
+/********************************************************************************
+ ***** HELPER FUNCTION **********************************************************
+ ********************************************************************************/
+
+/*
+ * PAYPAL LOGS
+ */
+function paypal_logs_form($form_state)
+{
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Filter Logs'),
+		'#theme' => 'paypal_logs_filters',
+	);
+	$form['group']['search'] = array(
+		'#type' => 'textfield',
+		'#default_value' => ($_GET['search'] ? $_GET['search'] : $form_state['storage']['search']),
+	);
+	$form['group']['dbtable'] = array(
+		'#type' => 'select',
+		'#default_value' => ($_GET['dbtable'] ? $_GET['dbtable'] : $form_state['storage']['dbtable']),
+		'#options' => array(
+			'pp_Logging' => 'pp_Logging', 
+			'pp_SessionData' => 'pp_SessionData',
+		),
+	);	
+	if($form['group']['dbtable']['#default_value'] == "pp_Logging" || 
+		empty($form['group']['dbtable']['#default_value']))
+	{
+		$options = array('' => 'Any');
+		$result = db_query("SELECT DISTINCT(s.CallName) c FROM {pp_Logging} s ORDER BY c ASC");
+		while($name = db_fetch_array($result))
+		{
+			$options[$name['c']] = $name['c'];
+		}
+		$form['group']['callname'] = array(
+			'#type' => 'select',
+			'#default_value' => ($_GET['callname'] ? $_GET['callname'] : $form_state['storage']['callname']),
+			'#options' => $options,
+			'#default_value' => ($_GET['callname'] ? $_GET['callname'] : $form_state['storage']['callname']),
+		);
+	}
+	$form['group']['find'] = array(
+		'#type' => 'submit',
+		'#value' => t('Find'),
+	);
+	$form['group']['reset'] = array(
+		'#type' => 'submit',
+		'#value' => t('Reset'),
+	);
+	$form['pager'] = array(
+		'#value' => $form_state['storage']['pager'],
+	);
+	$form['results'] = array(
+		'#title' => t('Results'),
+		'#value' => $form_state['storage']['results'],
+	);
+	
+	
+	$dbtable = ($_GET['dbtable'] ? $_GET['dbtable'] : $form_state['storage']['dbtable']);
+	// $callname = ($_GET['callname'] ? $_GET['callname'] : $form_state['storage']['callname']);
+	$numberOfRows = 1;
+	$param = array();
+	switch($dbtable)
+	{
+		case 'pp_Logging':
+			$query = 	"SELECT * FROM {pp_Logging} s 
+						WHERE s.Value LIKE '%%%s%%' ".
+						(empty($callname) ? null : " AND s.CallName LIKE '%s' ").
+						" ORDER BY s.LastUpdatedDateTime DESC";
+			$cquery = 	"SELECT COUNT(*) FROM {pp_Logging} s 
+						WHERE s.Value LIKE '%%%s%%' ".
+						(empty($callname) ? null : " AND s.CallName LIKE '%s' ").
+						" ORDER BY s.LastUpdatedDateTime DESC";
+			$param[] = ($_GET['search'] ? $_GET['search'] : $form_state['storage']['search']);
+			$param[] = ($_GET['callname'] ? $_GET['callname'] : $form_state['storage']['callname']);
+		break;
+		case 'pp_SessionData':
+			$query = 	"SELECT * FROM {pp_SessionData} s 
+						LEFT JOIN {pp_Vendor} v ON s.VendorID = v.VendorID
+						WHERE s.Value LIKE '%%%s%%' OR s.SessionID LIKE '%s' 
+						ORDER BY s.LastUpdatedDateTime DESC";
+			$cquery = 	"SELECT COUNT(*) FROM {pp_SessionData} s 
+						LEFT JOIN {pp_Vendor} v ON s.VendorID = v.VendorID
+						WHERE s.Value LIKE '%%%s%%' OR s.SessionID LIKE '%s' 
+						ORDER BY s.LastUpdatedDateTime DESC";
+			$numberOfRows = 20;
+			$param[] = ($_GET['search'] ? $_GET['search'] : $form_state['storage']['search']);
+			$param[] = ($_GET['search'] ? $_GET['search'] : $form_state['storage']['search']);
+		break;
+		default:
+			$query = "SELECT * FROM {pp_Logging} s ORDER BY s.LastUpdatedDateTime DESC";
+			$cquery = "SELECT COUNT(*) FROM {pp_Logging} s ORDER BY s.LastUpdatedDateTime DESC";
+		break;
+	}
+	
+	// $param = ($_GET['search'] ? $_GET['search'] : $form_state['storage']['search']);
+	// $results = pager_query($query, $numberOfRows, 0, null, $param, $callname);
+	$args = array_merge(array($query, $numberOfRows, 0, $cquery), $param);
+	$results = call_user_func_array('pager_query', $args);
+	$rows = array();
+	while($r = db_fetch_array($results))
+	{
+		$vals = array_values($r);
+		$vals[3] = paypal_urlQueryStringParse($vals[3], true);
+		$rows[] = $vals;
+		$h = array_keys($r);
+	}
+	foreach((array)$h as $key => $val)
+	{
+		$headers[] = array(
+			'data' => t('@name', array('@name' => $val)),
+			//'field' => $val,
+		);
+	}
+	$form['results']['#value'] = theme('table', $headers, $rows, array('width' => '100%'));
+	$form['pager']['#value'] = theme('pager', array(), $numberOfRows);
+
+	return $form;
+}
+
+/**
+ * parse URL query string into array
+ */
+function paypal_urlQueryStringParse($string = null, $table = false)
+{
+	if(!is_null($string) && strstr($string, "&") && strstr($string, "="))
+	{
+		$vals = explode("&", $string);
+		foreach((array)$vals as $k)
+		{
+			list($name,$val) = explode("=", $k, 2);
+			$qs[] = array($name, urldecode($val));
+		}
+		
+		return ($table ? theme('table', array(), $qs, array('width' => '100%')) : $qs);
+	}
+	else
+	{
+		return $string;
+	}
+}
+
+/*
+ * submit logs form
+ */
+function paypal_logs_form_submit($form, &$form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-find')
+	{
+		unset($_GET['search']);
+		$form_state['storage']['search'] = $form_state['values']['search'];
+		unset($_GET['dbtable']);
+		$form_state['storage']['dbtable'] = $form_state['values']['dbtable'];
+		unset($_GET['callname']);
+		$form_state['storage']['callname'] = $form_state['values']['callname'];
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-reset')
+	{
+		unset($form_state['storage']['query']);
+		unset($form_state['storage']['search']);
+		unset($form_state['storage']['dbtable']);
+		unset($form_state['storage']['callname']);
+		unset($_GET['search']);
+		unset($_GET['dbtable']);
+		unset($_GET['callname']);
+	}
+}
+
+/*
+ * theme paypal_logs_filters
+ */
+function theme_paypal_logs_filters($form)
+{
+	global $pager_total_items;
+	$output = '';
+	
+	$rows = array();
+	$rows[] = array(
+		t('Search for'), 
+		drupal_render($form['search']), 
+		drupal_render($form['dbtable']),
+		drupal_render($form['callname']),
+		drupal_render($form['find']),
+		drupal_render($form['reset']),
+		($pager_total_items[0] ? 'Total Items: ' . $pager_total_items[0] : null),
+	);
+	$output .= theme('table', array(), $rows, array('width' => '100%'));
+	$output .= drupal_render($form);
+	
+	return $output;
+}
+
+
+/*
+ * Main settings form
+ */
+function paypal_settings_form($form_state)
+{
+	$form = array();
+	
+	$form['variables'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Set Variables'),
+	);
+	
+	$form['variables']['paypal_return_url'] = array(
+		'#type' => 'item',
+		'#title' => t('Return URL'),
+		'#value' => url('paypal/return/-vid-', array('absolute' => true)),
+		'#description' => t('Where -vid- is the vendor ID.'),
+	);
+	
+	$form['variables']['paypal_api_environment'] = array(
+		  '#type' => 'select', 
+		  '#title' => t('PayPal API Environment'), 
+		  '#default_value' => variable_get('paypal_api_environment',"sandbox"),
+		  '#options' => array(
+		    'sandbox' => t('sandbox'), 
+		    //'beta-sandbox' => t('beta-sandbox'), 
+		    'live' => t('live'),
+		  ),
+		  '#description' => t('Select the type of PayPal server. When in development select "sandbox"'),
+	);
+	$form['variables']['sandbox'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Sandbox Variables')
+	);
+	$form['variables']['paypal_ipn_test_email'] = array(
+		'#type' => 'textfield',
+		'#title' => t('IPN test email'),
+		'#default_value' => variable_get('paypal_ipn_test_email', 'pedro.posada@teligence.net'),
+		'#description' => t('Send email with raw success or error IPN messages. For debugging purposes.'),
+	);
+	$form['variables']['sandbox']['paypal_sandbox_api_username'] = array(
+		'#type' => 'textfield',
+		'#title' => t('API Username'),
+		'#default_value' => variable_get('paypal_sandbox_api_username', 'pedro_1245952375_biz_api1.teligence.net'),
+	);
+	$form['variables']['sandbox']['paypal_sandbox_api_password'] = array(
+		'#type' => 'textfield',
+		'#title' => t('API Password'),
+		'#default_value' => variable_get('paypal_sandbox_api_password', 'EU3R53WLLMXK9EFD'),
+	);
+	$form['variables']['sandbox']['paypal_sandbox_api_signature'] = array(
+		'#type' => 'textfield',
+		'#title' => t('API Signature'),
+		'#default_value' => variable_get('paypal_sandbox_api_signature', 'AZsulbuZ5kZJsdxQG-.O7MUlXdxPAo55jUqfeeTGvDZml.xUw4uzGoYJ'),
+	);
+	$form['variables']['sandbox']['paypal_sandbox_cancel_url'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Cancel URL'),
+		'#default_value' => variable_get('paypal_sandbox_cancel_url', url('paypal/testurl', array('absolute' => true))),
+	);
+	
+	$query = array(
+		'ID' => 0,
+		'Price' => 9.99,
+		'Tax' => 1.3986,
+		'Promo' => 10,
+		'IncludeTax' => 0,
+		'PackageID' => 0,
+		'AreaCode' => 604,
+	);
+	$form['variables']['sandbox']['testlink'] = array(
+		'#type' => 'item',
+		'#title' => 'Package details test link',
+		'#value' => l(url('paypal/package-details', array('absolute' => true)), 'paypal/package-details', array('attributes' => array('target' => '_blank'), 'query' => $query, 'html' => true)),
+		'#description' => t('Pass sample parameters to paypal payment website to initiate a paypal payment process.'),
+	);
+	
+	
+	return system_settings_form($form); 
+}
+
+/*
+ * flush chaches
+ */
+function paypal_flush_cache()
+{
+	// Flush all caches; no need to re-implement this.
+    module_load_include('inc', 'system', 'system.admin');
+    $form = $form_state = array();
+    system_clear_cache_submit($form, $form_state);
+    drupal_goto();
+}
+
+
+/*
+ * add new vendor form
+ */
+function paypal_add_new_vendor_form($form_state)
+{
+	$form = array();
+	
+	return $form;
+}
+
+
+/*
+ * paypal refundTransaction handler
+ */
+function paypal_refund($TRANSACTIONID)
+{
+	$refundTransaction = paypal_refund_handler($TRANSACTIONID);
+
+	print ( $refundTransaction['ACK'] == 'Success' ? 1 : 0 );
+	
+	// debug
+	//print '<pre>' . print_r($refundTransaction, true) . '</pre>';
+	
+	exit;
+}
+
+
+/*
+ * refund a transaction
+ */
+function paypal_refund_handler($TRANSACTIONID, $note = null)
+{
+	$sessionData = db_fetch_array(db_query(" SELECT * FROM {pp_SessionData} WHERE ParameterName = 'TRANSACTIONID' AND Value = '%s'", $TRANSACTIONID));
+	$INVNUM = db_result(db_query(" SELECT Value FROM {pp_SessionData} WHERE SessionID = '%s' ", $sessionData['SessionID']));
+	$vendor = db_fetch_array(db_query(" SELECT * FROM {pp_Credential} AS c INNER JOIN {pp_Vendor} AS v ON c.VendorID = v.VendorID WHERE c.VendorID = '%s' ", $sessionData['VendorID']));	
+
+	return paypal_RefundTransaction($vendor, $TRANSACTIONID, $INVNUM, $note);
+}
+
+
+/*
+ * Show package details before going to paypal
+ * receive values from vendor web site
+ */
+function paypal_show_package_details_form($form_state)
+{
+	drupal_add_js(drupal_get_path('module', 'paypal') . '/js/jquery.buttons.js');
+
+	$form['#theme'] = 'paypal_show_package_details';
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#pre_render' => array('paypal_show_package_details_form_pre_render'),
+	);
+	
+	$form['group']['token'] = array(
+		'#type' => 'hidden',
+		'#value' => strlen($_REQUEST['Token']) ? $_REQUEST['Token'] : $form_state['storage']['values']['token'],
+	);
+	$form['group']['vendorID'] = array(
+		'#type' => 'hidden',
+	);
+	
+	$form['group']['output'] = array(
+		'#value' => '',
+	);
+	$form['loader'] = array(
+		'#value' => theme('image', drupal_get_path('module', 'paypal') . '/images/ajax-loader.gif', 'Paypal loading', 'Paypal loading', array('id' => 'paypal-loading')),
+	);
+	
+	$form['button'] = array(
+		'#type' => 'image_button',
+		'#value' => t('Continue to PayPal'),
+		'#weight' => 999,
+		'#src' => drupal_get_path('module', 'paypal') . '/images/paypal-button.jpg',
+	);
+
+	return $form;
+}
+/*
+ * pre render: add/remove elements and/or values to the form
+ */
+function paypal_show_package_details_form_pre_render($form)
+{
+	return $form;
+}
+
+
+/*
+ * validate handler for Show package details form
+ */
+function paypal_show_package_details_form_validate($form, &$form_state)
+{
+	if(!db_result(db_query("SELECT VendorID FROM {pp_SessionData} WHERE SessionID = '%s' LIMIT 1", urldecode(check_plain($form_state['values']['token'])))))
+	{
+		form_set_error('button', 'Invalid token.');	
+	}
+}
+/*
+ * submit handler for Show package details form
+ */
+function paypal_show_package_details_form_submit($form, &$form_state)
+{
+	$form_state['storage']['values'] = $form_state['values'];
+
+	/*
+	 * Pass parameters to PAYPAL to start express checkout process
+	 * - first load parameters from pp_SessionData table
+	 * - then call paypal_SetExpressCheckout and pass parameters accordingly
+	 * - if success then redirect to URL returned by paypal_SetExpressCheckout
+	 */
+	$vendor = db_fetch_array(db_query(" SELECT * FROM {pp_Credential} AS c, {pp_Vendor} AS v WHERE c.VendorID = '%s' AND v.VendorID = '%s'", $form_state['values']['vendorID'], $form_state['values']['vendorID']));
+	
+	$result = db_query(" SELECT * FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' ", $form_state['values']['vendorID'], $form_state['values']['token']);
+	while($packages = db_fetch_array($result))
+	{
+		$packageDetails[$packages['ParameterName']] = $packages['Value'];	
+	}
+	
+	//drupal_set_message('<pre>'.print_r($vendor,true).'</pre>');
+	//drupal_set_message('<pre>'.print_r($_SESSION['paypal_guid'],true).'</pre>');
+	
+	/*
+	 * make call to PAYPAL to initiate express checkout process
+	 * if initiation is successful then redirect to PAYPAL.
+	 */
+	$paypalResponse = paypal_SetExpressCheckout($vendor, $packageDetails[$vendor['ProductDescription']], $packageDetails[$vendor['TotalAmount']], $form_state['values']['token']);
+	if($paypalResponse['paypalStartURL'])
+	{
+		drupal_goto($paypalResponse['paypalStartURL']);
+		//drupal_set_message('<pre>'.print_r($paypalResponse,true).'</pre>');
+	}
+	else
+	{
+		//drupal_set_message('<pre>'.print_r($paypalResponse, true).'</pre>');
+		drupal_set_message(urldecode($paypalResponse['L_LONGMESSAGE0']), 'error');
+	}
+}
+
+
+/*
+ * store all parameters in SessionData table and return SessionID
+ */
+function paypal_set_session_data($vendorID)
+{
+	if(!db_result(db_query("SELECT VendorID FROM {pp_Vendor} WHERE VendorID = '%s'", check_plain($vendorID))))
+	{
+		print 'Action=Failure&Error=Non existing vendor ID.';
+		return;
+	}
+	
+	if(urldecode($_REQUEST['VendorPass']) <> md5(db_result(db_query("SELECT Password FROM {pp_Vendor} WHERE VendorID = '%s'", check_plain($vendorID)))))
+	{
+		print 'Action=Failure&Error=Invalid vendor credentials.';
+		return;
+	}
+	
+	/* 
+	 * load URL from pp_Function_GetPackageDetails
+	 * parse it into the form of domain name and query parameters
+	 * make the call to back-end
+	 * save vendor's back-end response name value pairs in pp_SessionData
+	 */ 
+	$output['Action'] = 'Failure';
+	if(strlen(check_plain($vendorID)))
+	{
+		// grab query params from all three URL calls in three different tables.
+		$GetPackageDetails = db_fetch_array(db_query("SELECT * FROM {pp_Function_GetPackageDetails} WHERE VendorID = '%s' ", $vendorID));
+		$ValidateResponse = db_fetch_array(db_query("SELECT * FROM {pp_Function_ValidateResponse} WHERE VendorID = '%s' ", $vendorID));
+		$OrderFulFillment = db_fetch_array(db_query("SELECT * FROM {pp_Function_OrderFulFillment} WHERE VendorID = '%s' ", $vendorID));
+		
+		$urlpartsG = parse_url ($GetPackageDetails['URL']);
+		$urlpartsV = parse_url ($ValidateResponse['URL']);
+		$urlpartsO = parse_url ($OrderFulFillment['URL']);
+		$pairs = array_unique(explode('&', $urlpartsG['query'] . '&' . $urlpartsV['query'] . '&' . $urlpartsO['query'] . '&' . $_SERVER['QUERY_STRING'] ));
+		$collector = array();
+	    foreach($pairs as $pair) 
+	    {
+	        list($name, $value) = explode('=', $pair, 2);
+	        (strstr($urlpartsG['query'], $name) ? $queryParams[] = $name . "=" . $_REQUEST[$name] : null);
+	        $collector[$name] = $_REQUEST[$name];
+	    }
+	    $path = $urlpartsG['path'] . '?' . implode ("&", array_unique($queryParams));
+	    $callResult = paypal_loadXML2array($urlpartsG['host'], $path);
+	    if($callResult['success'])
+	    {
+	    	if($callResult['result']->{$GetPackageDetails['SuccessParameter']} == $GetPackageDetails['SuccessValue'])
+	    	{
+	    		/*
+				 * Generate paypal_guid 
+				 * GUID to track sessions data
+				 * it will be stored in pp_SessionData table
+				 */
+				paypal_guid(true);
+				
+	    		/*
+	 			 * save all name value pairs in pp_SessionData table
+	 			 * check to not make duplicates
+	 			 */
+	    		$sessionData = array_merge((array)$callResult['result'], $collector);
+		 		foreach((array)$sessionData as $key => $val)
+		 		{	 			
+		 			/*
+		 			 * update or create name value pairs in SessionData table
+		 			 */
+		 			if(db_result(db_query("SELECT ParameterName FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s'", $vendorID, $_SESSION['paypal_guid'], $key)))
+		 			{
+		 				db_query("UPDATE {pp_SessionData} SET 
+		 					VendorID = '%s', 
+		 					SessionID = '%s', 
+		 					ParameterName = '%s', 
+		 					Value = '%s' WHERE 
+		 					VendorID = '%s' AND 
+		 					SessionID = '%s' AND 
+		 					ParameterName = '%s' ", 
+		 					$vendorID, $_SESSION['paypal_guid'], $key, $val, $vendorID, $_SESSION['paypal_guid'], $key);
+		 			}
+		 			else
+		 			{
+		 				db_query("INSERT INTO {pp_SessionData} (VendorID, SessionID, ParameterName, Value) VALUES('%s', '%s', '%s', '%s')", 
+		 				$vendorID, $_SESSION['paypal_guid'], $key, $val);
+		 			}
+		 		}
+		 		
+		 		/*
+		 		 * success
+		 		 */
+		 		$output['Token'] = $_SESSION['paypal_guid'];
+		 		$output['Action'] = 'Success';
+	    	}
+	    	else
+	    	{
+	    		$output['Error'] = "{$callResult['result']->$GetPackageDetails['SuccessParameter']} - " . db_result(db_query("SELECT ErrorMessage FROM {pp_Function_ErrorMapping} WHERE VendorID = '%s' AND FunctionName = 'GetPackageDetails' AND ErrorName = '%s'", $vendorID, $callResult['result']->{$GetPackageDetails['SuccessParameter']}));
+	    	}
+	    }
+	    else
+	    {
+	    	$output['Error']  = "Bad request - [XML GetPackageDetails] - URL: {$urlpartsG['host']}$path" . "\n";
+	    	//$output['Error'] .= "Pairs: " . print_r($pairs, true) . "\n";
+	    	$output['Error'] .= "GetPackageDetails: {$callResult['result']}";
+	    }
+	}
+	else
+	{
+		$output['Error'] = 'Bad request - [no vendor ID]';
+	}
+	
+	$nvpStr = '';
+	foreach((array)$output as $key => $value)
+	{
+		$nvpStr .= "&" . $key . "=" . $value;
+	}
+
+	print trim($nvpStr, "&");
+	//print '<pre>' . print_r($output, true) . '</pre>';
+	exit;
+}
+
+
+
+/*
+ * test url for cancel, return and others
+ */
+function paypal_test_url()
+{
+	/*
+	 * initial values returned from PAYPAL
+	 */
+	$items[] = array('initial values returned in $_REQUEST from paypal', '<pre>' . print_r($_REQUEST, true) . '</pre>');
+
+	$output = theme('table', array('Action', 'Response'), $items);
+
+	return $output;
+}
+
+/*
+ * loader progress page
+ */
+function paypal_output_buffer($vid = null)
+{
+	//drupal_add_js(drupal_get_path('module', 'paypal') . '/js/jquery.ajax.js');
+	
+	$form['message'] = array(
+		'#type' => 'item',
+		'#value' => 'Processing... please wait.',
+	);
+	$form['token'] = array(
+		'#type' => 'hidden',
+		'#value' => $_REQUEST['token'],
+	);
+	$form['vid'] = array(
+		'#type' => 'hidden',
+		'#value' => $vid,
+	);
+	
+	return drupal_render($form);
+}
+
+/*
+ * paypal return URL
+ * payment site will decide here where to go whether if it was success or failure
+ * 
+ * Calls to PAYPAL:
+ * - GetExpressCheckoutDetails
+ * - DoExpressCheckoutPayment
+ *  
+ * Calls to back-end:
+ * - Validate Response
+ * - Order Fulfillment 
+ */
+function paypal_return_url($vid)
+{
+	// debug
+	$items[] = array('initial values returned in $_REQUEST from paypal', '<pre>' . print_r($_REQUEST, true) . '</pre>');
+	
+	/*
+	 * make call to paypal to get full set of values
+	 * use token returned by paypal e.g.: $_REQUEST['token'] = EC-0D896077051315636
+	 */
+	$vendor = db_fetch_array(db_query(" SELECT * FROM {pp_Credential} WHERE VendorID = '%s' ", $vid));
+	$paypalDetails = paypal_GetExpressCheckoutDetails($vendor, $_REQUEST['token']);
+	if($paypalDetails["ACK"] === "Success")
+	{
+		// debug
+		$items[] = array('response values from paypal_GetExpressCheckoutDetails', '<pre>' . print_r($paypalDetails, true) . '</pre>');
+				
+		/* 
+		 * load URL from pp_Function_ValidateResponse
+		 * parse it into the form of domain name and query parameters
+		 * make the call to back-end
+		 * save vendor's back-end response name value pairs in pp_SessionData
+		 */ 
+		$ValidateResponse = db_fetch_array(db_query("SELECT * FROM {pp_Function_ValidateResponse} WHERE VendorID = '%s' ", $vid));
+		$urlparts = parse_url ($ValidateResponse['URL']);
+		$pairs = explode('&', $urlparts['query']);
+		$collector = array();
+		$queryParams = array();
+	    foreach($pairs as $pair) 
+	    {
+	        list($name, $value) = explode('=', $pair, 2);
+	        if(array_key_exists($name, $paypalDetails))
+	        {
+	        	$queryParams[] = $name . "=" . $paypalDetails[$name];
+	        	$collector[$name] = $paypalDetails[$name];
+	        }
+	        else
+	        {
+	        	$result = db_result(db_query("SELECT Value FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s'", $vid, urldecode($paypalDetails['INVNUM']), $name));
+	        	$queryParams[] = $name . "=" . $result;
+	        	$collector[$name] = $result;
+	        }
+	    }
+	    $path = $urlparts['path'] . '?' . implode ("&", $queryParams);
+	    
+	    /******************************************
+	     * back-end call to Validate Response
+	     */
+	    $callResult = paypal_loadXML2array($urlparts['host'], $path);
+	    if($callResult['success'])
+	    {
+	    	// debug
+	    	$items[] = array('XML values from ' . $urlparts['host'] . $path, '<pre>' . print_r($callResult, true) . '</pre>');
+	    	
+	    	if($callResult['result']->{$ValidateResponse['SuccessParameter']} == $ValidateResponse['SuccessValue'])
+	    	{
+			    /*
+	 			 * save all name value pairs in  pp_SessionData table
+	 			 * check to not make duplicates
+	 			 */
+	    		$sessionData1 = array_merge((array)$callResult['result'], $collector);
+		 		foreach((array)$sessionData1 as $key => $val)
+		 		{
+		 			
+		 			/*
+		 			 * update or create name value pairs in SessionData table
+		 			 */
+		 			if(db_result(db_query("SELECT ParameterName FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s'", $vid, urldecode($paypalDetails['INVNUM']), $key)))
+		 			{
+		 				db_query("UPDATE {pp_SessionData} SET 
+		 				VendorID = '%s', 
+		 				SessionID = '%s', 
+		 				ParameterName = '%s', 
+		 				Value = '%s' WHERE 
+		 				VendorID = '%s' AND 
+		 				SessionID = '%s' AND 
+		 				ParameterName = '%s' ", 
+		 				$vid, urldecode($paypalDetails['INVNUM']), $key, $val, $vid, urldecode($paypalDetails['INVNUM']), $key);
+		 			}
+		 			else
+		 			{
+		 				db_query("INSERT INTO {pp_SessionData} (VendorID, SessionID, ParameterName, Value) VALUES('%s', '%s', '%s', '%s')", 
+		 				$vid, urldecode($paypalDetails['INVNUM']), $key, $val);
+		 			}
+		 		}
+		 		
+		 		$paypalDetails['AMT'] = db_result(db_query("SELECT Value FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s' AND Value IS NOT NULL LIMIT 0,1", $vid, urldecode($paypalDetails['INVNUM']), $vendor['TotalAmount']));
+		 		$doCheckout = paypal_DoExpressCheckoutPayment($vendor, $paypalDetails); 		
+		 		
+		 		// debug
+    			$items[] = array('Response from paypal_DoExpressCheckoutPayment', '<pre>' . print_r($doCheckout, true) . '</pre>');
+		 		
+		    	if("Success" == $doCheckout["ACK"]) 
+				{
+					/* 
+					 * load URL from pp_Function_OrderFulFillment
+					 * parse it into the form of domain name and query parameters
+					 * make the call to back-end
+					 * save vendor's back-end response name value pairs in pp_SessionData
+					 */ 
+					$OrderFulFillment = db_fetch_array(db_query("SELECT * FROM {pp_Function_OrderFulFillment} WHERE VendorID = '%s' ", $vid));
+					$urlparts = parse_url ($OrderFulFillment['URL']);
+					$pairs = explode('&', $urlparts['query']);
+					$collector = array();
+					$queryParams = array();
+				    foreach($pairs as $pair) 
+				    {
+				        list($name, $value) = explode('=', $pair, 2);
+				        if(array_key_exists($name, $doCheckout))
+				        {
+				        	$queryParams[] = $name . "=" . $doCheckout[$name];
+				        	$collector[$name] = $doCheckout[$name];
+				        }
+				        else
+				        {
+				        	$result = db_result(db_query("SELECT Value FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s'", $vid, urldecode($paypalDetails['INVNUM']), $name));
+				        	$queryParams[] = $name . "=" . $result;
+				        	$collector[$name] = $result;
+				        }
+				    }
+				    $path = $urlparts['path'] . '?' . implode ("&", $queryParams);
+					foreach((array)$collector as $key => $val)
+			 		{ 		
+			 			/*
+			 			 * update or create name value pairs in SessionData table
+			 			 */
+			 			if(db_result(db_query("SELECT ParameterName FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s'", $vid, urldecode($paypalDetails['INVNUM']), $key)))
+			 			{
+			 				db_query("UPDATE {pp_SessionData} SET 
+			 					VendorID = '%s', 
+			 					SessionID = '%s', 
+			 					ParameterName = '%s', 
+			 					Value = '%s' WHERE 
+			 					VendorID = '%s' AND 
+			 					SessionID = '%s' AND 
+			 					ParameterName = '%s' ", 
+			 					$vid, urldecode($paypalDetails['INVNUM']), $key, $val, $vid, urldecode($paypalDetails['INVNUM']), $key);
+			 			}
+			 			else
+			 			{
+			 				db_query("INSERT INTO {pp_SessionData} (VendorID, SessionID, ParameterName, Value) VALUES('%s', '%s', '%s', '%s')", 
+			 				$vid, urldecode($paypalDetails['INVNUM']), $key, $val);
+			 			}
+			 		}
+				    
+				    /*******************************************
+				     * back-end call to Order Fulfillment
+				     */
+				    $callResult = paypal_loadXML2array($urlparts['host'], $path);
+				    if($callResult['success'])
+	    			{
+	    				// debug
+	    				$items[] = array('XML values from ' . $urlparts['host'] . $path, '<pre>' . print_r($callResult, true) . '</pre>');	
+	    			
+	    				if($callResult['result']->{$OrderFulFillment['SuccessParameter']} == $OrderFulFillment['SuccessValue'])
+	    				{
+			    			/*
+				 			 * save all name value pairs in pp_SessionData table
+				 			 * check to not make duplicates
+				 			 */
+				    		$sessionData = array_merge((array)$callResult['result'], $collector);
+					 		foreach((array)$sessionData as $key => $val)
+					 		{ 		
+					 			/*
+					 			 * update or create name value pairs in SessionData table
+					 			 */
+					 			if(db_result(db_query("SELECT ParameterName FROM {pp_SessionData} WHERE VendorID = '%s' AND SessionID = '%s' AND ParameterName = '%s'", $vid, urldecode($paypalDetails['INVNUM']), $key)))
+					 			{
+					 				db_query("UPDATE {pp_SessionData} SET 
+					 					VendorID = '%s', 
+					 					SessionID = '%s', 
+					 					ParameterName = '%s', 
+					 					Value = '%s' WHERE 
+					 					VendorID = '%s' AND 
+					 					SessionID = '%s' AND 
+					 					ParameterName = '%s' ", 
+					 					$vid, urldecode($paypalDetails['INVNUM']), $key, $val, $vid, urldecode($paypalDetails['INVNUM']), $key);
+					 			}
+					 			else
+					 			{
+					 				db_query("INSERT INTO {pp_SessionData} (VendorID, SessionID, ParameterName, Value) VALUES('%s', '%s', '%s', '%s')", 
+					 				$vid, urldecode($paypalDetails['INVNUM']), $key, $val);
+					 			}
+					 		}
+					 		
+							/**
+							 * SUCCESSFUL PAYPAL TRANSACTION
+							 */
+					 		$resultURL = url($vendor['PaypalSuccessURL'], 
+				 			array(
+				 				'query' => array(
+				 					'Token' => urldecode($paypalDetails['INVNUM']
+							))));
+					 		
+					 		// debug
+					 		watchdog("PAYPAL Sale", "<pre>" . print_r($paypalDetails, true) . "</pre>", array(), WATCHDOG_NOTICE);
+	    					$items[] = array('Go to PaypalSuccessURL', '<pre>' . $resultURL . '</pre>');
+	    				}
+	    				else
+	    				{
+		    				/*
+		    				 * Void the transaction in PAYPAL.
+		    				 * DoVoid
+		    				 */
+	    					$error = db_result(db_query("SELECT ErrorMessage FROM {pp_Function_ErrorMapping} WHERE VendorID = '%s' AND FunctionName = 'OrderFulfillment' AND ErrorName = '%s'", $vid, $callResult['result']->{$OrderFulFillment['SuccessParameter']}));
+	    					$refundTransaction = paypal_refund_handler($collector['TRANSACTIONID'], $error);
+	    					watchdog("PAYPAL DoVoid", "<pre>" . $urlparts['host'] . $path . "<br />" . print_r($callResult['result'], true) . print_r($collector, true) . print_r($refundTransaction, true) . "</pre>", array(), WATCHDOG_NOTICE);
+	    					
+	    					// error message
+					 		$resultURL = url($vendor['PaypalFailureURL'], 
+				 			array(
+				 				'query' => array(
+				 					'error' => "DoVoid - " . $refundTransaction['L_LONGMESSAGE0'],
+									'Token' => urldecode($paypalDetails['INVNUM']
+							))));
+	    					
+	    					// debug
+	    					$items[] = array('Response from paypal_DoVoid', '<pre>' . print_r($refundTransaction, true) . '</pre>');
+	    					$items[] = array('Go to PaypalFailureURL', '<pre>' . $vendor['PaypalFailureURL'] . '</pre>');		
+	    				}
+	    			}
+	    			else
+	    			{
+	    				/*
+	    				 * Void the transaction in PAYPAL.
+	    				 * DoVoid
+	    				 */
+    					$refundTransaction = paypal_refund_handler($collector['TRANSACTIONID'], $error);
+    					watchdog("PAYPAL DoVoid", "<pre>" . $urlparts['host'] . $path . "<br />" . print_r($callResult['result'], true) . print_r($sessionData1, true) . print_r($collector, true) . print_r($refundTransaction, true) . "</pre>", array(), WATCHDOG_NOTICE);
+    					$resultURL = url($vendor['PaypalFailureURL'], 
+    					array(
+    						'query' => array(
+    							'error' => "DoVoid - " . $refundTransaction['L_LONGMESSAGE0'], 
+    							'Token' => urldecode($paypalDetails['INVNUM'])
+						)));
+    					
+	    				// debug
+	    				$items[] = array('OrderFulFillment', '<pre>' . $callResult['result'] . '</pre>');
+	    				$items[] = array('Go to PaypalFailureURL', '<pre>' . $vendor['PaypalFailureURL'] . '</pre>');
+	    			}
+				} 
+				else  
+				{
+					/**
+					 * failure
+					 * DoExpressCheckoutPayment
+					 */
+	    			$resultURL = url($vendor['PaypalFailureURL'], 
+	    			array(
+	    				'query' => array(
+	    					'error' => "DoExpressCheckoutPayment - " . $doCheckout['L_LONGMESSAGE0'],
+							'Token' => urldecode($paypalDetails['INVNUM']
+					))));
+					
+					// debug
+					watchdog("PAYPAL Error", '<pre>' . print_r($doCheckout, true) . '</pre>', array(), WATCHDOG_NOTICE);
+    				$items[] = array('Go to PaypalFailureURL', '<pre>' . $vendor['PaypalFailureURL'] . '</pre>');
+				}				
+	    	}
+	    	else
+	    	{
+	    		/**
+				 * failure
+				 * ValidateResponse
+				 */
+	    		$resultURL = url($vendor['PaypalFailureURL'], 
+	    		array(
+	    			'query' => array(
+	    				'error' => "ValidateResponse - " . $callResult['result']->{$ValidateResponse['SuccessParameter']},
+						'Token' => urldecode($paypalDetails['INVNUM']
+				))));
+	    		
+	    		// debug
+	    		watchdog("PAYPAL Error", '<pre>' . print_r($items, true) . print_r($callResult, true) . '</pre>', array(), WATCHDOG_NOTICE);
+    			$items[] = array('Go to PaypalFailureURL', '<pre>' . $vendor['PaypalFailureURL'] . '</pre>');
+	    	}
+	    }
+	    else
+	    {
+	    	/**
+			 * failure
+			 * Connection Error to
+			 */
+	    	$resultURL = url($vendor['PaypalFailureURL'], 
+	    	array(
+	    		'query' => array(
+	    			'error' => 'Connection Error to ' . $urlparts['path'],
+					'Token' => urldecode($paypalDetails['INVNUM']
+			))));
+	    	
+	    	// debug
+	    	watchdog("PAYPAL Error", '<pre>' . print_r($path, true) . '</pre>', array(), WATCHDOG_NOTICE);
+    		$items[] = array('Go to PaypalFailureURL', '<pre>' . $vendor['PaypalFailureURL'] . '</pre>');
+	    }	
+	}
+	else
+	{
+		/**
+		 * failure
+		 * GetExpressCheckoutDetails
+		 */
+	    $resultURL = url($vendor['PaypalFailureURL'], 
+	    array(
+	    	'query' => array(
+	    		'error' => "GetExpressCheckoutDetails - " . $paypalDetails['L_LONGMESSAGE0'],
+				'Token' => urldecode($paypalDetails['INVNUM']
+		))));
+		
+		// debug
+		watchdog("PAYPAL Error", '<pre>' . print_r($paypalDetails, true) . '</pre>', array(), WATCHDOG_NOTICE);
+    	$items[] = array('paypal_GetExpressCheckoutDetails', '<pre>' . print_r($paypalDetails, true) . '</pre>');
+    	$items[] = array('Go to PaypalFailureURL', '<pre>' . $vendor['PaypalFailureURL'] . '</pre>');
+	}
+	
+	/*
+	 * go to resulting page on vendor web site
+	 */
+	drupal_goto($resultURL);
+}
+
+
+/*
+ * handler to return pp_SessionData to vendor
+ */
+function paypal_get_session_data($SessionID)
+{
+	$result = db_query("SELECT ParameterName, Value FROM {pp_SessionData} WHERE SessionID = '%s' ", $SessionID);
+	
+	$output = '';
+	while($pair = db_fetch_array($result))
+	{
+		$output .= "&" . $pair['ParameterName'] . "=" . $pair['Value'];
+	}
+	
+	$output = trim($output, "&");
+	
+	print $output;
+	exit;
+}
+
+
+
+/*
+ * GUID global universal identifier generator.
+ * Generate one per session and store it in the 
+ * session variables.
+ */
+function paypal_guid($renewGUID = null)
+{
+    // The field names refer to RFC 4122 section 4.1.2
+    if ( isset($_SESSION['paypal_guid']) && !$renewGUID )
+    {
+        return $_SESSION['paypal_guid'];
+    }
+    else
+    {
+        $_SESSION['paypal_guid'] = sprintf('%04x%04x-%04x-%03x4-%04x-%04x%04x%04x',
+	        mt_rand(0, 65535), mt_rand(0, 65535), // 32 bits for "time_low"
+	        mt_rand(0, 65535), // 16 bits for "time_mid"
+	        mt_rand(0, 4095), // 12 bits before the 0100 of (version) 4 for "time_hi_and_version"
+	        bindec(substr_replace(sprintf('%016b', mt_rand(0, 65535)), '01', 6, 2)),
+	        // 8 bits, the last two of which (positions 6 and 7) are 01, for "clk_seq_hi_res"
+	        // (hence, the 2nd hex digit after the 3rd hyphen can only be 1, 5, 9 or d)
+	        // 8 bits for "clk_seq_low"
+	        mt_rand(0, 65535), mt_rand(0, 65535), mt_rand(0, 65535) // 48 bits for "node"
+        );
+        return $_SESSION['paypal_guid'];
+    }
+}
+
+
+/*
+ * IPN Listener
+ * http://wiki.teligence.net/doku.php?id=ep:nbi:200781:requirements:200781-03
+ */
+function paypal_ipn_listener()
+{
+	$req = '';
+	foreach ((array)$_REQUEST as $key => $value) 
+	{
+		$value = urlencode(stripslashes($value));
+		$req .= "&$key=$value";
+	}	
+
+	if(strlen($req))
+	{
+		//store call request in pp_Logging
+		db_query("INSERT INTO {pp_Logging} (SessionID, CallName, Value) VALUES('%s', '%s', '%s')", paypal_guid(), 'IPN' . '_request', trim($req, "&"));	
+	}
+	
+	// read the post from PayPal system and add 'cmd'
+	$req = 'cmd=_notify-validate'. $req;
+		
+	// post back to PayPal system to validate
+	$header .= "POST /cgi-bin/webscr HTTP/1.0\r\n";
+	$header .= "Content-Type: application/x-www-form-urlencoded\r\n";
+	$header .= "Content-Length: " . strlen($req) . "\r\n\r\n";
+	$url = ( "sandbox" === variable_get('paypal_api_environment',"sandbox") ? 'ssl://www.sandbox.paypal.com' : 'ssl://www.paypal.com' );
+	$fp = fsockopen ($url, 443, $errno, $errstr, 30);
+	
+	// sample posted variables from PAYPAL
+	//	$_POST['item_name'];
+	//	$_POST['item_number'];
+	//	$_POST['payment_status'];
+	//	$_POST['mc_gross'];
+	//	$_POST['mc_currency'];
+	//	$_POST['txn_id'];
+	//	$_POST['receiver_email'];
+	//	$_POST['payer_email'];
+	$message = array(
+			"to" => variable_get("paypal_ipn_test_email",""), 
+			"subject" => "blank", 
+			"body" => print_r($_POST, true),
+	);
+	if (!$fp) 
+	{
+		// HTTP ERROR
+		$message = array(
+			"to" => variable_get("paypal_ipn_test_email",""), 
+			"subject" => "HTTP ERROR", 
+			"body" => "<p>$errstr</p>" . print_r($_POST, true),
+		);
+	} 
+	else 
+	{
+		// expose value to PAYPAL IPN
+		fputs ($fp, $header . $req);
+		
+		//store call request in pp_Logging
+		db_query("INSERT INTO {pp_Logging} (SessionID, CallName, Value) VALUES('%s', '%s', '%s')", $_SESSION['paypal_guid'], 'IPN' . '_response', $req);
+		
+		while (!feof($fp)) 
+		{
+			$res = fgets ($fp, 1024);
+			if (strcmp ($res, "VERIFIED") == 0) 
+			{
+				/* PAYPAL RECOMMENDATIONS
+				 * check the payment_status is Complete
+				 * check that txn_id has not been previously processed
+				 * check that receiver_email is your Primary PayPal email
+				 * check that payment_amount/payment_currency are correct
+				 * process payment
+				 */
+				$query = "SELECT sd2.Value SequenceId, sd1.VendorID VendorID FROM 
+				{pp_SessionData} sd1 INNER JOIN {pp_SessionData} sd2 ON 
+				sd1.SessionID = sd2.SessionID AND sd2.ParameterName = 'SequenceId' WHERE 
+				sd1.ParameterName = 'TRANSACTIONID' AND 
+				sd1.Value = '%s'";
+				
+				$transaction_id = (isset($_POST['parent_txn_id']) && strlen($_POST['parent_txn_id']) ? $_POST['parent_txn_id'] : $_POST['txn_id']);
+				
+				if($sessionData = db_fetch_array(db_query($query, $transaction_id)))
+				{
+					$vendorIpnURL = db_fetch_array(db_query("SELECT * FROM {pp_Function_IPN} WHERE VendorID = '%s' ", $sessionData['VendorID']));
+					$urlparts = parse_url ($vendorIpnURL['URL']);
+					
+					/* // 9RY014001S000645H
+					 * WIKI
+					 * http://wiki.teligence.net/doku.php?id=ep:nbi:200781:requirements:200781-03
+					 * 
+					 * PAYPAL
+					 * https://cms.paypal.com/us/cgi-bin/?&cmd=_render-content&content_ID=developer/e_howto_admin_IPNReference
+					 * 
+					 * array(txn_type, payment_type, payment_status, case_type)
+					 */
+					$NotificationTypes['instant'			. 'Reversed'					]= 'Chargeback';
+					$NotificationTypes['express_checkout'	. 'echeck' 		. 'Denied'		]= 'eCheckNSF';
+					$NotificationTypes['express_checkout'	. 'echeck' 		. 'Failed'		]= 'eCheckNSF';
+					$NotificationTypes['express_checkout' 	. 'echeck' 		. 'Completed'	]= 'eCheckSuccess';
+					$NotificationTypes['express_checkout' 	. 'instant' 	. 'Failed'		]= 'CashFailed';
+					$NotificationTypes['new_case' 			. 'complaint'					]= 'Complaint';
+								
+					if($NotificationType = $NotificationTypes[$_POST['txn_type'] . $_POST['payment_type'] . $_POST['payment_status'] . $_POST['case_type']])
+					{
+						$sequenceid = urlencode($sessionData['SequenceId']);
+						$txn_id = urlencode($transaction_id);
+						$NotificationType = urlencode($NotificationType);
+						$path = $urlparts['path'] . '?' . "SequenceId=$sequenceid&PayPalTransactionId=$txn_id&NotificationType=$NotificationType";
+						$callResult = paypal_loadXML2array($urlparts['host'], $path);
+						if($callResult['success'])
+					    {
+					    	if($callResult['result']->{$vendorIpnURL['SuccessParameter']} == $vendorIpnURL['SuccessValue'])
+					    	{
+					    		// successful call to the back-end
+					    		$message = array(
+					    			"to" => variable_get("paypal_ipn_test_email",""), 
+					    			"subject" => "successful call to the back-end", 
+					    			"body" => 	"vendorIpnURL: " . print_r($callResult['result'], true) . "<br />" .  
+					    						$urlparts['host'] . $path . "<br />" .
+					    						"transaction_id: " . $transaction_id . "<br />",
+					    		);
+					    	}
+					    	else
+					    	{
+					    		// response from back-end call returned something other than the SuccessValue
+					    		// $callResult->{$vendorIpnURL['SuccessParameter']}
+					    		$message = array(
+					    			"to" => variable_get("paypal_ipn_test_email",""), 
+					    			"subject" => "response from back-end call returned something other than the SuccessValue", 
+					    			"body" => 	"vendorIpnURL: " . print_r($callResult['result'], true) . "<br />" .  
+					    						$urlparts['host'] . $path . "<br />" .
+					    						"transaction_id: " . $transaction_id . "<br />",
+					    		);
+					    	}
+					    }
+					    else
+					    {
+					    	// call to back-end method didn't work due to network issues
+					    	// "vendorIpnURL: {$callResult['result']}"
+					    	$message = array(
+					    		"to" => variable_get("paypal_ipn_test_email",""), 
+					    		"subject" => "call to back-end method didn't work due to network issues", 
+					    		"body" => "vendorIpnURL: {$callResult['result']}" . "<br />" . print_r($_POST, true) . $urlparts['host'] . $path,
+					    	);
+					    }
+					}
+					else
+					{
+						// combination of paypal $_POST variables not applicable in our API
+						// $_POST['txn_type'] . $_POST['payment_type'] . $_POST['payment_status'] . $_POST['case_type']
+						$message = array(
+					    	"to" => variable_get("paypal_ipn_test_email",""), 
+					    	"subject" => "Combination of variables sent by PAYPAL are not applicable to our API", 
+					    	"body" => "txn_type:{$_POST['txn_type']}  payment_type:{$_POST['payment_type']}  payment_status:{$_POST['payment_status']}  case_type:{$_POST['case_type']}",
+					    );
+					}
+				}
+				else
+				{
+					// no TRANSACTIONID comming from PAYPAL request
+					$message = array(
+		    			"to" => variable_get("paypal_ipn_test_email",""), 
+		    			"subject" => (isset($_POST['parent_txn_id']) && strlen($_POST['parent_txn_id']) ? 'parent_txn_id' : 'txn_id')." was not found in database", 
+		    			"body" => print_r($_POST, true),
+			    	);
+				}
+				
+			
+			}
+			elseif (strcmp ($res, "INVALID") == 0) 
+			{
+				// PAYPAL didn't verify the request
+				$message = array(
+					"to" => variable_get("paypal_ipn_test_email",""), 
+					"subject" => "PAYPAL didn't verify the request. PAYPAL response = 'INVALID'.", 
+					"body" => print_r($_POST, true),
+				);
+			}
+			
+		}
+		fclose ($fp);
+	}
+	watchdog("PAYPAL IPN", "<pre>" . $message['subject'] . " *****<br /> " . $message['body'] . "</pre>", array(), WATCHDOG_NOTICE);
+}
+
+
+/*
+ * simulator for IPN listener
+ * this handler will send a sample request to IPN listener
+ * this is just for testing porpuses
+ */
+function paypal_ipn_simulator()
+{
+	$API_Endpoint = "http://paypal.integration/paypal/ipn";
+	$nvpreq = "mc_gross=19.95&protection_eligibility=Eligible&address_status=confirmed&payer_id=LPLWNMTBWMFAY&tax=0.00&address_street=1+Main+St&payment_date=20%3A12%3A59+Jan+13%2C+2009+PST&payment_status=Completed&charset=windows-1252&address_zip=95131&first_name=Test&mc_fee=0.88&address_country_code=US&address_name=Test+User&notify_version=2.6&custom=&payer_status=verified&address_country=United+States&address_city=San+Jose&quantity=1&verify_sign=AtkOfCXbDm2hu0ZELryHFjY-Vb7PAUvS6nMXgysbElEn9v-1XcmSoGtf&payer_email=gpmac_1231902590_per%40paypal.com&txn_id=61E67681CH3238416&payment_type=instant&last_name=User&address_state=CA&receiver_email=gpmac_1231902686_biz%40paypal.com&payment_fee=0.88&receiver_id=S8XGHLYDW9T3S&txn_type=express_checkout&item_name=&mc_currency=USD&item_number=&residence_country=US&test_ipn=1&handling_amount=0.00&transaction_subject=&payment_gross=19.95&shipping=0.00";
+
+	/*
+	// Set the curl parameters.
+	$ch = curl_init();
+	curl_setopt($ch, CURLOPT_URL, $API_Endpoint);
+	curl_setopt($ch, CURLOPT_VERBOSE, 1);
+
+	// Turn off the server and peer verification (TrustManager Concept).
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($ch, CURLOPT_POST, 1);
+	
+	// Set the request as a POST FIELD for curl.
+	curl_setopt($ch, CURLOPT_POSTFIELDS, $nvpreq);
+	
+	// Get response from the server.
+	$httpResponse = curl_exec($ch);
+	*/
+	
+	// post back to PayPal system to validate
+	//$header .= "POST /cgi-bin/webscr HTTP/1.0\r\n";
+	//$header .= "Content-Type: application/x-www-form-urlencoded\r\n";
+	//$header .= "Content-Length: " . strlen($nvpreq) . "\r\n\r\n";
+	$fp = fopen ($API_Endpoint . "?" . $nvpreq,"w");
+	$res = "";
+	if (!$fp) 
+	{
+		return "HTTP ERROR";
+	} 
+	else 
+	{
+		// expose value to PAYPAL IPN Listener
+		//fputs ($fp, $header . $req);
+	
+		while (!feof($fp)) 
+		{
+			$res .= fgets ($fp, 1024) . "\n\r";
+		}
+		fclose ($fp);
+	}
+	
+	return $res;
+}
+
+
+/********************************************************************************
+ ***** THEME FUNCTIONS **********************************************************
+ ********************************************************************************/
+ 
+/*
+ * theme package details
+ */
+function theme_paypal_show_package_details($form)
+{
+ 	$output  = '';
+	
+ 	drupal_add_css(drupal_get_path('module', 'paypal') . '/paypal.css', 'theme');
+ 	
+ 	/**
+ 	 * check if token is invalid to not show anything
+ 	 */
+ 	$sessid = urldecode(check_plain($form['group']['token']['#value']));
+ 	if($VendorID = db_result(db_query("SELECT VendorID FROM {pp_SessionData} WHERE SessionID = '%s' LIMIT 1", $sessid)))
+	{
+		/**
+		 * load template from vendor
+		 */
+		$TemplateURL = db_result(db_query("	SELECT TemplateURL FROM {pp_Function_GetPackageDetails} 
+											WHERE VendorID = '%s'", $VendorID));
+		// $lang = db_result(db_query("SELECT Value FROM {pp_SessionData} 
+									// WHERE ParameterName = 'lang' 
+									// AND SessionID = '%s' LIMIT 1", $sessid));
+		$result = db_query("SELECT ParameterName, Value FROM {pp_SessionData} WHERE SessionID = '%s' AND ParameterName != 'q'", $sessid);
+		$query = array();
+		while($param = db_fetch_array($result))
+		{
+			$query[] = $param['ParameterName'].'='.$param['Value']; 
+		}
+		
+		// configure POST request
+		$request_url = $TemplateURL;
+		$request_headers = array('Content-Type' => 'application/x-www-form-urlencoded');
+		$request_method = 'POST';
+		$request_retry = 3;
+		$data = implode($query, '&');
+		$httpresult = drupal_http_request($request_url, $request_headers, $request_method, $data, $request_retry);
+		if($httpresult->code == 200 || $httpresult->code == 301)
+		{
+			$template = $httpresult->data;
+			/**
+			 * load all values for vendor from pp_SessionData table
+			 * do token substitution on template
+			 */
+			$result = db_query("SELECT ParameterName, Value FROM {pp_SessionData} 
+								WHERE SessionID = '%s'", $sessid);
+		 	while($token = db_fetch_array($result))
+		 	{
+		 		if($token['ParameterName'] == 'q')continue;
+		 		$template = str_replace($token['ParameterName'], $token['Value'], $template);
+		 	}
+		 	$form['group']['output']['#value'] = $template;
+		 	$form['group']['vendorID']['#value'] = $VendorID;
+		 	$output .= drupal_render($form);	
+		}
+		else
+		{
+			$form['button']['#type'] = 'hidden';
+			$form['group']['output']['#value'] = "Template could not be loaded. Please try again later.";
+			$output .= drupal_render($form);
+			
+			// error logging and alerts
+			watchdog("debug","@errorId - @cause - @resol - @httpResult", 
+			array(
+				"@errorId" => "PPPP001", // Brand Websites teligence click to call
+				"@cause" => "Cause: drupal_http_request cannot connect to $TemplateURL?$qs; Connection times out or response is invalid.",
+				"@resol" => "Resolution: open network connection on port 80 from webserver to $TemplateURL?$qs  ; Try telnet to $TemplateURL server from paypal box.", 
+				"@httpResult" => "Http Response code: " . $httpresult->code, 
+			), WATCHDOG_EMERG);
+		}
+	
+		
+	}
+	else
+	{
+		$form['button']['#type'] = 'hidden';
+		$form['group']['output']['#value'] = 'Invalid token. ' . urldecode(check_plain($form['group']['token']['#value']));
+		$output .= drupal_render($form);
+	}
+ 
+ 	return $output;
+}
+ 
+ 

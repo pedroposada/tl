@@ -1,0 +1,761 @@
+<?php
+
+
+
+/******************************
+ * DRUPAL HOOKS
+ ******************************/
+
+/**
+ * Implements hook_init()
+ */
+function teligence_loc_init()
+{
+	// stop hook_init for this request
+	if(substr($_GET['q'],0,11) == 'loc/mobile/')
+		return;
+	
+	// do not use localization for admins
+	if(user_access('administer nodes'))
+		return;
+	
+	// stop if localization values are stored for this user 
+	if(isset($_SESSION['localization']))
+		return;
+	
+	// device detection, mobile or desktop
+	if(teligence_loc_isMobileDevice())
+	{
+		drupal_add_js(drupal_get_path('module', 'teligence_loc') . '/js/gears_init.js');
+		drupal_add_js(drupal_get_path('module', 'teligence_loc') . '/js/geo.js');
+		drupal_add_js(drupal_get_path('module', 'teligence_loc') . '/js/geoloc.js');
+	}
+	else
+	{
+		// pouplate localization with defaults
+		$localization = new stdClass();
+		$localization->Ani = variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090');
+		$localization->City = t('Local');
+		
+		// get localization values from maxmind
+		$geodb = teligence_loc_maxmind(ip_address());
+		
+		// check if inside US or Canada and valid city name
+		if(in_array($geodb->country_code, array('US','CA')) && strlen($geodb->city))
+		{
+			// local access number, city and state
+			$localization->Region = $geodb->region;
+			$localization->City = $geodb->city;
+			
+			// call soap back-end
+			$params = new stdClass();
+			$params->ivrBrandId = variable_get('teligence_loc_brand_id', 1);
+			$params->longitude = $geodb->longitude;
+			$params->latitude = $geodb->latitude;
+			$params->country = ($geodb->country_code == 'US' ? 'USA' : 'Canada');
+			$result = teligence_loc_soap_call($params, 'GetLocalAccessNumberByLongLat', variable_get('teligence_loc_wsdl_localization', ''));
+			switch($result->GetLocalAccessNumberByLongLatResult->ResponseCode)
+			{
+				case 'Success':
+					$localization->Region = $result->GetLocalAccessNumberByLongLatResult->Region;
+					$localization->Country = $params->country;
+					$localization->MarketId = $result->GetLocalAccessNumberByLongLatResult->MarketId;
+					$localization->Ani = $result->GetLocalAccessNumberByLongLatResult->Ani;
+				break;
+				case 'NoLocalAccessNumbersAvailable':
+					$localization->Ani = variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090');
+				break;
+				case 'InvalidRequestParams':
+				case 'TechnicalError':
+				break;
+			}
+			
+			// logging for back-end double request debugging 
+			if(variable_get('teligence_loc_debug', 0))
+				watchdog('teligence_loc', 'GetLocalAccessNumberByLongLat params: !data',array('!data'=>'<pre>'.check_plain(print_r($params,true)).'</pre>'));
+		}
+				
+		// log values for debugging
+		if(variable_get('teligence_loc_debug', 0))
+			watchdog('teligence_loc', '$localization vars !data', array('!data' => '<pre>'.check_plain(print_r($localization, true)).'</pre>'));
+
+		// save localization values in session
+		$_SESSION['localization'] = $localization;
+	}
+}
+ 
+/**
+ * Implementation of hook_perm()
+ */
+function teligence_loc_perm()
+{
+	return array(
+		'access localization settings',
+	);
+}
+ 
+/**
+ * Implementation of hook_menu()
+ */
+function teligence_loc_menu()
+{
+	// settings
+	$items['admin/loc'] = array(
+		'title' => 'Teligence Localization',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_loc_settings_form'),
+		'access arguments' => array('access localization settings'),
+	);
+	$items['admin/loc/settings'] = array(
+		'title'=> 'Settings',
+    	'type'=>MENU_DEFAULT_LOCAL_TASK,
+		'weight'=> -10,
+	);
+	$items['admin/loc/geolocation-test'] = array(
+		'title'=> 'Geo IP Location Test',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_loc_settings_form2'),
+		'access arguments' => array('access localization settings'),
+    	'type'=>MENU_LOCAL_TASK,
+	);
+	
+	// CALLBACKS 
+	$items['loc/mobile/%/%'] = array(
+		'title'=> 'Set session variables and cookies for mobile',
+		'page callback' => 'teligence_loc_mobile',
+		'page arguments' => array(2,3),
+		'access callback' => true,
+    	'type'=>MENU_CALLBACK,
+	);
+	$items['loc/locvals'] = array(
+		'page callback' => 'teligence_loc_locvals',
+		'access callback' => true,
+    	'type'=>MENU_CALLBACK,
+	);
+	
+	$items['loc/cached'] = array(
+		'title' => 'Test Cached Page',
+		'page callback' => 'teligence_loc_cached',
+		'access callback' => true,
+	);
+	
+	return $items;
+}
+ 
+function teligence_loc_cached()
+{
+	$time = "My time " . time();
+	return $time;
+} 
+ 
+/**
+ * Implements MYMODULE_preprocess_page()
+ */
+function teligence_loc_preprocess_page(&$vars)
+{
+	// set toll free number value as a setting value for javascript
+	// variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090')
+	drupal_add_js(array('teligence_loc' => array('widgets' => array('tollFreeAccessNumber' => array(variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090'))))), 'setting');
+	drupal_add_js(drupal_get_path('module','teligence_loc').'/js/jquery.teligence_loc.js');
+	
+	// cookie with flavor
+	// check if cookie does not exist
+	$vars['flavor'] = 'DEFAULT';
+	if(isset($_COOKIE['flavor']))
+	{
+		$vars['flavor'] = $_COOKIE['flavor'];
+	}
+
+	// replace flavor token, not for node edit page and block edit or configure page
+	if(arg(0).arg(2) !== 'nodeedit' && arg(1).arg(2) !== 'buildblock' && arg(0).arg(1) !== 'nodeadd')
+		$vars['content'] = str_replace('[flavor]',$vars['flavor'], $vars['content']);
+	
+	// save localization values in session
+	$vars['localization'] = $_SESSION['localization'];
+}
+
+/**
+ * Implements MYMODULE_preprocess_block()
+ */
+function teligence_loc_preprocess_block(&$vars)
+{
+	$items = array(
+		'[city]' => $_SESSION['localization']->City,
+		'[region]' => $_SESSION['localization']->Region,
+		'[ani]' => $_SESSION['localization']->Ani,
+	);
+	$vars['block']->content = str_replace(array_keys($items),array_values($items),$vars['block']->content);
+}
+/**
+ * Implements MYMODULE_preprocess_node()
+ */
+function teligence_loc_preprocess_node(&$vars)
+{
+	if(variable_get('teligence_loc_debug', 0))
+		watchdog('teligence_loc', 'node vars !prefix', array('!prefix' => '<pre>'.check_plain(print_r($vars,true)).'</pre>'));
+	
+	// check if this is landing page and has flavor value set
+	if(in_array($vars['type'],array('ctc_landing_page','landing_page')))
+	{
+		
+		if(isset($_COOKIE['flavor']))
+		return;	
+		
+		// set cookie with theme flavor
+		$prefix = db_result(db_query('SELECT flavor_prefix FROM {teligence_localization} WHERE nid = %d', $vars['nid']));
+		if($prefix)
+		{
+			if(variable_get('teligence_loc_debug', 0))
+				watchdog('teligence_loc', 'cookie was set !data', array('!data' => '<pre>'.check_plain(print_r($_COOKIE,true)).'</pre>'));
+		}
+		else
+		{
+			$prefix = 'DEFAULT';
+		}
+		setcookie('flavor', $prefix, (time()+60*60*24*30),"/",$_SERVER['HTTP_HOST'], 0);
+	}
+}
+
+/**
+ * Implementation of hook_nodeapi()
+ */
+function teligence_loc_nodeapi(&$node, $op, $a3 = NULL, $a4 = NULL)
+{
+	switch($op)
+	{
+		case 'view':
+			if(in_array($node->type,array('ctc_landing_page','landing_page','page')))
+			{
+				$items = array(
+					'[city]' => $_SESSION['localization']->City,
+					'[region]' => $_SESSION['localization']->Region,
+					'[ani]' => $_SESSION['localization']->Ani,
+				);
+				$node->content['body']['#value'] = str_replace(array_keys($items),array_values($items),$node->content['body']['#value']);
+			}
+		break;
+		case 'presave':
+			if(in_array($node->type,array('ctc_landing_page','landing_page')))
+			{
+				$object = array(
+					'nid' => $node->nid, 
+					'flavor_prefix' => $node->teligence_loc_flavors, 
+				);
+				if(db_result(db_query('SELECT flavor_prefix FROM {teligence_localization} WHERE nid = %d', $node->nid)))
+				{
+					$r = drupal_write_record('teligence_localization', $object, 'nid');
+				}
+				else
+				{
+					$r = drupal_write_record('teligence_localization', $object);
+				}
+			}
+			// watchdog('teligence_loc', 'nodeapi update drupal_write_record !r', array('!r' => '<pre>'.print_r($r, true).'</pre>'));
+			// watchdog('teligence_loc', 'nodeapi update !node', array('!node' => '<pre>'.print_r($node, true).'</pre>'));
+		break;	
+		case 'delete':
+			if(in_array($node->type,array('ctc_landing_page','landing_page')))
+			{
+				if(db_result(db_query('SELECT flavor_prefix FROM {teligence_localization} WHERE nid = %d', $node->nid)))
+				{
+					$r = db_query('DELETE FROM {teligence_localization} WHERE nid = %d', $node->nid);
+				}
+			}
+			// watchdog('teligence_loc', 'nodeapi update drupal_write_record !r', array('!r' => '<pre>'.print_r($r, true).'</pre>'));
+			// watchdog('teligence_loc', 'nodeapi update !node', array('!node' => '<pre>'.print_r($node, true).'</pre>'));
+		break;
+	}
+}
+
+/**
+ * Implementation of hook_form_alter()
+ */
+function teligence_loc_form_alter(&$form, &$form_state, $form_id)
+{
+	$items = array(
+		t('[city] => Name of the City. First letter upper case.'),
+		t('[region] => Name of State or Province. First letter upper case.'),
+		t('[ani] => Local Access Number. Will show in th form of 123.456.7890'),
+		t('[flavor] => Prefix to be used to switch css and images. Comes from cookie and expires every 30days.'),
+	);
+	
+	// alter landing page node add/edit form
+	if(in_array($form_id,array('ctc_landing_page_node_form','landing_page_node_form',1)))
+	{
+		$prefix = db_result(db_query('SELECT flavor_prefix FROM {teligence_localization} 
+					WHERE nid = %d', $form['#node']->nid));
+		$options = array('DEFAULT' => 'DEFAULT') + (array)teligence_loc_valuelistoptions(variable_get('teligence_loc_flavors', 'BLACK' . "\n" . 'LATIN' . "\n" . 'WHITE'));
+		$form['teligence_loc_flavors'] = array(
+			'#type' => 'select',
+			'#title' => t('Select a theme flavor'),
+			'#default_value' => $prefix ? $prefix : null,
+			'#options' => $options,
+			'#weight' => -999,
+			'#description' => t('To add more flavors go to !link', array('!link' => l('admin/loc/settings', 'admin/loc/settings'))),
+		);
+	}
+
+	if(in_array($form_id,array('ctc_landing_page_node_form','landing_page_node_form','page_node_form',1)))
+	{
+		$form['body_field']['body']['#description'] .= t('Available tokens: !tokens', array('!tokens' => theme('item_list', $items)));
+	}
+
+	// alter block form
+	if($form_id == "block_admin_configure" && $form['module']['#value'] == "block")
+	{
+		$form['block_settings']['body_field']['body']['#description'] .= t('Available tokens: !tokens', array('!tokens' => theme('item_list', $items)));
+		// watchdog('teligence_loc', 'block add/edit form: !form', array('!form' => '<pre>' . check_plain(print_r($form, true)) . '</pre>'));
+	}
+}
+
+/***************************
+ * HELPER FUNCTIONS
+ ***************************/
+
+/**
+ * GetLocalAccessNumberByAreaCode
+ */
+
+ 
+/**
+ * set cookie with city, state and local access number for mobile
+ */
+function teligence_loc_mobile($lat, $long)
+{
+	// local access number, city and state
+	$localization = new stdClass();
+	$localization->Ani = variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090');
+	$localization->City = t('Local');
+	
+	// cal google maps api
+	$gmaps = 'http://maps.googleapis.com/maps/api/geocode/json?latlng='. $lat .','. $long .'&sensor=false';
+	$response = drupal_http_request($gmaps);
+	$reversed = json_decode($response->data);
+	
+	// find country, region and city name
+	$country = $region = $city = null;
+	foreach((array)$reversed->results[0]->address_components as $k => $v)
+	{
+		if(in_array('country',(array)$v->types))
+		{
+			$country = $v->short_name;
+		}
+		if(in_array('administrative_area_level_1',(array)$v->types))
+		{
+			$region = $v->short_name;
+		}
+		if(in_array('locality',(array)$v->types))
+		{
+			$city = $v->long_name;
+		}
+		if($country && $region && $city)
+		{
+			break;
+		}
+	}
+	
+	// check if inside US or Canada and valid city name
+	if(in_array($country, array('US','CA')) && strlen($city))
+	{
+		// call soap back-end
+		$params = new stdClass();
+		$params->ivrBrandId = variable_get('teligence_loc_brand_id', 1);
+		$params->longitude = $long;
+		$params->latitude = $lat;
+		$params->country = ($country == 'US' ? 'USA' : 'Canada');
+		$result = teligence_loc_soap_call($params, 'GetLocalAccessNumberByLongLat', variable_get('teligence_loc_wsdl_localization', ''));
+		switch($result->GetLocalAccessNumberByLongLatResult->ResponseCode)
+		{
+			case 'Success':
+				$localization->MarketId = $result->GetLocalAccessNumberByLongLatResult->MarketId;
+				$localization->Country = $params->country;
+				$localization->Region = $region;
+				$localization->City = $city;
+				$localization->Ani = $result->GetLocalAccessNumberByLongLatResult->Ani;
+			break;
+			case 'NoLocalAccessNumbersAvailable':
+				$localization->Ani = variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090');
+			break;
+			case 'InvalidRequestParams':
+			break;
+			case 'TechnicalError':
+			break;
+		}
+	}
+	
+	// save local access number and  info in session
+	$_SESSION['localization'] = $localization;
+}
+
+/**
+ * retrieve localization values for ajax 
+ */
+function teligence_loc_locvals()
+{
+	// exclude this page from cache
+	global $conf;
+    $conf['cache'] = CACHE_DISABLED;
+	
+	$locvals = array();
+	$locvals['Ani'] = $_SESSION['localization']->Ani;
+	$locvals['City'] = $_SESSION['localization']->City;
+	$locvals['Region'] = $_SESSION['localization']->Region;
+	$locvals['Country'] = $_SESSION['localization']->Country;
+	$locvals['MarketId'] = $_SESSION['localization']->MarketId;
+	$locvals['Flavor'] = isset($_COOKIE['flavor']) ? $_COOKIE['flavor'] : 'DEFAULT';
+	$locvals['Time'] = time();
+	
+	print drupal_json($locvals);
+	exit;
+} 
+ 
+/**
+ * function to return array from list of values from a textarea
+ * one value per line. 
+ * This will return a list to use in the #options element of a select input field.
+ */
+function teligence_loc_valuelistoptions($values = null)
+{
+	$allowed_values = array();
+	
+	if(!is_null($values))
+	{
+		$list = explode("\n", $values);
+	    $list = array_map('trim', $list);
+	    $list = array_filter($list, 'strlen');
+	    foreach ((array)$list as $opt) 
+	    {
+	      // Sanitize the user input.
+	      $opt = filter_xss($opt, array());
+	      $allowed_values[$opt] = $opt;
+	    }
+	}
+	
+	return $allowed_values;
+}
+
+/**
+ * query maxmind db 
+ */
+function teligence_loc_maxmind($ip = null)
+{
+	$geoloc = NULL;
+	if(!is_null($ip))
+	{
+		// include geoipcity.inc
+		module_load_include('inc', 'teligence_loc', 'geoipcity');
+		
+		// open connection to maxmind db
+		// $path = $_SERVER['DOCUMENT_ROOT'] . base_path() . drupal_get_path('module', 'teligence_loc') . '/geoipcity.dat';
+		$path = drupal_get_path('module', 'teligence_loc') . '/geoipcity.dat';
+		$gi = geoip_open($path, GEOIP_STANDARD); // GEOIP_SHARED_MEMORY, GEOIP_MEMORY_CACHE
+		
+		// query maxmind db
+		$record = geoip_record_by_addr($gi, $ip);
+		
+		// $geolocation = drupal_http_request($url);
+		$geoloc = teligence_loc_casttoclass('stdClass', $record);
+		
+		// error logging and alerting
+		if(empty($geoloc->city))
+		{
+			watchdog('teligence_loc',"@errorId - @cause - @resol - @output", 
+			array(
+				'@errorId' => 'BWTL002',
+				'@cause' => "Cause: maxmind localization database result set for IP Address ($ip) is empty.",
+				'@resol' => "Resolution: if IP Address ($ip) is valid and not internal, then replace maxmind database with new one.", 
+				'@output' => 'Raw output from maxmind: <pre>'.print_r($geoloc,1).'</pre>', 
+			), WATCHDOG_INFO);
+		}
+		
+		// close connection to maxmind db
+		geoip_close($gi);
+	}
+	return $geoloc;
+}
+
+
+/**
+ * settings pages
+ */
+function teligence_loc_settings_form($form_state)
+{
+	$form['teligence_loc_tollfree_costumer_access'] = array (
+	    '#type'=>'textfield',
+	    '#title'=>t('Customer Access Toll Free Number'),
+	    '#description'=>t('Will be shown if no local access numbers are available.'),
+	    '#default_value'=>variable_get('teligence_loc_tollfree_costumer_access', '1-800-916-1090'),
+	    '#required' => true,
+    );
+	$form['teligence_loc_brand_id'] = array(
+		'#type' => 'select',
+		'#title' => t('Brand Code'),
+		'#options' => array (
+	        1=>'Livelinks (1)',
+	        2=>'InteractiveMale (2)',
+	        3=>'Tango Personals (3)',
+	        4=>'Red Hot Dateline (4)',
+	        6=>'Mens Free Chatline (6)',
+	        7=>'VibeLine (7)',
+	        8=>'Fonochat (8)',
+	        12=>'Lavender Line (12)',
+	    ),
+		'#default_value' => variable_get('teligence_loc_brand_id', 1),
+	);
+	$form['teligence_loc_debug'] = array(
+		'#type' => 'select',
+		'#title' => t('Debug Mode'),
+		'#options' => array(0 =>'No', 1 => 'Yes'),
+		'#default_value' => variable_get('teligence_loc_debug', 0),
+		'#required' => true,
+	);
+	$items = array('GetLocalAccessNumberByAreaCode', 'GetLocalAccessNumberByLongLat', 'GetMarkets');
+	$form['teligence_loc_wsdl_localization'] = array(
+		'#type' => 'textfield',
+		'#title' => t('WSDL Localization'),
+		'#default_value' => variable_get('teligence_loc_wsdl_localization', 'http://192.168.184.197/Teligence/Services/Hosts/BrandWebSite/Localization.svc?wsdl'),
+		'#required' => true,
+		'#size' => 120,
+		'#description' => t('Enter URL in the form of http://xxxx/xxx/xx.svc?wsdl !items', array('!items' => theme('item_list', $items))),
+	);
+	$form['teligence_loc_wsdl_cache'] = array(
+		'#type' => 'select',
+		'#title' => t('Cache WSDL'),
+		'#options' => array(0 =>'No', 1 => 'Yes'),
+		'#default_value' => variable_get('teligence_loc_cache_wsdl', 1),
+		'#required' => true,
+	);
+	$form['teligence_loc_flavors'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Theme Flavors'),
+		'#default_value' => variable_get('teligence_loc_flavors', 'BLACK' . "\n" . 'LATIN' . "\n" . 'WHITE'),
+		'#description' => t('Store theme flavor prefixes like BBW and AAF. One per line.'),
+		'#required' => true,
+	);
+	
+	return system_settings_form($form);
+}
+function teligence_loc_settings_form2($form_state)
+{
+	$form['test'] = array(
+		'#type' => 'fieldset',
+	);
+	$form['test']['ip'] = array(
+		'#type' => 'textfield',
+		'#title' => t('IP Address'),
+		'#required' => true,
+		'#default_value' => $form_state['storage']['ip'] ? $form_state['storage']['ip'] : t('97.122.101.209'),
+	);
+	$form['test']['url'] = array(
+		'#type' => 'textfield',
+		'#title' => t('WSDL URL'),
+		'#required' => true,
+		'#default_value' => $form_state['storage']['url'] ? $form_state['storage']['url'] : variable_get('teligence_loc_wsdl_localization', 'http://192.168.184.197/Teligence/Services/Hosts/BrandWebSite/Localization.svc'),
+		'#size' => 120,
+		'#description' => t('Enter URL in the form of http://xxxx/xxx/xx.svc?wsdl'),
+	);
+	$form['test']['send'] = array(
+		'#type' => 'submit',
+		'#value' => t('Test'),
+	);
+	if(isset($form_state['storage']['result']))
+	{
+		$form['test']['result_geo'] = array(
+			'#type' => 'item',
+			'#title' => t('Geolocation result from !url', array('!url' => url('', array('absolute' => true)) . $form_state['storage']['ipurl'])),
+			'#value' => $form_state['storage']['result'],
+		);
+	}
+	if(isset($form_state['storage']['wsdl']))
+	{
+		$form['test']['result_wsdl_latlong'] = array(
+			'#type' => 'item',
+			'#title' => t('wsdl result from GetLocalAccessNumberByLongLat'),
+			'#value' => $form_state['storage']['wsdl'],
+		);
+	}
+	if(isset($form_state['storage']['areacode']))
+	{
+		$form['test']['result_wsdl_areacode'] = array(
+			'#type' => 'item',
+			'#title' => t('wsdl result from GetLocalAccessNumberByAreaCode'),
+			'#value' => $form_state['storage']['areacode'],
+		);
+	}
+	
+	return $form;
+}
+
+function teligence_loc_settings_form2_submit($form, &$form_state)
+{
+	// get localization values from maxmind
+	$geodb = teligence_loc_maxmind($form_state['values']['ip']);
+	
+	$form_state['storage']['result'] .= 'geo object<pre>' . print_r($geodb, true) . '</pre>';
+	$form_state['storage']['ip'] = $form_state['values']['ip'];
+	
+	// call soap back-end GetLocalAccessNumberByLongLat 
+	if(!is_null($geodb))
+	{
+		$params = new stdClass();
+		$params->ivrBrandId = variable_get('teligence_loc_brand_id', 1);
+		$params->longitude = $geodb->longitude;
+		$params->latitude = $geodb->latitude;
+		$params->country = ($geodb->country_code == 'US' ? 'USA' : 'Canada');
+		$result = teligence_loc_soap_call($params, 'GetLocalAccessNumberByLongLat', $form_state['values']['url']);
+		$form_state['storage']['wsdl']  = 'wsdl input params<pre>' . print_r($params, true) . '</pre>';
+		$form_state['storage']['wsdl'] .= 'wsdl response<pre>' . print_r($result, true) . '</pre>';
+		$form_state['storage']['url'] = $form_state['values']['url'];
+	}
+	
+	// call sopa back-end GetLocalAccessNumberByLongLat 
+	if(!is_null($geodb->area_code))
+	{
+		$params = new stdClass();
+		$params->ivrBrandId = variable_get('teligence_loc_brand_id', 1);
+		$params->areaCode = $geodb->area_code;
+		$result = teligence_loc_soap_call($params, 'GetLocalAccessNumberByAreaCode', $form_state['values']['url']);
+		$form_state['storage']['areacode']  = 'wsdl input params<pre>' . print_r($params, true) . '</pre>';
+		$form_state['storage']['areacode'] .= 'wsdl response<pre>' . print_r($result, true) . '</pre>';
+	}
+}
+
+
+/**
+ * hack to cast any object to any class
+ * http://stackoverflow.com/questions/965611/forcing-access-to-php-incomplete-class-object-properties/965704#965704
+ */
+function teligence_loc_casttoclass($class, $object)
+{
+	return unserialize(preg_replace('/^O:\d+:"[^"]++"/', 'O:' . strlen($class) . ':"' . $class . '"', serialize($object)));
+}
+
+
+
+/************************
+ * SOAP
+ */
+
+ /*
+ * SOAP send
+ * wrap the php soap function so we can handle any errors or exceptions
+ */
+function teligence_loc_soap_call(&$params, $method_name, $wsdl, $renewGUID = null)
+{
+	$output = new stdClass();
+	
+	if(!class_exists('SoapClient'))
+	{
+		$output->{$method_name . "Result"}->ResponseCode = 'SoapClientMissing';
+		return $output;
+	}
+	
+	$params->sequenceId = teligence_cart_uuid($renewGUID);
+	
+    // send xml
+    try
+    {
+    	if(!@file_get_contents($wsdl)) 
+    	{
+        	throw new SoapFault('Server', 'No WSDL found at ' . $wsdl);
+    	}
+		
+		// set up the service client using WSDL
+		if(variable_get('teligence_loc_cache_wsdl', 1))
+		{
+			$client = new SoapClient($wsdl);
+		}
+		else
+		{
+			$client = new SoapClient($wsdl, array('cache_wsdl'=>WSDL_CACHE_NONE));
+		}
+    	
+		// call soap method and pass parameters object
+        $output = $client->{ $method_name }($params);
+    } 
+	catch(SoapFault $e)
+    {
+    	$output = new stdClass();
+        if(check_plain(print_r($e->getMessage(), true)) == 'Error Fetching http headers')
+        {
+        	$output->{$method_name . "Result"}->ResponseCode = 'ErrorFetchingHttpHeaders';
+        	$output->{$method_name . "Result"}->ErrMsg = 'There has been a technical problem with your transaction. Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx');
+        }
+        else
+        {
+        	$output->{$method_name . "Result"}->ResponseCode = $e->getCode();
+        	$output->{$method_name . "Result"}->ErrMsg = $method_name.' Soap Error Code: '.check_plain($e->getMessage());
+        }
+
+		watchdog('teligence_loc',"@errorId - @cause - @resol - @methodName - @responseCode - @ErrMsg - @input - @output", 
+			array(
+				'@errorId' => 'BWTL001',
+				'@cause' => 'Cause: SOAP brand websites cannot connect to Back-end; Connection times out or response is invalid.',
+				'@resol' => "Resolution: check network connection on port 80 from webserver to $wsdl", 
+				'@methodName' => 'Method Name = '.$method_name,
+				'@responseCode' => 'SoapErrorCode = ' . $e->getCode(),
+				'@ErrMsg' => $output->{$method_name . "Result"}->ErrMsg,
+				'@input' => 'Input Parameters: <pre>'.print_r($params,1).'</pre>',
+			), WATCHDOG_ALERT);
+    }
+	
+	
+    return $output;
+}
+
+
+/**
+ * new version of mobile redirection checking function sent by Steven Reimer on Tuesday, October 19, 2010 6:32 PM
+ */
+function teligence_loc_isMobileDevice() 
+{
+	// Filter out explicitly non-mobile devices (false positives)
+	$nonMobileKeywords = array('iPad');
+	foreach ($nonMobileKeywords as $keyword) 
+	{
+		if (strpos($_SERVER['HTTP_USER_AGENT'], $keyword) !== false)
+		{
+			return false;
+		} 
+	}
+	 
+	// X-WAP-Profile & HTTP-Profile are mobile indicators
+	if (isset($_SERVER['HTTP_X_WAP_PROFILE']) || isset($_SERVER['HTTP_PROFILE']))
+	{
+		return true;
+	} 
+	
+	// Search for mobile device user agents
+	$mobileKeywords = array(
+		'Samsung', 'Motorola', 'LG', 'BlackBerry',
+		'RIM', 'Research in Motion', 'iPhone', ' Pre/', 'Android',
+		'IEMobile', 'Windows CE', 'Ericsson', 'Nokia', 'Palm',
+		'HTC', 'Pantech', 'Kyocera', 'Sanyo', 'Ustar', 'Audiovox',
+		'Handspring', 'Opera Mobi', 'Mobile', 'Smartphone', 'iPod',
+		'HipTop', 'Sec-', 'Mot-', 'Sie-', 'AvantGo', 'up.b', 'up/',
+		'Opera Mini', 'Samu'
+	);
+	foreach ($mobileKeywords as $keyword) 
+	{
+		if (strpos($_SERVER['HTTP_USER_AGENT'], $keyword) !== false)
+		{
+			return true;
+		} 
+	}
+	
+	// Search for mobile-specific MIME type support
+	$mobileMIMEtypes = array(
+		'application/vnd.wap.xhtml+xml', 
+		'text/vnd.wap.wml'
+	);
+	foreach ($mobileMIMEtypes as $mimeType) 
+	{
+		if (strpos($_SERVER['HTTP_ACCEPT'], $mimeType) !== false) 
+		{
+			return true;
+		}
+	}
+	
+	// Device failed all checks, assume non-mobile
+	return false;
+}

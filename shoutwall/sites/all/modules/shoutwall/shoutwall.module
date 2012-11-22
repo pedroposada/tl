@@ -1,0 +1,796 @@
+<?php
+
+/*************************
+ * DRUPAL HOOKS
+ */
+
+ 
+/**
+ * Implements hook_menu
+ */
+function shoutwall_menu()
+{
+	/**
+	 * ADMIN
+	 */
+	$items['admin/shoutwall'] = array (
+	    'title'=>'Shoutwall Settings',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('shoutwall_settingsform'),
+	    'access arguments'=> array ('access shoutwall settings'),
+	    'file' => 'shoutwall-settings.inc',
+    );
+    $items['admin/shoutwall/settings'] = array (
+	    'title'=>'Settings',
+	    'type'=>MENU_DEFAULT_LOCAL_TASK,
+    	'weight'=> -10,
+    );
+	
+	/**
+	 * PAGES
+	 */
+	$items['shoutwall/frontpage'] = array(
+		'title'=>'Home Page',
+		'description'=>'Front Page of The Shoutwall',
+		'page callback'=>'theme',
+		'page arguments'=>array('shoutwall_frontPage'),
+		'access callback'=>TRUE,
+	);
+	
+	/**
+	 * HANDLERS
+	 */
+	$items['shoutwall/remotepost/%/%'] = array(
+		'description'=>'Web handler for remote requests coming from shoutwall telephony box',
+		'page callback'=>'shoutwall_remoteHandler',
+		'page arguments'=>array(2),
+		'access callback'=>'shoutwall_access',
+		'access arguments'=>array(2,3),
+		'type'=>MENU_CALLBACK,
+	);
+	$items['shoutwall/streamaudio/%/%'] = array(
+		'description'=>'Web handler to stream audio',
+		'page callback'=>'shoutwall_streamAudio',
+		'page arguments'=>array(2),
+		'access callback'=>'shoutwall_access',
+		'access arguments'=>array(2,3),
+		'type'=>MENU_CALLBACK,
+	);
+	$items['shoutwall/getshoutandlist/%/%'] = array(
+		'description'=>'Get Shout and List of Shouts',
+		'page callback'=>'shoutwall_getShoutAndList',
+		'page arguments'=>array(2,3),
+		'access callback'=>TRUE,
+		'type'=>MENU_CALLBACK,
+	);
+	
+	return $items;
+}
+
+/**
+ * Implements hook_theme()
+ */
+function shoutwall_theme($existing, $type, $theme, $path)
+{
+	return array(
+		'shoutwall_audioPlayer' => array(
+			'variables' => array('element' => NULL),
+			'path' => drupal_get_path('module','shoutwall') .'/templates',
+			'template'=>'shoutwall-audioPlayer',
+		),
+		'shoutwall_frontPage' => array(
+			'variables' => array('element' => NULL),
+			'path' => drupal_get_path('module','shoutwall') .'/templates',
+			'template'=>'shoutwall-frontPage',
+		),
+		'shoutwall_categoryList' => array(
+			'variables' => array('resultSet' => NULL, 'activeCat' => NULL),
+		),
+		'shoutwall_shoutsList' => array(
+			'variables' => array('resultSet' => NULL, 'linktext' => '*', 'shoutId'=>NULL),
+		),
+		'shoutwall_directionLink' => array(
+			'variables' => array('linkObj' => NULL, 'text' => '>>'),
+		),
+	);
+}
+
+/**
+ * Implements hook_page_alter(&$page)
+ */
+function shoutwall_page_alter(&$page)
+{
+	// watchdog('shoutwall',$_GET['q'] . ' shoutwall_preprocess_page(&$vars)<pre>'.check_plain(print_r($vars,1)).'</pre>');
+}
+
+/**
+ * Implements hook_js_alter(&$javascript)
+ */
+function shoutwall_js_alter(&$js)
+{
+	if(isset($js['sites/all/modules/shoutwall/js/jquery.jplayer.min.js']))
+	{
+		$js['misc/jquery.js']['data'] = drupal_get_path('module','shoutwall').'/js/jquery-1.7.1.min.js';
+		$js['misc/jquery.js']['version'] = '1.7.1';
+	}
+	// watchdog('shoutwall',$_GET['q'] . ' shoutwall_js_alter(&$js)<pre>'.check_plain(print_r($js,1)).'</pre>');
+}
+ 
+/**
+ * Implements MYMODULE_preprocess_hook()
+ */
+function shoutwall_preprocess_shoutwall_frontPage(&$vars)
+{
+	// add tabs script
+	drupal_add_js(drupal_get_path('module','shoutwall').'/js/jquery.frontpage.js');
+
+	// add custom css
+	drupal_add_css(drupal_get_path('module','shoutwall').'/shoutwall.css');
+		
+	if(db_select('shoutwall_shouts','sws')->fields('sws')->condition('Status','A')->execute()->rowCount())
+	{
+		$vars['audioPlayer'] = theme('shoutwall_audioPlayer');
+	}
+	else 
+	{
+		$vars['audioPlayer'] = t('No shouts.');
+	}
+	
+	$vars['feedbackForm'] = drupal_get_form('shoutwall_feedbackform');
+}
+
+/**
+ * Implements MYMODULE_preprocess_hook()
+ */
+function shoutwall_preprocess_shoutwall_audioPlayer(&$vars)
+{
+	// add custom js with drupal_add_js()
+	drupal_add_js(drupal_get_path('module','shoutwall').'/js/jquery.jplayer.min.js');
+	drupal_add_js(drupal_get_path('module','shoutwall').'/js/jquery.ba-bbq.js');
+	drupal_add_js(drupal_get_path('module','shoutwall').'/js/jquery.shoutwall.js');
+	drupal_add_js(array('shoutwall'=>array('swfCustomPath'=>drupal_get_path('module','shoutwall').'/js')),'setting');
+	drupal_add_js(array('shoutwall'=>array('shoutsFolderPath'=>url('shoutwall/streamaudio'))),'setting');
+	drupal_add_js(array('shoutwall'=>array('loadShoutsByCategoryUrl'=>url('shoutwall/loadshoutsbycategory'))),'setting');
+	drupal_add_js(array('shoutwall'=>array('loadShoutByIdUrl'=>url('shoutwall/loadshoutbyid'))),'setting');
+	drupal_add_js(array('shoutwall'=>array('getShoutAndListUrl'=>url('shoutwall/getshoutandlist'))),'setting');
+	
+	// add custom css
+	drupal_add_css(drupal_get_path('module','shoutwall').'/shoutwall.css');
+	drupal_add_css(drupal_get_path('module','shoutwall').'/skin/blue.monday/jplayer.blue.monday.css');
+	
+	try
+	{
+		// db query for categories
+		$categories = db_select('shoutwall_shouts','sws')
+			->fields('sws')
+			->condition('Status','A')
+			->orderBy('Id')
+			->groupBy('CategoryName');
+			
+		$directionCategories = clone $categories;
+		
+		$categories = $categories->execute()->fetchAll();
+		
+		$activeCat = $categories[ceil((count($categories)-1)/2)]->categoryname;
+		// $activeCat = $categories[0]->categoryname;
+		
+		// debug
+		// watchdog('shoutwall','$activeCat <pre>'.check_plain(print_r($categories,1)).'</pre>');
+		
+		// db query for shouts
+		$shouts = db_select('shoutwall_shouts','sws')
+			->fields('sws')
+			->condition('Status','A')
+			->condition('CategoryName',$activeCat)
+			->orderBy('Id');
+		$directionShouts = clone $shouts;
+		
+		// add category list
+		$variables = array(
+			'resultSet'=>$categories, 
+			'activeCat'=>$activeCat
+		);
+		$vars['categoryList'] = theme('shoutwall_categoryList',$variables);
+	
+		// add shout list
+		$shouts = $shouts->execute()->fetchAll();
+		$variables = array(
+			'resultSet'=>$shouts, 
+		);
+		$vars['shoutsList'] = theme('shoutwall_shoutsList',$variables);
+		
+		// grab first shout values
+		$vars['headlinetext'] = $shouts[0]->headlinetext;
+		$vars['shouttext'] = $shouts[0]->shouttext;
+		$vars['createdate'] = format_date($shouts[0]->createdate);
+		
+		// prev and next links for categories
+		$directionLinks = shoutwall_nextPrevLinks($directionCategories->execute()->fetchAllAssoc('id'), $categories[ceil((count($categories)-1)/2)]->id);
+		$vars['prevCatLink'] = theme('shoutwall_directionLink', array('linkObj'=>$directionLinks['prev'],'text'=>'<<'));
+		$vars['nextCatLink'] = theme('shoutwall_directionLink', array('linkObj'=>$directionLinks['next'],'text'=>'>>'));
+		
+		// prev and next links for shouts
+		$directionLinks = shoutwall_nextPrevLinks($directionShouts->execute()->fetchAllAssoc('id'));
+		$vars['prevShoutLink'] = theme('shoutwall_directionLink', array('linkObj'=>$directionLinks['prev'],'text'=>'<<'));
+		$vars['nextShoutLink'] = theme('shoutwall_directionLink', array('linkObj'=>$directionLinks['next'],'text'=>'>>'));
+	}
+	catch(Exception $e)
+	{
+		watchdog_exception('shoutwall', $e);
+	}
+	
+}
+
+/**
+ * Implements MYMODULE_preprocess_hook()
+ */
+function shoutwall_preprocess_page(&$vars)
+{
+	// watchdog('shoutwall',$_GET['q'] . ' shoutwall_preprocess_page(&$vars)<pre>'.check_plain(print_r($vars,1)).'</pre>');
+}
+
+
+/**
+ * Implements hook_file_download()
+ */
+function shoutwall_file_download($uri)
+{
+	// watchdog('shoutwall',' shoutwall_file_download($uri)<pre>'.check_plain(print_r($uri,1)).'</pre>');
+}
+
+/**
+ * Implements hook_mail($key, &$message, $params)
+ */
+function shoutwall_mail($key, &$message, $params)
+{
+	// make all emails from this module HTML
+	// $message['headers']['Content-Type'] = 'text/html; charset=UTF-8; format=flowed';
+	
+	switch($key)
+    {
+		case 'feedbackform':
+			$message['headers']['From'] = '"'.$params['firstname'].'" <'.$params['email'].'>';
+			$message['from'] = '"'.$params['firstname'].'" <'.$params['email'].'>';
+			$message['subject'] = 'The Shoutwall Feedback';
+			$message['body'][] = theme('item_list',array('type'=>'ul','items'=>array(
+				'First Name: ' . $params['firstname'],
+				'Email: ' . $params['email'],
+				'About Your Experience: ' . "\n" . $params['yourexperience'],
+			)));
+			break;
+	}
+}
+
+
+/**************************
+ * PAGE CALLBACKS
+ */
+
+/**
+ * get single shout and list of shouts matching fragment in URL via ajax
+ */ 
+function shoutwall_getShoutAndList($id,$hash)
+{
+	try
+	{
+		// db query for categories
+		$categories = db_select('shoutwall_shouts','sws')
+			->fields('sws')
+			->condition('Status','A')
+			->orderBy('Id')
+			->groupBy('CategoryName')
+			->execute()
+			->fetchAllAssoc('id');
+			
+		// db query for single shout
+		$shout = db_select('shoutwall_shouts','sws')
+			->fields('sws')
+			->condition('Id',$id)
+			->execute()
+			->fetchObject();
+			
+		// db query for shouts
+		$shouts = db_select('shoutwall_shouts','sws')
+			->fields('sws')
+			->condition('Status','A')
+			->condition('CategoryName',$shout->categoryname)
+			->orderBy('Id')
+			->execute()
+			->fetchAllAssoc('id');
+
+		// watchdog('shoutwall','shoutwall_getShoutAndList($id,$hash) <pre>'.check_plain(print_r($shouts,1)).'</pre>');
+		
+		// prev and next links for categories
+		$directionCatLinks = shoutwall_nextPrevLinks($categories, key($shouts));
+		
+		// prev and next links for shouts
+		$directionLinks = shoutwall_nextPrevLinks($shouts, $id);
+		
+		// render list
+		print drupal_json_encode(array(
+			'list'=>theme('shoutwall_shoutsList',array('resultSet' => $shouts, 'shoutId' => $id)),
+			'headlinetext'=>$shout->headlinetext,
+			'shouttext'=>$shout->shouttext,
+			'createdate'=>format_date($shout->createdate),
+			'categoryname'=>$shout->categoryname,
+			'categoryElementId'=>strtoupper(filter_var($shout->categoryname,FILTER_SANITIZE_URL)),
+			'prevShoutLink'=>theme('shoutwall_directionLink', array('linkObj'=>$directionLinks['prev'],'text'=>'<<')),
+			'nextShoutLink'=>theme('shoutwall_directionLink', array('linkObj'=>$directionLinks['next'],'text'=>'>>')),
+			'prevCatLink'=>theme('shoutwall_directionLink', array('linkObj'=>$directionCatLinks['prev'],'text'=>'<<')),
+			'nextCatLink'=>theme('shoutwall_directionLink', array('linkObj'=>$directionCatLinks['next'],'text'=>'>>')),
+		));
+	}
+	catch(Exception $e)
+	{
+		watchdog_exception('shoutwall', $e);
+	}
+}
+ 
+/**
+ * custom access control 
+ */
+function shoutwall_access($id, $hash)
+{
+	return (md5($id.variable_get('shoutwall_secret','')) == $hash ? TRUE : FALSE);
+}
+ 
+ 
+/**
+ * stream audio
+ */
+function shoutwall_streamAudio($id)
+{
+	// logic to double check if shout exists or not, must return filepath
+	try
+	{
+		$uri = db_select('shoutwall_shouts','sws')
+			->fields('sws',array('AudioFilename','Id'))
+			->condition('Id',$id)
+			->execute()
+			->fetchField();
+		$filepath = drupal_realpath($uri);
+	}
+	catch(Exception $e)
+	{
+		watchdog_exception('shoutwall', $e);
+		exit;		
+	}
+	
+	if(!is_file($filepath))
+		exit;
+
+	// avoid double streaming of file, grab file size from response http header
+	if (substr($filepath,0,4)=='http') 
+	{
+		$x = array_change_key_case(get_headers($filepath, 1),CASE_LOWER);
+		if ( strcasecmp($x[0], 'HTTP/1.1 200 OK') != 0 ) 
+		{ 
+			$filesize = $x['content-length'][1]; 
+		}
+		else 
+		{ 
+			$filesize = $x['content-length']; 
+		}
+	}
+	else 
+	{ 
+		$filesize = @filesize($filepath); 
+	}
+
+	// set headers
+	header('Content-type: audio/mpeg');
+	header('Content-Length: '. $filesize );
+	header("Expires: -1");
+	header("Cache-Control: no-store, no-cache, must-revalidate");
+	header("Cache-Control: post-check=0, pre-check=0", false);
+
+	@readfile($filepath);
+}
+
+
+/**
+ * handle operations via POST request from telephony box
+ */
+function shoutwall_remoteHandler($id)
+{
+	watchdog('shoutwall','Original $_POST shoutwall_remoteHandler($id)<pre>'.check_plain(print_r($_POST,1)).'</pre>');	
+	
+	if(empty($id) || !ctype_digit($id))
+	{
+		watchdog('shoutwall','Invalid Resquest Params; "Id" is not valid: ' . $id);
+		print 400;
+		exit;	
+	}
+
+	// assuming all input parameters are valid
+	switch ($_POST['op']) 
+	{
+		case 'create':
+		case 'update':
+			$validation = array();
+			if(empty($_POST['Status']) || !in_array($_POST['Status'], array('A','D')))
+				$validation[] = 'Invalid Resquest Params; "Status" is not valid.';
+			
+			if(empty($_POST['ShoutText']))
+				$validation[] = 'Invalid Resquest Params; "ShoutText" is empty.';
+				
+			if(empty($_POST['HeadlineText']))
+				$validation[] = 'Invalid Resquest Params; "HeadlineText" is empty.';
+				
+			if(empty($_POST['CategoryName']))
+				$validation[] = 'Invalid Resquest Params; "CategoryName" is empty.';
+			
+			if(!isset($_FILES['fileupload']) || $_FILES['fileupload']['error'])
+				$validation[] = 'Invalid Resquest Params; "fileupload" is not valid: ' . $_FILES['fileupload']['error'];
+			
+			if(count($validation))
+			{
+				watchdog('shoutwall','$validation shoutwall_remoteHandler($id)<pre>'.check_plain(print_r($validation,1)).'</pre>');
+				print 400;
+				exit;	
+			}
+			
+			// drupal_move_uploaded_file($_FILES['fileupload']['tmp_name'], $uri);
+			$destination = file_build_uri('shoutwall/' . $_FILES['fileupload']['name']);
+			if($filepath = file_unmanaged_move($_FILES['fileupload']['tmp_name'], $destination))
+			{
+				try
+				{
+					db_merge('shoutwall_shouts')
+						->key(array('Id'=>$id))
+						->fields(array(
+							'Status'=>$_POST['Status'],
+							'CreateDate'=>time(),
+							'CategoryName'=>$_POST['CategoryName'],
+							'HeadlineText'=>$_POST['HeadlineText'],
+							'ShoutText'=>$_POST['ShoutText'],
+							'AudioFilename'=>$filepath,
+						))
+						->execute();
+						
+					watchdog('shoutwall','Success '.$_POST['op'].' <pre>'.check_plain(print_r($_POST,1)).'</pre>');	
+					print 200;
+				}
+				catch(Exception $e)
+				{
+					watchdog_exception('shoutwall', $e);
+					print 400;
+				}
+			}
+			else
+			{
+				watchdog('shoutwall','file could not be saved <pre>'.check_plain(print_r($_FILES,1)).'</pre>');
+				print 400;
+			}
+			
+			break;
+		case 'delete':
+			try
+			{
+				if(!db_select('shoutwall_shouts','sws')->fields('sws')->condition('Id',$id)->execute()->rowCount())
+				{
+					print 400;
+					exit;
+				}
+				
+				// db query for single shout
+				$shout = db_select('shoutwall_shouts','sws')
+					->fields('sws')
+					->condition('Id',$id)
+					->execute()
+					->fetchObject();
+				
+				// delete file
+				file_unmanaged_delete($shout->audiofilename);
+					
+				$num_deleted = db_delete('shoutwall_shouts')
+					->condition('Id', $id)
+					->execute();
+				watchdog('shoutwall','Success '.$_POST['op'].' <pre>'.check_plain(print_r($_POST,1)).'</pre>');	
+				print 200;
+			}
+			catch(Exception $e)
+			{
+				watchdog_exception('shoutwall', $e);
+				print 400;
+			}
+			break;
+		default:
+			watchdog('shoutwall','Invalid Resquest Params; "op" is not valid: ' . $_POST['op']);
+			print 400;
+			break;
+	}
+}
+
+/**
+ * carrousell next and prev links
+ */
+function shoutwall_nextPrevLinks($result, $shoutId = null)
+{
+	$prevs = $result;
+	$nexts = $result;
+	foreach ($result as $key => $record) 
+	{
+		if(is_null($shoutId))
+			break;
+		
+		next($prevs) ? null : reset($prevs);
+		next($nexts) ? null : reset($nexts);
+		if(isset($shoutId) && $shoutId == $key)
+		{
+			prev($prevs) ? null : end($prevs);
+			prev($nexts) ? null : end($nexts);
+			break;
+		}
+			
+	}
+	
+	// prev
+	$prevObj  = prev($prevs) ? current($prevs) : end($prevs);
+	
+	// next
+	$nextObj  = next($nexts) ? current($nexts) : reset($nexts);
+	
+	return array(
+		'prev' => $prevObj,
+		'next' => $nextObj,
+	);
+}
+
+/************************
+ * THEME FUNCTIONS
+ */
+
+/**
+ * theme prev or next links
+ */
+function theme_shoutwall_directionLink($variables)
+{
+	$options = array(
+		'fragment'=>$variables['linkObj']->id . '/' . md5($variables['linkObj']->id . variable_get('shoutwall_secret','')),
+		'external'=>TRUE,
+		'attributes'=>array(
+			'class'=>array('directionLink'),
+			'alt'=>$variables['linkObj']->headlinetext,
+			'title'=>$variables['linkObj']->headlinetext,
+		),
+	);
+	return l($variables['text'],'',$options);
+}
+ 
+/**
+ * theme output for categories
+ */
+function theme_shoutwall_categoryList($variables)
+{
+	$output = '';
+	
+	$items = array(); 
+	$i = 1;
+	foreach($variables['resultSet'] as $record)
+	{
+		$options = array(
+			'fragment'=>$record->id . '/' . md5($record->id . variable_get('shoutwall_secret','')),
+			'external'=>TRUE,
+			'attributes'=>array(
+				'class'=>array('categoryLink'),
+				'id'=>strtoupper(filter_var($record->categoryname,FILTER_SANITIZE_URL)),
+				'alt'=>$record->categoryname,
+				'title'=>$record->categoryname,
+			),
+		);
+		if($variables['activeCat'] == $record->categoryname)
+		{
+			// set active class to item in the middle
+			$options['attributes']['class'][] = 'active';
+			
+			// logic to select first shout on page load
+			$firstShout = $record->id . '/' . md5($record->id . variable_get('shoutwall_secret',''));
+			drupal_add_js(array('shoutwall'=>array('firstShout'=>$firstShout)),'setting');
+		}
+		$item = array(
+			'data' => l($record->categoryname,'',$options),
+			'id' => 'listItem_'.$i,
+			'class' => array('categoryListItem'),
+		);
+		$items[] = $item;
+		$i++;
+	}
+	$vars = array(
+		'title'=>t('Category List'),
+		'type'=>'ul',
+		'items'=>$items,
+		'attributes'=>array('id'=>'categoryList'),
+	);
+	$output = theme('item_list',$vars);
+	
+	return $output;
+}
+
+/**
+ * theme output for shouts list by category
+ */
+function theme_shoutwall_shoutsList($variables)
+{
+	$output = '';
+	
+	$items = array(); 
+	foreach($variables['resultSet'] as $key => $record)
+	{
+		$options = array(
+			'fragment'=>$record->id . '/' . md5($record->id . variable_get('shoutwall_secret','')),
+			'external'=>TRUE,
+			'attributes'=>array(
+				'class'=>array('shoutLink'),
+				'id'=>'shout_'.$record->id,
+				'alt'=>$record->headlinetext,
+				'title'=>$record->headlinetext,
+			),
+		);
+		
+		if(isset($variables['shoutId']) && $variables['shoutId'] == $record->id)
+		{
+			$options['attributes']['class'][] = 'active';
+		}
+		elseif(!count($items) && !isset($variables['shoutId'])) 
+		{
+			$options['attributes']['class'][] = 'active';
+		}
+
+		$item = array(
+			'data' => l($variables['linktext'],'',$options),
+			'id' => 'shoutslistItem_'.$record->id,
+			'class' => array('shoutListItem'),
+		);
+		$items[] = $item;
+	}
+	$vars = array(
+		'title'=>t('Shouts List'),
+		'type'=>'ul',
+		'items'=>$items,
+		'attributes'=>array('id'=>'shoutItemList'),
+	);
+	$output = theme('item_list',$vars);
+	
+	return $output;
+}
+
+/*********************************
+ * VALIDATORS
+ */
+
+/**
+ * validate element for emails
+ */
+function shoutwall_emails_validate($element, &$form_state)
+{
+	if(!valid_email_address($element['#value']))
+	{
+		form_error($element, 'Invalid Email Address.');
+	}
+}
+ 
+/**********************************
+ * FORMS
+ */
+
+/**
+ * settings form
+ */
+function shoutwall_settingsform($form, &$form_state)
+{
+	$form['group'] = array(
+		'#type'=>'fieldset',
+	);
+	$form['group']['shoutwall_feedbackEmail'] = array(
+		'#type'=>'textfield',
+		'#title'=>t('Feedback Email Address'),
+		'#default_value'=>variable_get('shoutwall_feedbackEmail'),
+		'#element_validate'=>array('shoutwall_emails_validate'),
+	);
+	
+	return system_settings_form($form);
+}
+ 
+/**
+ * Contact us form
+ */
+function shoutwall_feedbackform($form, &$form_state)
+{
+	// Provide a wrapper around the entire form, since we'll replace the whole
+	// thing with each submit.
+	$form['#prefix'] = '<div id="wizard-form-wrapper">';
+	$form['#suffix'] = '</div>';
+	
+	// $form_state['storage'] has no specific drupal meaning, but it is
+	// traditional to keep variables for multistep forms there.
+	$step = empty($form_state['storage']['step']) ? 1 : $form_state['storage']['step'];
+	$form_state['storage']['step'] = $step;
+	
+	$form['group'] = array(
+		'#type'=>'fieldset',
+	);
+	
+	switch ($step) 
+	{
+		case 1:
+			$form['group']['firstname'] = array(
+				'#type'=>'textfield',
+				'#title'=>t('First Name'),
+			);
+			$form['group']['email'] = array(
+				'#type'=>'textfield',
+				'#title'=>t('Email'),
+			);
+			$form['group']['yourexperience'] = array(
+				'#type'=>'textarea',
+				'#title'=>t('Your Experience'),
+			);
+			$form['group']['sendfeedback'] = array(
+				'#type'=>'submit',
+				'#value'=>t('Send'),
+				'#ajax'=>array(
+					'callback'=>'shoutwall_feedbackform_ajax',
+					'wrapper'=>'wizard-form-wrapper',
+				),
+			);
+			break;
+		
+		case 2:
+			$form['group']['goback'] = array(
+		      '#type' => 'submit',
+		      '#value' => t("Go Back"),
+		      // Since all info will be discarded, don't validate on 'prev'.
+		      '#limit_validation_errors' => array(),
+		      // #submit is required to use #limit_validation_errors
+		      '#submit' => array('shoutwall_feedbackform_submit'),
+		      '#ajax' => array(
+		        'callback' => 'shoutwall_feedbackform_ajax',
+		        'wrapper' => 'wizard-form-wrapper',
+		      ),
+		    );
+			break;
+	}
+	// watchdog('shoutwall', 'shoutwall_feedbackform <pre>'.check_plain(print_r($form_state,1)).'</pre>');
+	
+	return $form;
+}
+function shoutwall_feedbackform_validate($form, &$form_state)
+{
+	if($form_state['triggering_element']['#parents'][0] == 'sendfeedback')
+	{
+		if(empty($form_state['values']['firstname']))
+		{
+			form_error($form['group']['firstname'],'First Name is required.');
+		}
+		if(!valid_email_address($form_state['values']['email']))
+		{
+			form_error($form['group']['email'],'Invalid email address.');
+		}
+		if(empty($form_state['values']['yourexperience']))
+		{
+			form_error($form['group']['yourexperience'],'Please tell us about your experience on the website.');
+		}
+	}
+}
+function shoutwall_feedbackform_submit($form, &$form_state)
+{
+	if($form_state['triggering_element']['#parents'][0] == 'sendfeedback')
+	{
+		$form_state['storage']['step']++;
+		drupal_mail('shoutwall','feedbackform',variable_get('shoutwall_feedbackEmail',''),language_default(),$form_state['values']);
+		drupal_set_message('Thanks for your feedback.');
+	}
+	
+	if($form_state['triggering_element']['#parents'][0] == 'goback')
+	{
+		$form_state['storage']['step']--;
+	}
+	
+	// Otherwise, we still have work to do.
+	$form_state['rebuild'] = TRUE;
+}
+function shoutwall_feedbackform_ajax($form, $form_state)
+{
+	return $form;
+}

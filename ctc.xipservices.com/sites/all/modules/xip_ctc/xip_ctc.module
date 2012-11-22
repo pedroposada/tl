@@ -1,0 +1,255 @@
+<?php
+
+/*************************************
+ * DRUPAL HOOKS
+ */
+
+/**
+ * Implements hook_permissions()
+ */
+function xip_ctc_permission() 
+{
+  return array(
+    'access ctc settings' => array(
+      'title' => t('Modify Settings for CTC'), 
+      'description' => t('Perform administration tasks for ctc.'),
+      'restrict access' => TRUE,
+    ),
+  );
+}
+ 
+/**
+ * Implements hook_menu()
+ */
+function xip_ctc_menu()
+{
+	/**
+	 * ADMIN
+	 */
+	$items['admin/ctc'] = array (
+	    'title'=>'CTC Settings',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('xip_ctc_settingsForm'),
+	    'access arguments'=> array ('access ctc settings'),
+    );
+    $items['admin/ctc/settings'] = array (
+	    'title'=>'Settings',
+	    'type'=>MENU_DEFAULT_LOCAL_TASK,
+    	'weight'=> -10,
+    );
+	
+	/**
+	 * PAGES
+	 */
+	$items['ctc/script'] = array(
+		'page callback'=>'theme',
+		'page arguments'=>array('xip_ctc_embedFormCode'), 
+		'access arguments'=>array("access ctc settings"),
+	);
+	
+	/**
+	 * HANDLERS
+	 */
+	$items['ctc/call'] = array(
+		'page callback'=>'xip_ctc_callCTC',
+		'access callback'=>TRUE,
+		'type'=>MENU_CALLBACK,
+	);
+	
+	return $items;
+}
+
+/**
+ * Implements hook_theme()
+ */
+function xip_ctc_theme($existing, $type, $theme, $path)
+{
+	return array(
+		'xip_ctc_embedForm' => array(
+			'variables' => array('scriptSource' => NULL),
+			'path' => drupal_get_path('module','xip_ctc'),
+			'template'=>'xip_ctc-embedForm',
+		),
+		'xip_ctc_embedFormCode' => array(
+			'variables' => array('sourceCode' => NULL),
+			'path' => drupal_get_path('module','xip_ctc'),
+			'template'=>'xip_ctc-embedFormCode',
+		),
+	);
+}
+
+/**
+ * Implements MYMODULE_preprocess_hook()
+ */
+function xip_ctc_preprocess_xip_ctc_embedForm(&$vars)
+{
+	$vars['captchaImage'] = url(drupal_get_path('module','xip_ctc') . '/js/1.JPG',array('absolute'=>TRUE));
+	$vars['scriptSource'] = url(drupal_get_path('module','xip_ctc') . '/js/captcha.js',array('absolute'=>TRUE));
+}
+/**
+ * Implements MYMODULE_preprocess_hook()
+ */
+function xip_ctc_preprocess_xip_ctc_embedFormCode(&$vars)
+{
+	$replace = array(
+		'DESTINATIONPHONE' => '<span class="token">DESTINATIONPHONE</span>',
+		'PARTNERID' => '<span class="token">PARTNERID</span>',
+		'SOURCE' => '<span class="token">SOURCE</span>',
+	);
+	$form = theme('xip_ctc_embedForm');
+	$sourceCode = htmlentities($form);
+	$sourceCode = str_replace(array_keys($replace), array_values($replace), $sourceCode);
+	$vars['sourceCode'] = $sourceCode;
+	$vars['demo'] = $form;
+}
+
+/************************************
+ * CALLBACKS
+ */
+function xip_ctc_callCTC()
+{
+	// make parameters case insensitive; sanitize 
+	$request = array();
+	foreach((array)$_REQUEST as $key => $value)
+	{
+		$request[strtolower($key)] = check_plain(filter_xss(str_replace(',','',$value), array()));
+	}
+	
+	// validate destination phone number
+	$strdestinationphone = $request['destinationphone'];
+	if(!xip_ctc_validPhoneNumber($request['destinationphone']))
+		$strdestinationphone = 0;
+	
+	// validate callers phone number
+	$strrequestorphone = '1' . $request['requestorphone'];
+	if(!xip_ctc_validPhoneNumber($request['requestorphone']))
+		$strrequestorphone = 0;
+	
+	// create auth string
+	$strmd5hash = md5(variable_get('xip_ctc_sharedSecretCTCBox', 'SimonSays') . $strrequestorphone . $strdestinationphone);
+	
+	// map request parameters and variables to query string
+	$qstring = array();
+	$qstring['RequestorPhone'] = $strrequestorphone;
+	$qstring['RequestorCID'] = substr($strdestinationphone, -10);
+	$qstring['DestinationPhone'] = $strdestinationphone;
+	$qstring['DestinationCID'] = variable_get('xip_ctc_destination_cid', 'PASSTHROUGH');
+	$qstring['PromptSet'] = variable_get('xip_ctc_promptSet', 'XIP1');
+	$qstring['TimeLimit'] = variable_get('xip_ctc_time_limit', '7200');
+	$qstring['PartnerID'] = $request['partnerid'];
+	$qstring['Source'] = $request['source'];
+	$qstring['Auth'] = $strmd5hash;
+	
+	// build string to pass to click to call server
+	$qs = '';
+	foreach($qstring as $key => $val)
+	{
+		$qs .= $key . '=' . filter_xss($val, array()) . '&';
+	}
+	
+	// Create the stream context; make sure the request times out after 3 seconds; avoid hanging for long periods of time
+	$context = stream_context_create(array(
+	    'http' => array(
+	        'timeout' => 3      // Timeout in seconds
+	    )
+	));
+	
+	// Make actual call to click2call server
+	$url = $qs ? variable_get('xip_ctc_url','') . '?' . $qs : variable_get('xip_ctc_url','');
+	$response = @file_get_contents($url,FALSE,$context);
+	
+	return $response;
+}
+
+/************************************
+ * SETTINGS
+ */
+
+/**
+ * settings form
+ */
+function xip_ctc_settingsForm($form, &$form_state)
+{
+	$form['settings'] = array(
+		'#type'=>'fieldset',
+	);
+	$form['settings']['xip_ctc_promptSet'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Prompt Set code'),
+		'#default_value' => variable_get('xip_ctc_promptSet', 'XIP1'),
+		'#description' => t("Prompt Set code."),
+		'#required' => TRUE,
+	);
+	$form['settings']['xip_ctc_sharedSecretCTCBox'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Shared Secret between CTC box and us'),
+		'#default_value' => variable_get('xip_ctc_sharedSecretCTCBox', 'SimonSays'),
+		'#description' => t("Secret string shared between us and the CTC box. Not with clients."),
+		'#required' => TRUE,
+	);
+	$form['settings']['xip_ctc_url'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Call Request URL'),
+		'#default_value' => variable_get('xip_ctc_url', ''),
+		'#size' => 100,
+		'#description' => t("Enter url of call request handler from http:// up to but NOT including '?'."),
+		'#required' => TRUE,
+	);
+	$form['settings']['xip_ctc_destination_cid']=array(
+		'#type'=>'textfield',
+		'#default_value'=>variable_get('xip_ctc_destination_cid', 'PASSTHROUGH'),
+		'#title'=>t('Destination CID'),
+		'#required'=>TRUE,
+	);
+	$form['settings']['xip_ctc_time_limit']=array(
+		'#type'=>'textfield',
+		'#default_value'=>variable_get('xip_ctc_time_limit', '7200'),
+		'#title'=>t('Time Limit'),
+		'#required'=>TRUE,
+	);
+	
+	return system_settings_form($form);
+}
+ 
+
+/************************************
+ * THEME FUNCTIONS
+ */
+
+
+
+/*************************************
+ * HELPER FUNCTIONS
+ */
+
+/**  
+ * Verifies that $phonenumber is a valid ten-digit North American phone number
+ *
+ * @param string $phonenumber
+ * @return boolean Returns boolean FALSE if the phone number is not valid. 
+ */
+function xip_ctc_validPhoneNumber($phonenumber = null) 
+{
+  if(is_null($phonenumber))
+	return false;
+   
+  $phonenumber = trim($phonenumber);
+  
+  // define regular expression
+  $regex = "/
+    \D*           # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    [02-9]\d{2}   # area code (can't start with 1)
+    \D*           # optional separator
+    [02-9]\d{2}   # 3-digit prefix (can't start with 1)    
+    \D*           # optional separator
+    \d{4}         # 4-digit line number
+    \D*           # optional separator
+    \d*           # optional extension
+    \D*           # ignore trailing non-digits
+    /x";
+  
+  // return true if valid, false otherwise
+  return (bool) preg_match($regex, $phonenumber); 
+}

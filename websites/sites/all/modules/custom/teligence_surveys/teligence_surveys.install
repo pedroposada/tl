@@ -1,0 +1,129 @@
+<?php
+
+/**
+ * Implements hook_schema()
+ */
+// function teligence_surveys_schema()
+// {
+	// $schema['teligence_surveys'] = array(
+	    // 'description' => 'Table to store form submissions.', 
+	    // 'fields' => array(
+	      // 'formId' => array(
+	        // 'description' => 'Unique id of the form.', 
+	        // 'type' => 'varchar', 
+	        // 'unsigned' => TRUE, 
+	        // 'not null' => TRUE,
+	      // ), 
+	      // 'formValues' => array(
+	        // 'description' => 'Serialized associative array of submitted values.', 
+	        // 'type' => 'blob', 
+	        // 'not null' => FALSE, 
+	        // 'default' => '',
+	      // ),
+	      // 'formSubmissionTimeStamp' => array( // see: user install created
+	        // 'description' => 'Time stamp of the form submission.', 
+	        // 'type' => 'int',
+	        // 'not null' => true,
+	      // ),
+	    // ), 
+	    // 'primary key' => array('formId'),
+	// );
+	
+  	// return $schema;
+// }
+
+/**
+ * Implements hook_requirements($phase)
+ */
+function teligence_surveys_requirements($phase)
+{
+	$requirements = array();
+	
+	if($phase == 'install')
+	{
+		global $db_url;
+		if(!array_key_exists('surveys', $db_url))
+		{
+			$requirements['teligence_survey'] = array(
+				'title' => "surveys database not found",
+				'description' => "Please add another entry in the \$db_url array in settings.php file pointing to 'surveys' database.",
+				'severity' => REQUIREMENT_ERROR,
+			);
+		}
+		else
+		{
+			$url = parse_url($db_url['surveys']);
+			// Decode url-encoded information in the db connection string
+			$url['user'] = urldecode($url['user']);
+			// Test if database url has a password.
+			$url['pass'] = isset($url['pass']) ? urldecode($url['pass']) : '';
+			$url['host'] = urldecode($url['host']);
+			$url['path'] = urldecode($url['path']);
+			
+			// Allow for non-standard MySQL port.
+			if (isset($url['port']))
+				$url['host'] = $url['host'] . ':' . $url['port'];
+			
+			$connection = @mysql_connect($url['host'], $url['user'], $url['pass'], TRUE, 2);
+			if(!$connection || !mysql_select_db(substr($url['path'], 1)))
+			{
+				$requirements['teligence_survey'] = array(
+					'title' => "surveys database not found",
+					'description' => "The 'surveys' database was not found. Please create a new database called 'surveys'.",
+					'severity' => REQUIREMENT_ERROR,
+				);
+			}
+		}
+	}
+	
+	return $requirements;
+}
+
+/**
+ * Implements hook_install()
+ */
+function teligence_surveys_install()
+{
+	if(db_set_active('surveys'))
+	{
+		if(!db_table_exists('teligence_surveys'))
+		{
+			$sql = "CREATE TABLE  surveys.teligence_surveys (
+					formId VARCHAR( 250 ) NOT NULL ,
+					formValues TEXT NOT NULL ,
+					formSubmissionTimeStamp TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP 
+					) ENGINE = MYISAM ;";
+			if(db_query($sql))
+				drupal_set_message('teligence_surveys table was created.');
+		}
+		db_set_active();
+	}
+	// drupal_install_schema('teligence_surveys');
+	
+	// secure pages
+	$secure  = variable_get('teligence_secure_pages','');
+	$secure .= "\n"."surveys/secure/*";
+	variable_set('teligence_secure_pages',$secure);
+}
+
+/**
+ * Implements hook_uninstall()
+ */
+function teligence_surveys_uninstall()
+{
+	if(db_set_active('surveys'))
+	{
+		if(db_table_exists('teligence_surveys'))
+		{
+			$sql = "DROP TABLE surveys.teligence_surveys";
+			if(db_query($sql))
+				drupal_set_message('teligence_surveys table was deleted.');
+		}
+		db_set_active();
+	}
+	// drupal_uninstall_schema('teligence_surveys');
+	
+	// secure pages
+	$secure  = variable_get('teligence_secure_pages','');
+	variable_set('teligence_secure_pages',str_replace("\n"."surveys/secure/*", "",$secure));
+}

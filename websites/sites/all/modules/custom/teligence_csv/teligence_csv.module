@@ -1,0 +1,132 @@
+<?php
+
+
+/**
+ * DRUPAL HOOKS
+ */
+
+/**
+ * Implementation of hook_cron()
+ */
+function teligence_csv_cron(){
+	
+	switch(variable_get('theme_default', '')){
+		
+		case 'bgk':
+			teligence_csv_bgk();
+		break;
+		
+		case 'teligence2':
+			teligence_csv_teligence();
+		break;
+	}	
+	
+}
+
+/**
+ * helper functions
+ */
+
+/*
+ * create csv file for bgk
+ */
+function teligence_csv_bgk(){
+	//if(user_access('access all views')){
+		
+		
+		//$files = file_scan_directory($directory, "\.csv");
+		$directory = file_directory_temp().'/opt_out_csv/';
+		$dest = $directory.'bgk_optout_'.date('Ymd', time()).'.csv';
+		
+		
+		if((date('D', time()) == 'Mon') && !file_exists($dest)){
+			
+			file_check_directory($directory, 1);
+			
+			$result = db_query(
+				"SELECT profile_values_profile_phone.value AS profile_values_profile_phone_value, users.mail AS users_mail
+		 		FROM users users 
+		 		LEFT JOIN profile_values profile_values_profile_ptc ON users.uid = profile_values_profile_ptc.uid 
+				AND profile_values_profile_ptc.fid = '9'
+		 		LEFT JOIN profile_values profile_values_profile_phone ON users.uid = profile_values_profile_phone.uid 
+				AND profile_values_profile_phone.fid = '6'
+		 		WHERE profile_values_profile_ptc.value = 0"
+			);
+			
+			$data  = '';
+			//$data .= 'PHONE,EMAIL'.chr(13);
+			while($row = db_fetch_array($result)){
+				$account = user_load(array('mail' => $row['users_mail']));
+				
+				if(!$account->profile_csv_export_status){
+					$row['profile_values_profile_phone_value'] = preg_replace('/[^\d]/i', '', $row['profile_values_profile_phone_value']);
+					$data .= implode(',', $row).chr(13).chr(10);
+					$account_array = (array)$account;
+					$account_array['profile_csv_export_status'] = 1;
+					$account = user_save($account, $account_array, 'Profile');
+				}
+			}
+			
+			if($data){
+				$filename = file_save_data($data, $dest, FILE_EXISTS_ERROR);
+				drupal_set_message('filename: '.$filename);
+			}else{
+				drupal_set_message('no new file because no data');
+			}
+			
+			
+		}else{
+			drupal_set_message('file exists or not monday');
+		}
+		
+		//drupal_set_message('<pre>'.print_r($files, true).'</pre>');
+		
+	//}
+}
+
+
+/*
+ * create csv file for teligence
+ */
+function teligence_csv_teligence(){
+	//if(user_access('access all views')){
+		
+		
+		//$files = file_scan_directory($directory, "\.csv");
+		$directory = file_directory_temp().'/opt_out_csv/';
+		$dest = $directory.'teligence_optout_'.date('Ymd', time()).'.csv';
+		
+		
+		if((date('D', time()) == 'Mon') && !file_exists($dest)){
+			
+			file_check_directory($directory, true);
+			//$dest = file_destination($dest, FILE_EXISTS_REPLACE );
+			//@chmod($directory, 0775);
+			
+			$result = db_query(
+				"SELECT data AS email, no FROM webform_submitted_data WHERE nid = 105 AND no = 0"
+			);
+			
+			$data  = '';
+			//$data .= 'PHONE,EMAIL'.chr(13);
+			while($row = db_fetch_array($result)){
+				$data .= ','.$row['email'].chr(13).chr(10);
+				db_query(" UPDATE webform_submitted_data SET no = 1 WHERE nid = 105 AND data = '%s'", $row['email']);
+			}
+			
+			if($data){
+				$filename = file_save_data( $data, $dest, FILE_EXISTS_REPLACE );
+				drupal_set_message('filename: '.$filename);
+			}else{
+				drupal_set_message('no new file because no data');
+			}
+			
+			
+		}else{
+			drupal_set_message('file exists or not monday');
+		}
+		
+		//drupal_set_message('<pre>'.print_r($files, true).'</pre>');
+		
+	//}
+}

@@ -1,0 +1,8 @@
+<?php
+$module_path = drupal_get_path('module', 'teligence_custom_js');
+
+drupal_add_js($module_path . '/teligence_custom_js.js'); // custom JS files
+drupal_add_js($module_path . '/jquery_autotab.js'); // auto tab - jquery
+drupal_add_js($module_path . '/jquery_cycle.js'); // image cycle - jquery
+
+

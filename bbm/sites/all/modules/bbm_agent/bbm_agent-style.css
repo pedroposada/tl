@@ -1,0 +1,240 @@
+.bold {
+	font-weight: bold;
+}
+
+table#header
+{
+	display:none;
+}
+
+tbody 
+{
+	border:none;
+}
+
+div#footer
+{
+	display:none;
+}
+
+#bbm-wrapper .bbm-login-menu 
+{
+	text-align:right;
+}
+
+div#bbm-wrapper div.bbm-login-menu ul#navlist a,
+div#bbm-wrapper div.bbm-login-menu ul#navlist a:link,
+div#bbm-wrapper div.bbm-login-menu ul#navlist a:visited
+{
+	color:#000;
+}
+
+div#bbm-wrapper div.bbm-login-menu ul#navlist a.active 
+{
+	color:#808080;
+}
+
+.clearer
+{
+	clear:both;
+}
+
+.user-name 
+{
+	color:#6f6f6f;
+}
+
+#footer 
+{
+	background-color:#fff;
+}
+
+tr.odd
+{
+	background:#f5f5f5;
+}
+tr.even
+{
+	background:#ebebeb;
+}
+
+/*********************************************
+ ********************** Monitoring Screen ****
+ *********************************************/
+#bbm-agent-monitoring-form label.highlighted, 
+.highlighted
+{
+	color: #008000;
+	font-weight: bold;
+}
+fieldset.recording-stats .form-item 
+{
+	display:none;
+}
+#bbm-agent-monitoring-form .form-item
+{
+	margin-top:0;
+}
+#bbm-agent-monitoring-form .float-radios
+{
+	width:200px;
+	float:left;
+	padding:5px;
+}
+#bbm-agent-auditing-form .form-item .form-radios .form-item,
+#bbm-agent-monitoring-form .form-item .form-radios .form-item 
+{
+	/*float:left;*/
+	padding-left:0;
+}
+#bbm-agent-auditing-form fieldset,
+#bbm-agent-monitoring-form fieldset
+{
+	clear:both;
+}
+
+#bbm-agent-auditing-form .form-item,
+#bbm-agent-monitoring-form .form-item,
+{
+	margin:0;
+}
+
+#bbm-agent-monitoring-form .form-radios
+{
+	margin:3px 0 0 0;
+}
+
+#bbm-agent-monitoring-form .spacer
+{
+	clear:both;
+	height:10px;
+}
+
+
+
+/*****************************************
+ ******************** Auditing Screen ****
+ *****************************************/
+fieldset.left-label label
+{
+	width:150px;
+	float:left;
+}
+#bbm-agent-auditing-form fieldset.left-label label.option
+{
+	float:none;
+}
+table#language-selection-boxes-table,
+table#language-selection-boxes-table th,
+table#language-selection-boxes-table tbody,
+table#language-selection-boxes-table tr,
+table#language-selection-boxes-table td
+{
+	background:none;
+	border:none;
+	padding:0;
+	margin:0;
+}
+
+#edit-mid-wrapper
+{
+	float:left;
+	width:400px;
+	margin:0 auto 0 auto;
+}
+#bbm-agent-auditing-form fieldset.auditing-searchdetails .form-item
+{
+	margin:3px 0 3px 0;
+}
+#auditor-recording-table 
+{
+	width:100%;
+}
+#auditor-recording-table td
+{
+	text-align:left;
+}
+#auditor-recording-table td.field-title-auditor
+{
+	font-weight: bold;
+}
+#bbm-agent-auditing-form .float-radios
+{
+	clear:both;
+	/*background:#e4e4e4;*/
+	margin:0;
+}
+.pager-buttons
+{
+	margin-top:5px;
+}
+.pager-buttons #edit-prev-page
+{
+	float:left;
+}
+.pager-buttons #edit-next-page
+{
+	float:right;
+}
+
+/************************************
+ * USER ADMINISTRATION SCREEN *******
+ ************************************/
+#edit-LanguageCd-wrapper
+{
+	margin: 0;
+}
+
+
+/******
+ * TABLES 
+ */
+table.white-table .form-checkboxes,
+table.white-table .form-radios 
+{
+	margin:0;
+}
+table.white-table,
+table.white-table tr.even, 
+table.white-table tr.odd, 
+table.white-table th 
+{
+	background:#fff;
+	border:none;
+}
+table.white-table .odd,
+table.white-table .even
+{
+	background:#fff;
+}
+
+/***
+ * TABLES SORTER tablesorter
+ */
+table.tablesorter thead tr .header {
+    background-image: url("images/bg.gif");
+    background-position: right center;
+    background-repeat: no-repeat;
+    cursor: pointer;
+}
+table.tablesorter thead tr th, 
+table.tablesorter tfoot tr th {
+    background-color: #E6EEEE;
+    border: 1px solid #FFFFFF;
+    font-size: 8pt;
+    padding: 4px;
+}
+table.tablesorter thead tr .headerSortDown {
+    background-image: url("images/desc.gif");
+}
+table.tablesorter thead tr .headerSortDown, table.tablesorter thead tr .headerSortUp {
+    background-color: #d5e7f0;
+}
+table.tablesorter thead tr .headerSortUp {
+    background-image: url("images/asc.gif");
+}
+table.tablesorter thead tr th.nosort {
+	background-image: none;
+	cursor:auto;
+}
+

@@ -1,0 +1,1063 @@
+$view = new view;
+$view->name = 'ctc_hub_numbers';
+$view->description = '';
+$view->tag = '';
+$view->view_php = '';
+$view->base_table = 'node';
+$view->is_cacheable = FALSE;
+$view->api_version = 2;
+$view->disabled = FALSE; /* Edit this to true to make a default view disabled initially */
+$handler = $view->new_display('default', 'Defaults', 'default');
+$handler->override_option('fields', array(
+  'field_brand_name_value' => array(
+    'label' => 'Brand Name',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_brand_name_value',
+    'table' => 'node_data_field_brand_name',
+    'field' => 'field_brand_name_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_hub_name_value' => array(
+    'label' => 'Hub Name',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_hub_name_value',
+    'table' => 'node_data_field_hub_name',
+    'field' => 'field_hub_name_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_area_code_value' => array(
+    'label' => 'Area Code',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_area_code_value',
+    'table' => 'node_data_field_area_code',
+    'field' => 'field_area_code_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_ctc_number_value' => array(
+    'label' => 'CTC Number',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_ctc_number_value',
+    'table' => 'node_data_field_ctc_number',
+    'field' => 'field_ctc_number_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'delete_node' => array(
+    'label' => 'Options',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'text' => 'Delete',
+    'exclude' => 0,
+    'id' => 'delete_node',
+    'table' => 'node',
+    'field' => 'delete_node',
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('filters', array(
+  'field_brand_name_value' => array(
+    'operator' => 'contains',
+    'value' => '',
+    'group' => '0',
+    'exposed' => TRUE,
+    'expose' => array(
+      'use_operator' => 0,
+      'operator' => 'field_brand_name_value_op',
+      'identifier' => 'field_brand_name_value',
+      'label' => 'Brand Name',
+      'optional' => 1,
+      'remember' => 0,
+    ),
+    'case' => 0,
+    'id' => 'field_brand_name_value',
+    'table' => 'node_data_field_brand_name',
+    'field' => 'field_brand_name_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_hub_name_value' => array(
+    'operator' => 'contains',
+    'value' => '',
+    'group' => '0',
+    'exposed' => TRUE,
+    'expose' => array(
+      'use_operator' => 0,
+      'operator' => 'field_hub_name_value_op',
+      'identifier' => 'field_hub_name_value',
+      'label' => 'Hub Name',
+      'optional' => 1,
+      'remember' => 1,
+    ),
+    'case' => 0,
+    'id' => 'field_hub_name_value',
+    'table' => 'node_data_field_hub_name',
+    'field' => 'field_hub_name_value',
+    'relationship' => 'none',
+  ),
+  'field_area_code_value' => array(
+    'operator' => 'starts',
+    'value' => '',
+    'group' => '0',
+    'exposed' => TRUE,
+    'expose' => array(
+      'use_operator' => 0,
+      'operator' => 'field_area_code_value_op',
+      'identifier' => 'field_area_code_value',
+      'label' => 'Area Code',
+      'optional' => 1,
+      'remember' => 0,
+    ),
+    'case' => 0,
+    'id' => 'field_area_code_value',
+    'table' => 'node_data_field_area_code',
+    'field' => 'field_area_code_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'type' => array(
+    'operator' => 'in',
+    'value' => array(
+      'ctc_hub_number' => 'ctc_hub_number',
+    ),
+    'group' => '0',
+    'exposed' => FALSE,
+    'expose' => array(
+      'operator' => FALSE,
+      'label' => '',
+    ),
+    'id' => 'type',
+    'table' => 'node',
+    'field' => 'type',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('access', array(
+  'type' => 'role',
+  'role' => array(
+    '3' => 3,
+  ),
+));
+$handler->override_option('cache', array(
+  'type' => 'none',
+));
+$handler->override_option('header', '<?php
+
+print drupal_get_form(\'teligence_ctc_hubnumbersimport_form\');
+
+?>
+
+<script type="text/javascript" src="/misc/collapse.js"></script>
+
+<fieldset class="collapsed collapsible">
+<legend>Add new ctc hub number</legend>
+<?php
+global $user;
+
+if( !function_exists("node_object_prepare")) {
+   include_once(drupal_get_path(\'module\', \'node\') . \'/node.pages.inc\');
+}
+$type = \'ctc_hub_number\';
+
+// Initialize settings:
+$node = array(\'uid\' => $user->uid, \'name\' => (isset($user->name) ? $user->name : \'\'), \'type\' => $type, \'language\' => \'\');
+
+print drupal_get_form($type .\'_node_form\', $node);
+?>
+</fieldset>
+
+List of all hub numbers.');
+$handler->override_option('header_format', '3');
+$handler->override_option('header_empty', 1);
+$handler->override_option('items_per_page', 30);
+$handler->override_option('use_pager', '1');
+$handler->override_option('style_plugin', 'table');
+$handler->override_option('style_options', array(
+  'grouping' => '',
+  'override' => 1,
+  'sticky' => 0,
+  'order' => 'asc',
+  'columns' => array(
+    'field_brand_name_value' => 'field_brand_name_value',
+    'field_hub_name_value' => 'field_hub_name_value',
+    'field_area_code_value' => 'field_area_code_value',
+    'field_ctc_number_value' => 'field_ctc_number_value',
+    'delete_node' => 'delete_node',
+  ),
+  'info' => array(
+    'field_brand_name_value' => array(
+      'sortable' => 1,
+      'separator' => '',
+    ),
+    'field_hub_name_value' => array(
+      'sortable' => 1,
+      'separator' => '',
+    ),
+    'field_area_code_value' => array(
+      'sortable' => 1,
+      'separator' => '',
+    ),
+    'field_ctc_number_value' => array(
+      'sortable' => 0,
+      'separator' => '',
+    ),
+    'delete_node' => array(
+      'separator' => '',
+    ),
+  ),
+  'default' => 'field_area_code_value',
+));
+$handler = $view->new_display('page', 'Hubnumbers (Page)', 'page_1');
+$handler->override_option('path', 'ctc/hubnumbers');
+$handler->override_option('menu', array(
+  'type' => 'normal',
+  'title' => 'Hub Numbers',
+  'description' => '',
+  'weight' => '0',
+  'name' => 'menu-hub-manager',
+));
+$handler->override_option('tab_options', array(
+  'type' => 'normal',
+  'title' => 'Hub Numbers',
+  'description' => '',
+  'weight' => '0',
+  'name' => 'menu-hub-manager',
+));
+$handler = $view->new_display('feed', 'Hubnumbers (Csv)', 'feed_1');
+$handler->override_option('fields', array(
+  'field_brand_name_value' => array(
+    'label' => 'Brand Name',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_brand_name_value',
+    'table' => 'node_data_field_brand_name',
+    'field' => 'field_brand_name_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_hub_name_value' => array(
+    'label' => 'Hub Name',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_hub_name_value',
+    'table' => 'node_data_field_hub_name',
+    'field' => 'field_hub_name_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_area_code_value' => array(
+    'label' => 'Area Code',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_area_code_value',
+    'table' => 'node_data_field_area_code',
+    'field' => 'field_area_code_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_ctc_number_value' => array(
+    'label' => 'CTC Number',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'strip_tags' => 0,
+      'html' => 0,
+    ),
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_ctc_number_value',
+    'table' => 'node_data_field_ctc_number',
+    'field' => 'field_ctc_number_value',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('filters', array(
+  'type' => array(
+    'operator' => 'in',
+    'value' => array(
+      'ctc_hub_number' => 'ctc_hub_number',
+    ),
+    'group' => '0',
+    'exposed' => FALSE,
+    'expose' => array(
+      'operator' => FALSE,
+      'label' => '',
+    ),
+    'id' => 'type',
+    'table' => 'node',
+    'field' => 'type',
+    'override' => array(
+      'button' => 'Override',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('items_per_page', 0);
+$handler->override_option('link_display', 'feed_1');
+$handler->override_option('style_plugin', 'views_csv');
+$handler->override_option('style_options', array(
+  'mission_description' => FALSE,
+  'description' => '',
+  'filename' => 'ctc-hubnumbers.csv',
+  'seperator' => ',',
+  'quote' => 1,
+  'header' => 1,
+));
+$handler->override_option('row_plugin', '');
+$handler->override_option('path', 'ctc/hubnumbers/csv');
+$handler->override_option('menu', array(
+  'type' => 'none',
+  'title' => '',
+  'description' => '',
+  'weight' => 0,
+  'name' => 'navigation',
+));
+$handler->override_option('tab_options', array(
+  'type' => 'none',
+  'title' => '',
+  'description' => '',
+  'weight' => 0,
+  'name' => 'navigation',
+));
+$handler->override_option('displays', array(
+  'page_1' => 'page_1',
+  'default' => 0,
+));
+$handler->override_option('sitename_title', FALSE);
+$handler = $view->new_display('page', 'Missing area codes (Page)', 'page_2');
+$handler->override_option('fields', array(
+  'field_promt_set_value' => array(
+    'label' => 'Prompt Set',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_promt_set_value',
+    'table' => 'node_data_field_promt_set',
+    'field' => 'field_promt_set_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_missing_area_code_value' => array(
+    'label' => 'Missing Area Code',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_missing_area_code_value',
+    'table' => 'node_data_field_missing_area_code',
+    'field' => 'field_missing_area_code_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_attempts_value' => array(
+    'label' => 'Number of attempts',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_attempts_value',
+    'table' => 'node_data_field_attempts',
+    'field' => 'field_attempts_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'changed' => array(
+    'label' => 'Last Attempt',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'date_format' => 'large',
+    'custom_date_format' => '',
+    'exclude' => 0,
+    'id' => 'changed',
+    'table' => 'node',
+    'field' => 'changed',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'delete_node' => array(
+    'label' => '',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 1,
+    'empty_zero' => 0,
+    'text' => '',
+    'exclude' => 0,
+    'id' => 'delete_node',
+    'table' => 'node',
+    'field' => 'delete_node',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('sorts', array(
+  'field_attempts_value' => array(
+    'order' => 'DESC',
+    'delta' => -1,
+    'id' => 'field_attempts_value',
+    'table' => 'node_data_field_attempts',
+    'field' => 'field_attempts_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('filters', array(
+  'type' => array(
+    'operator' => 'in',
+    'value' => array(
+      'missing_area_code' => 'missing_area_code',
+    ),
+    'group' => '0',
+    'exposed' => FALSE,
+    'expose' => array(
+      'operator' => FALSE,
+      'label' => '',
+    ),
+    'id' => 'type',
+    'table' => 'node',
+    'field' => 'type',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'changed' => array(
+    'operator' => '<=',
+    'value' => array(
+      'type' => 'date',
+      'value' => '',
+      'min' => '',
+      'max' => '',
+    ),
+    'group' => '0',
+    'exposed' => TRUE,
+    'expose' => array(
+      'use_operator' => 1,
+      'operator' => 'changed_op',
+      'identifier' => 'changed',
+      'label' => 'Attempt on (CCYY-MM-DD HH:MM:SS)',
+      'optional' => 1,
+      'remember' => 1,
+    ),
+    'id' => 'changed',
+    'table' => 'node',
+    'field' => 'changed',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('title', 'Missing area codes');
+$handler->override_option('header', '');
+$handler->override_option('header_empty', 0);
+$handler->override_option('path', 'ctc/hubnumbers/missing');
+$handler->override_option('menu', array(
+  'type' => 'normal',
+  'title' => 'Missing Area Codes',
+  'description' => '',
+  'weight' => '0',
+  'name' => 'menu-hub-manager',
+));
+$handler->override_option('tab_options', array(
+  'type' => 'none',
+  'title' => '',
+  'description' => '',
+  'weight' => 0,
+  'name' => 'navigation',
+));
+$handler = $view->new_display('feed', 'Missing area codes (Csv)', 'feed_2');
+$handler->override_option('fields', array(
+  'field_promt_set_value' => array(
+    'label' => 'Prompt Set',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_promt_set_value',
+    'table' => 'node_data_field_promt_set',
+    'field' => 'field_promt_set_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_missing_area_code_value' => array(
+    'label' => 'Missing Area Code',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_missing_area_code_value',
+    'table' => 'node_data_field_missing_area_code',
+    'field' => 'field_missing_area_code_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'field_attempts_value' => array(
+    'label' => 'Number of attempts',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'link_to_node' => 0,
+    'label_type' => 'widget',
+    'format' => 'default',
+    'multiple' => array(
+      'group' => TRUE,
+      'multiple_number' => '',
+      'multiple_from' => '',
+      'multiple_reversed' => FALSE,
+    ),
+    'exclude' => 0,
+    'id' => 'field_attempts_value',
+    'table' => 'node_data_field_attempts',
+    'field' => 'field_attempts_value',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+  'changed' => array(
+    'label' => 'Last Attempt',
+    'alter' => array(
+      'alter_text' => 0,
+      'text' => '',
+      'make_link' => 0,
+      'path' => '',
+      'link_class' => '',
+      'alt' => '',
+      'prefix' => '',
+      'suffix' => '',
+      'target' => '',
+      'help' => '',
+      'trim' => 0,
+      'max_length' => '',
+      'word_boundary' => 1,
+      'ellipsis' => 1,
+      'html' => 0,
+      'strip_tags' => 0,
+    ),
+    'empty' => '',
+    'hide_empty' => 0,
+    'empty_zero' => 0,
+    'date_format' => 'large',
+    'custom_date_format' => '',
+    'exclude' => 0,
+    'id' => 'changed',
+    'table' => 'node',
+    'field' => 'changed',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('sorts', array(
+  'changed' => array(
+    'order' => 'DESC',
+    'granularity' => 'second',
+    'id' => 'changed',
+    'table' => 'node',
+    'field' => 'changed',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('filters', array(
+  'type' => array(
+    'operator' => 'in',
+    'value' => array(
+      'missing_area_code' => 'missing_area_code',
+    ),
+    'group' => '0',
+    'exposed' => FALSE,
+    'expose' => array(
+      'operator' => FALSE,
+      'label' => '',
+    ),
+    'id' => 'type',
+    'table' => 'node',
+    'field' => 'type',
+    'override' => array(
+      'button' => 'Use default',
+    ),
+    'relationship' => 'none',
+  ),
+));
+$handler->override_option('items_per_page', 0);
+$handler->override_option('link_display', 'page_2');
+$handler->override_option('style_plugin', 'views_csv');
+$handler->override_option('style_options', array(
+  'mission_description' => FALSE,
+  'description' => '',
+  'filename' => 'ctc-missing-areacodes.csv',
+  'seperator' => ',',
+  'quote' => 1,
+  'header' => 1,
+));
+$handler->override_option('row_plugin', '');
+$handler->override_option('path', 'ctc/hubnumbers/missing/csv');
+$handler->override_option('menu', array(
+  'type' => 'none',
+  'title' => '',
+  'description' => '',
+  'weight' => 0,
+  'name' => 'navigation',
+));
+$handler->override_option('tab_options', array(
+  'type' => 'none',
+  'title' => '',
+  'description' => '',
+  'weight' => 0,
+  'name' => 'navigation',
+));
+$handler->override_option('displays', array(
+  'page_2' => 'page_2',
+  'default' => 0,
+  'page_1' => 0,
+));
+$handler->override_option('sitename_title', FALSE);

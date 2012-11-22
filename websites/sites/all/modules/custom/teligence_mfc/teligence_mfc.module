@@ -1,0 +1,231 @@
+<?php
+
+/**
+ * DRUPAL MODULES
+ */
+
+/**
+ * Implementation of hook_menu()
+ */
+function teligence_mfc_menu()
+{
+	$items['free/index.jsp'] = array(
+		'title' => 'Local Number Lookup',
+		'page callback' => 'theme',
+		'page arguments' => array('teligence_mfc_lookup'),
+		'access callback'=>true,
+    	'type'=>MENU_CALLBACK,
+	);
+	$items['admin/mfc'] = array(
+		'title' => 'Teligence MFC',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_mfc_settings_form'),
+		'access arguments'=>array('administer content'),
+	);
+	$items['admin/mfc/settings'] = array(
+		'title' => 'Settings',
+    	'type'=>MENU_DEFAULT_LOCAL_TASK,
+	);
+	
+	return $items;
+}
+
+
+/**
+ * Implementation of MODULENAME_preprocess_page()
+ */
+function teligence_mfc_preprocess_page(&$vars)
+{
+	if(module_exists('path'))
+	{
+		$alias = drupal_get_path_alias($_GET['q']);
+		switch($alias)
+		{
+			case 'free/index.jsp':
+			case 'safety_tips.jsp':
+			case 'about/terms_of_service.jsp':
+			case 'about/privacy.jsp':
+			case 'about/security.jsp':
+				
+				/**
+				 * set main template
+				 */
+				$vars['template_file'] = 'page-mfc';
+				
+				/**
+				 * set css
+				 */
+				$css = $vars['css'];
+				$css['all']['theme'] = array();
+				$css['all']['module'][drupal_get_path('module', 'teligence_mfc') . '/styles.css'] = 1;
+				$vars['styles'] = drupal_get_css($css);
+				
+				/**
+				 * bottom links navigation
+				 */
+				$query = request_uri();
+				$bottom_links = array(l('Home', 'free/index.jsp'));
+				foreach((array)teligence_mfc_links() as $k => $v)
+				{
+					$options = array();
+					if(strstr($query, $v))
+					{
+						$options['attributes'] = array('class' => 'active');
+					}
+					$bottom_links[] = l($k, $v, $options);
+				}
+				$vars['bottom_links'] = implode(' | ', $bottom_links);
+				
+				// $vars['debug'] = '<pre>'.check_plain(print_r($css, true)).'</pre>';				
+
+			break;
+		}
+	}
+}
+
+/**
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function teligence_mfc_preprocess_teligence_mfc_lookup(&$vars)
+{
+	$vars['lookUpForm'] = drupal_get_form('teligence_cart_aera_code_form', 6);
+}
+
+/**
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function teligence_mfc_preprocess_teligence_mfc_lookup_form(&$vars)
+{
+	
+}
+
+
+/**
+ * Implementation of hook_theme()
+ */
+function teligence_mfc_theme($existing, $type, $theme, $path)
+{
+	return array (
+	    'page'=> array (
+	    	'template'=> 'page-mfc',
+	    ),
+	    'teligence_mfc_lookup'=> array (
+	    	'template'=> 'page-mfc-lookup',
+	    ),
+	    'teligence_mfc_lookup_form'=> array (
+	    	'arguments' => array('form' => null),
+	    	'template'=> 'page-mfc-lookup-form',
+	    ),
+    );
+}
+
+
+/**
+ * Implementation of hook_form_alter()
+ */
+function teligence_mfc_form_alter(&$form, &$form_state, $form_id)
+{
+	if(module_exists('path') && $form_id == 'teligence_cart_aera_code_form')
+	{
+		$alias = drupal_get_path_alias($_GET['q']);
+		switch($alias)
+		{
+			case 'free/index.jsp':
+			case 'safety_tips.jsp':
+			case 'about/terms_of_service.jsp':
+			case 'about/privacy.jsp':
+			case 'about/security.jsp':
+				
+				$form['#theme'] = 'teligence_mfc_lookup_form';
+				
+				// $form = $vars['form'];
+				// $form['local_number']['area_code']['#title'] = t('Enter Your Area Code');
+				// $vars['form'] = $form;
+				
+				/**
+				 * set main template
+				 */
+				// $vars['template_file'] = 'page-mfc-lookup-form';
+				
+				// $vars['form'] = '<pre>'.check_plain(print_r($vars, true)).'</pre>';
+			break;
+		}
+	}
+}
+ 
+
+/**************************************
+ * HELPER FUNCTIONS
+ */
+
+/**
+ * settings form
+ */
+function teligence_mfc_settings_form($form_state)
+{
+	$form = array();
+	$form['aliases'] = array(
+		'#type' => 'fieldset',
+		'#title' => 'Link system paths to MFC pages',
+		'#tree' => true,
+		'#description' => t('Mens Free Chatline. Please configure the paths to the pages here. 
+				Pages will use custom stripped out template located at !path.
+				Copy template to theme folder to override it. ', array('!path' => drupal_get_path('module', 'teligence_mfc') .'/page-mfc.tpl.php'))
+	);
+	
+	global $base_root;
+	foreach((array)teligence_mfc_links() as $k => $v)
+	{
+		$alias = db_result(db_query("SELECT src FROM {url_alias} WHERE dst LIKE '%%%s%%'", $v));
+		$form['aliases'][$k]['src'] = array(
+			'#type' => 'textfield',
+			'#title' => $k,
+			'#field_prefix' => $base_root . '/',
+			'#field_suffix' => t('point to !dest', array('!dest' => $v)),
+			'#default_value' => $alias,
+			'#description' => t('Enter drupal system path.'),
+			'#required' => true,
+		);
+		$form['aliases'][$k]['pid'] = array(
+			'#type' => 'hidden',
+			'#default_value' => $alias,
+		);
+		$form['aliases'][$k]['dst'] = array(
+			'#type' => 'hidden',
+			'#default_value' => $v,
+		);
+	}
+	
+	$form['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+	);
+	
+	return $form;
+}
+
+/**
+ * submit settings form
+ */
+function teligence_mfc_settings_form_submit($form, &$form_state)
+{
+	foreach($form_state['values']['aliases'] as $k => $v)
+	{
+		path_set_alias($v['src'], $v['dst']);
+	}
+}
+
+
+/**
+ * hard coded links
+ */
+function teligence_mfc_links()
+{
+	return array(
+		// 'Home' => 'free/index.jsp',
+		'Safety Tips' => 'safety_tips.jsp',
+		'Terms of Use' => 'about/terms_of_service.jsp',
+		'Privacy Policy' => 'about/privacy.jsp',
+		'Security' => 'about/security.jsp',
+	);
+}

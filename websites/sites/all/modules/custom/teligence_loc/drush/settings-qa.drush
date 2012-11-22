@@ -1,0 +1,33 @@
+#!/usr/bin/env drush php-script
+
+<?php
+
+if(module_exists('teligence_loc'))
+{
+	// extract arguments
+	$args = array();
+	array_walk($_SERVER['argv'],function(&$item,$key) use(&$args){
+		if(strstr($item,'=')){
+			list($name,$val) = explode('=',$item,2);
+			$args[$name] = $val;
+		}
+	});
+	// var_dump($args);
+
+	// set variables	
+	$variables = array(
+		'teligence_loc_brand_id'=>1,
+		'teligence_loc_tollfree_costumer_access'=>"1-800-916-1090",
+		'teligence_loc_debug'=>0,
+		'teligence_loc_wsdl_localization'=>'http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/Localization.svc?wsdl',
+		'teligence_loc_cache_wsdl'=>1,
+		'teligence_loc_flavors'=>'BLACK' . "\n" . 'LATIN' . "\n" . 'WHITE',
+	);
+	array_walk($variables,function(&$val,$key) use(&$args){
+		if(isset($args[$key]) && !is_null($args[$key]))
+			$val = $args[$key];
+		
+		variable_set($key, $val);
+		drupal_set_message("$key was set to: " . variable_get($key,''));
+	});
+}

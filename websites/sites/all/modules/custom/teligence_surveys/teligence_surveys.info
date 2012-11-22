@@ -1,0 +1,7 @@
+; $Id$ 
+name = "Teligence Surveys"
+description = "Custom made forms that will collect data to surveys database; this module requires an external database called \"surveys\" to be created in advance."
+package = "Teligence"
+version = "6.0"
+core = "6.x"
+dependencies[] = teligence_secure

@@ -1,0 +1,7 @@
+; $Id$ 
+name = "PayPal - Automated Integration of Websites"
+description = "ep:nbi:200781 - http://wiki.teligence.net/doku.php?id=ep:nbi:200781"
+package = "Teligence"
+core = 6.x
+version = "6.x-1.0"
+core = "6.x"

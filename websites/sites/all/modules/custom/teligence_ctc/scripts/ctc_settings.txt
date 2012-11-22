@@ -1,0 +1,332 @@
+$settings = array();
+
+$settings["teligence_ctc_destination_cid"] = 'PASSTHROUGH';
+
+$settings["teligence_ctc_en_message_failure"] = 'CTC Failure Message: *';
+
+$settings["teligence_ctc_en_message_success"] = 'CTC Success Message: *';
+
+$settings["teligence_ctc_es_message_failure"] = 'CTC Mensaje Fallido: *';
+
+$settings["teligence_ctc_es_message_success"] = 'CTC Mensaje Exitoso: *';
+
+$settings["teligence_ctc_requestor_cid"] = '0000000000';
+
+$settings["teligence_ctc_time_limit"] = '600';
+
+$settings["teligence_ctc_tracking_foe"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+<!-- Google Code for Click to Call Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1034688015;
+var google_conversion_language = \"en\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"wsoJCM3AnwEQj6yw7QM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1034688015/?label=wsoJCM3AnwEQj6yw7QM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760686;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760686.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>';
+
+$settings["teligence_ctc_tracking_fon"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+<!-- Google Code for Click to Call Submit Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1046320792;
+var google_conversion_language = \"en\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"B-w7CLSmowEQmK328gM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1046320792/?label=B-w7CLSmowEQmK328gM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760686;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760686.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>
+
+';
+
+$settings["teligence_ctc_tracking_iml"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+
+<!-- Google Code for Click to Call Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1048295332;
+var google_conversion_language = \"en_US\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"-Gy7CMq3kgEQpO_u8wM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1048295332/?label=-Gy7CMq3kgEQpO_u8wM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760708;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760708.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>';
+
+$settings["teligence_ctc_tracking_imls"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+
+<!-- Google Code for Click to Call Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1035571292;
+var google_conversion_language = \"en\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"oGnDCMTIqwEQ3KDm7QM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1035571292/?label=oGnDCMTIqwEQ3KDm7QM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+
+
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760708;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760708.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>';
+
+$settings["teligence_ctc_tracking_lbl"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>';
+
+$settings["teligence_ctc_tracking_linkconnector"] = '<!-- <img border=\"0\" src=\"https://linkconnector.com/tm.php?lc=000000002591&oid=&amt=\" /> //-->';
+
+$settings["teligence_ctc_tracking_llk"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+
+<!-- Google Code for Click to Call Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1051012803;
+var google_conversion_language = \"en_US\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"nwlpCM3XgwEQw92U9QM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1051012803/?label=nwlpCM3XgwEQw92U9QM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760714;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760714.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>';
+
+$settings["teligence_ctc_tracking_myyearbook"] = '<img src=\"http://cpa.myyearbook.com/track/3017/simple/pixel.gif\" width=\"1\" height=\"1\" />
+<img src=\"http://cpa.myyearbook.com/track/3176/simple/pixel.gif\" width=\"1\" height=\"1\" />
+<img src=\"http://cpa.myyearbook.com/track/3194/simple/pixel.gif\" width=\"1\" height=\"1\" />';
+
+$settings["teligence_ctc_tracking_rdl"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+<!-- Google Code for Click to Call Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1037825225;
+var google_conversion_language = \"en_US\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"hz0UCJebvQEQyenv7gM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1037825225/?label=hz0UCJebvQEQyenv7gM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+
+
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760711;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760711.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>';
+
+$settings["teligence_ctc_tracking_rules"] = 'if($form_state[\'values\'][\'partnerID\'] == \'myb\')
+{
+$form_state[\'storage\'][\'values\'][\'append\'] .= variable_get(\'teligence_ctc_tracking_myyearbook\', \'\');
+}
+
+$form_state[\'storage\'][\'values\'][\'append\'] .= variable_get(\'teligence_ctc_tracking_linkconnector\', \'\');';
+
+$settings["teligence_ctc_tracking_vbl"] = '<SCRIPT language=\"JavaScript\" type=\"text/javascript\">
+<!-- Yahoo! Inc.
+window.ysm_customData = new Object();
+window.ysm_customData.conversion = \"transId=,currency=,amount=\";
+var ysm_accountid  = \"12NHGMMR5Q3R3TEGP1NDKA7745K\";
+document.write(\"<SCR\" + \"IPT language=\'JavaScript\' type=\'text/javascript\' \" 
++ \"SRC=//\" + \"srv3.wa.marketingsolutions.yahoo.com\" + \"/script/ScriptServlet\" + \"?aid=\" + ysm_accountid 
++ \"></SCR\" + \"IPT>\");
+// -->
+</SCRIPT>
+
+<!-- Google Code for Click to Call Conversion Page -->
+<script type=\"text/javascript\">
+<!--
+var google_conversion_id = 1035438109;
+var google_conversion_language = \"en_US\";
+var google_conversion_format = \"3\";
+var google_conversion_color = \"ffffff\";
+var google_conversion_label = \"T6KsCLuGpgEQnZDe7QM\";
+var google_conversion_value = 0;
+//-->
+</script>
+<script type=\"text/javascript\" src=\"http://www.googleadservices.com/pagead/conversion.js\">
+</script>
+<noscript>
+<div style=\"display:inline;\">
+<img height=\"1\" width=\"1\" style=\"border-style:none;\" alt=\"\" src=\"http://www.googleadservices.com/pagead/conversion/1035438109/?label=T6KsCLuGpgEQnZDe7QM&amp;guid=ON&amp;script=0\"/>
+</div>
+</noscript>
+
+
+<SCRIPT>
+ microsoft_adcenterconversion_domainid = 760712;
+ microsoft_adcenterconversion_cp = 5050;
+ microsoft_adcenterconversionparams = new Array();
+ microsoft_adcenterconversionparams[0] = \"dedup=1\";
+</SCRIPT>
+<SCRIPT SRC=\"http://0.r.msn.com/scripts/microsoft_adcenterconversion.js\"></SCRIPT>
+<NOSCRIPT><IMG width=1 height=1 SRC=\"http://760712.r.msn.com/?type=1&cp=1&dedup=1\"/></NOSCRIPT><a href=\"http://advertising.microsoft.com/MSNadCenter/LearningCenter/adtracker.asp\" target=\"_blank\">::adCenter::</a>';
+
+$settings["teligence_ctc_url"] = 'http://voice1.f8.teligence.net/callmenow/CallMeNow.php';
+

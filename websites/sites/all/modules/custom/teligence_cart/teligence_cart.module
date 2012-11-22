@@ -1,0 +1,4843 @@
+<?php
+
+/***************************************
+ * ********** DRUPAL HOOKS *********** *
+ ***************************************/
+
+/**
+ * Implemetation of hook_form_alter()
+ */
+function teligence_cart_form_alter(&$form, &$form_state, $form_id)
+{
+	/**
+	 * make middle or up package selected by default
+	 */
+	/**
+	 * ASU
+	 */
+	if($form_id == 'teligence_cart_select_package_form' && $form_state['storage']['step'] == 3)
+	{
+		$middle = (int)ceil(count((array)$form['packages']['#options'])/2);
+		$c = 0;
+		foreach((array)$form['packages']['#options'] as $k => $v)
+		{
+			$c++;
+			if($c == $middle)
+			{
+				$form['packages']['#default_value'] = $k;
+			}
+		}
+	}
+	/**
+	 * SR
+	 */
+	if($form_id == 'teligence_cart_add_time_form' && $form_state['storage']['step'] == 1)
+	{
+		$middle = (int)ceil(count((array)$form['packages_group']['packages']['#options'])/2);
+		$c = 0;
+		foreach((array)$form['packages_group']['packages']['#options'] as $k => $v)
+		{
+			$c++;
+			if($c == $middle)
+			{
+				$form['packages_group']['packages']['#default_value'] = $k;
+			}
+		}
+	}
+}
+ 
+/**
+ * Implementation of hook_init()
+ */
+function teligence_cart_init()
+{
+	/*
+	if(user_access('access logged in pages') && !user_access('administer nodes'))
+	{
+		if(strstr(request_uri(), '/user') || strstr(request_uri(), '/admin'))
+		{
+			//drupal_set_message('Bad request');
+			//drupal_goto('cart/add-time');
+		}
+	}
+	*/
+}
+
+/**
+ * Implementation of hook_user()
+ */
+function teligence_cart_user($op, &$edit, &$account, $category)
+{
+	if($op == "login")
+	{
+		if(user_access('access logged in pages') && !user_access('administer nodes'))
+		{
+			drupal_goto('cart/logout');
+		}
+	}
+}
+
+ /**
+ * Implementation of hook_perm()
+ */
+function teligence_cart_perm()
+{
+    return array (
+	    'administer cart settings',
+	    'change web password',
+	    'access login page',
+		'access logout page',
+	    'access logged in pages',
+		'access buy now',
+	    //'active web account',
+	    'access email campaign',
+    );
+}
+
+/*
+ * Implementation of hook_menu_alter(&$items)
+ */
+function teligence_cart_menu_alter(&$items)
+{
+	$items['user']['access callback'] = 'teligence_cart_user_page_access';
+	//$items['user']['access arguments'] = array();
+	
+	//drupal_set_message('<pre>'.print_r($items, true).'</pre>');
+}
+
+/*
+ * user page access callback
+ */
+function teligence_cart_user_page_access()
+{
+	if(user_access('access logged in pages') && !user_access('administer nodes'))
+	{
+		return false;
+	}
+	
+	return true; 
+}
+
+/**
+ * Implementation of hook_menu()
+ */
+function teligence_cart_menu()
+{
+
+    $items['admin/cart'] = array (
+	    'title'=>'Teligence Cart',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('teligence_cart_settings_form'),
+	    'access arguments'=> array ('administer cart settings'),
+    );
+
+    $items['admin/cart/settings'] = array (
+	    'title'=>'Settings',
+	    'type'=>MENU_DEFAULT_LOCAL_TASK,
+    	'weight'=> -10,
+    );
+
+    $items['admin/cart/test'] = array (
+	    'title'=>'Test Webservice',
+	    'description'=>'This page shows print_r results from call to method GetLocalAccessNumber in Provisioning.svc?WSDL',
+	    'page callback'=>'teligence_cart_test_page',
+	    'access arguments'=> array ('administer cart settings'),
+	    'type'=>MENU_LOCAL_TASK,
+    	'weight'=> -9,
+    );
+    
+    $items['admin/cart/errors'] = array (
+	    'title'=>'Messages to user',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array('teligence_cart_errors_form'),
+	    'access arguments'=> array ('administer cart settings'),
+	    'type'=>MENU_LOCAL_TASK,
+	    'file' => 'inc/teligence_cart_errors.inc',
+    	'weight'=> 10,
+    );
+    $items['admin/cart/settings-export'] = array(
+		'title' => 'Export Settings',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_cart_settings_export'),
+		'access arguments' => array('administer cart settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 11,
+	);
+	$items['admin/cart/settings-import'] = array(
+		'title' => 'Import Settings',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_cart_settings_import'),
+		'access arguments' => array('administer cart settings'),
+		'type'=>MENU_LOCAL_TASK,
+		'weight'=> 12,
+	);
+    
+    /**********************************************/
+
+    $items['cart/buy'] = array (
+    'title'=>'Buy Now',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_select_package_form'),
+    'access arguments'=>array('access buy now'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>-1,
+    );
+	
+	$items['cart/add-time'] = array (
+    'title'=>'Add Time',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_add_time_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>0,
+    );
+
+    $items['cart/signup'] = array (
+    'title'=>'Sign Up For Web Account',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_signup_web_form'),
+    'access arguments'=> array ('access login page'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>1,
+    );
+    
+    $items['cart/email-campaign'] = array (
+    'title'=>'Email Campaign',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_email_campaign'),
+    'access arguments'=> array ('access email campaign'),
+    'menu_name'=>'menu-teligence-cart',
+    'file' => 'inc/teligence_cart_email_campaign.inc',
+    'weight'=>1,
+    );
+
+    $items['cart/login'] = array (
+    'title'=>'Login',
+    'page callback'=>'teligence_cart_login_page',
+    'access arguments'=> array ('access login page'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>2,
+    );
+    
+    $items['cart/forgot-password'] = array (
+    'title'=>'Forgot Password',
+    'page callback'=>'teligence_cart_forgot_password_page',
+    'access arguments'=> array ('access login page'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>3,
+    );
+	
+	$items['cart/logout'] = array (
+	'title' => 'Logout',
+    'page callback'=>'teligence_cart_logout_page',
+    'access arguments'=> array ('access logout page'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>100,
+    );
+
+    $items['cart/getlocalnumber'] = array (
+    'title'=>'Get Local Access Number',
+    'page callback'=>'teligence_cart_get_local_number',
+    'access callback'=>true,
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>3,
+    );
+
+    $items['cart/change-web-password'] = array (
+    'title'=>'Change Web Password',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_change_web_password_form'),
+    'access arguments'=> array ('change web password'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>4,
+    );
+	
+	$items['cart/order-history'] = array (
+    'title'=>'View Order History',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_view_order_history_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>5,
+    );
+	$tokens = teligence_cart_tokens();
+	$items['cart/ivr-passcode'] = array (
+    'title'=>'Change '. $tokens['[brand-name]'] .' Passcode',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_change_ivr_passcode_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>6,
+    );
+	
+	$items['cart/billing-address'] = array (
+    'title'=>'Edit Billing Address',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_edit_billing_address_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>7,
+    );
+	
+	$items['cart/add-card'] = array (
+    'title'=>'Manage Credit Cards',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_add_new_cc_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>8,
+    );
+	
+	$items['cart/show-balance'] = array (
+    'title'=>'Show Current Balance',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_show_balance_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>9,
+    );
+	
+	$items['cart/contact-perm'] = array (
+    'title'=>'Manage Contact Permissions',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_contact_perm_form'),
+    'access arguments'=> array ('access logged in pages'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>10,
+    );
+	$items['cart/find-packages'] = array (
+    'title'=>'Find Packages',
+    'page callback'=>'drupal_get_form',
+    'page arguments'=> array ('teligence_cart_find_packages'),
+    'access arguments'=> array ('access login page'),
+    'menu_name'=>'menu-teligence-cart',
+    'weight'=>11,
+    );
+
+    $items['cart/validate/%'] = array (
+    'page callback'=>'teligence_cart_validate_web_account',
+    'page arguments'=> array (2),
+    'access callback'=>true,
+    'type'=>MENU_CALLBACK,
+    );
+    
+    $items['cart/validate-campaign/%teligence_cart_campaign'] = array (
+    'page callback'=>'teligence_cart_validate_email_campaign_account',
+    'page arguments'=> array (2),
+    'access callback'=>true,
+    'file' => 'inc/teligence_cart_email_campaign.inc',
+    'type'=>MENU_CALLBACK,
+    );
+
+    $items['cart/password-reset/%'] = array (
+    'title'=>'Password Reset',
+    'page callback'=>'teligence_cart_reset_id',
+    'page arguments'=> array (2),
+    'access callback'=>true,
+    'type'=>MENU_CALLBACK,
+    );
+    
+    $items['cart/state'] = array (
+    'page callback'=>'teligence_cart_populate_state',
+    'access callback'=>true,
+    'type'=>MENU_CALLBACK,
+    );
+    
+    $items['cart/blank'] = array (
+    'page callback'=>'teligence_cart_blank_page',
+    'access callback'=>true,
+    'type'=>MENU_CALLBACK,
+    );
+    
+    $items['cart/delete-cc/%'] = array (
+    'page callback'=>'teligence_cart_deactivate_payment',
+    'page arguments'=>array(2),
+    'access arguments'=> array ('access logged in pages'),
+    'type'=>MENU_CALLBACK,
+    );
+    
+    $items['cart/email-campaign/success'] = array (
+    'page callback'=>'teligence_cart_emailcampaign_success',
+    'access callback'=> true,
+    'type'=>MENU_CALLBACK,
+    'file' => 'inc/teligence_cart_email_campaign.inc',
+    );
+
+    return $items;
+}
+
+/*
+ * arguments loader implementation
+ */
+/*
+ * campaign url params loader
+ */
+function teligence_cart_campaign_load($csv = null)
+{
+	
+	if(drupal_strlen($csv))
+	{
+		watchdog('emailcampaign', 'url params received by teligence_cart_campaign_load 
+			 ---------------------------------- <pre>'.print_r($csv, true).'</pre>');
+
+		$csv = explode(',', urldecode($csv));
+		
+		return $csv;
+	}
+	else
+	{
+		return false;
+	}
+
+}
+
+/**
+ * Implementation of hook_theme()
+ */
+function teligence_cart_theme($existing, $type, $theme, $path)
+{
+    return array (
+	    'teligence_cart_autosignup'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    	'template'=>'teligence-cart-autosignup',
+	    	'function'=>'theme_teligence_cart_autosignup',
+	    ),
+	    'teligence_cart_summary'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+		'teligence_cart_edit_cc'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+	    'teligence_cart_packages'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+	    'teligence_cart_packages_stand_alone'=> array (
+	    	'arguments'=> array ('form'=>null),
+	    ),
+		'teligence_cart_select_expiration_date' => array(
+			'arguments' => array('form'=>null),
+		),
+		'teligence_cart_account' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_cart_credit_cards' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_cart_order_history' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_cart_current_balance' => array(
+			'arguments' => array('form' => null),
+		),
+		'teligence_cart_local_number_lookup' => array(
+			'arguments' => array('rows' => null),
+		),
+		'teligence_cart_selection_boxes' => array(
+			'arguments' => array('form' => null),
+		),
+    );
+}
+
+
+/**
+ * Implementation of hook_mail()
+ */
+function teligence_cart_mail($key, & $message, $params)
+{
+
+   	// make all emails HTML
+	$message['headers']['Content-Type'] = 'text/html; charset=UTF-8; format=flowed';
+	
+	switch($key)
+    {
+        case 	'validate':
+            $message['subject'] = teligence_cart_token_replacer(variable_get('teligence_cart_validate_account_subject','Welcome to [brand-name]: please validate email'),$params['tokens']);
+            $message['body'] = variable_get('teligence_cart_validate_account', '');
+            $message['body'] = teligence_cart_token_replacer($message['body'], $params['tokens']);
+            break;
+            
+        case 'email_campaign':
+            $message['subject'] = teligence_cart_token_replacer(variable_get('teligence_cart_email_campaign_subject','[brand-name] on-line account confirmation'),$params['tokens']);
+            $message['body'] = variable_get('teligence_cart_email_campaign', '');
+            $message['body'] = teligence_cart_token_replacer($message['body'], $params['tokens']);
+			break;
+			
+        case 'forgot':
+            $message['subject'] = teligence_cart_token_replacer(variable_get('teligence_cart_forgot_pass_email_subject', '[brand-name] account: reset your password'),$params['tokens']);
+            $message['body'] = variable_get('teligence_cart_forgot_pass_email', '');
+            $message['body'] = teligence_cart_token_replacer($message['body'], $params['tokens']);
+            break;
+        /*    
+        case 'asu':
+            $message['subject'] = t('Sign Up Successful');
+            $message['body'] = variable_get('teligence_cart_asu', '');
+            $message['body'] = teligence_cart_token_replacer($message['body'], $params['tokens']);
+        	break;
+        */
+            	
+        case 'time_purchase':
+            $message['subject'] = teligence_cart_token_replacer(variable_get('teligence_cart_asu_subject', 'Thank you from [brand-name]: purchase confirmation'),$params['tokens']);
+            $message['body'] = variable_get('teligence_cart_asu', '');
+            $message['body'] = teligence_cart_token_replacer($message['body'], $params['tokens']);
+        	break;
+        	
+        case 'signup':
+            $message['subject'] = teligence_cart_token_replacer(variable_get('teligence_cart_sr_subject', 'Thank you from [brand-name]: signup confirmation'),$params['tokens']);
+            $message['body'] = variable_get('teligence_cart_sr', '');     
+            $message['body'] = teligence_cart_token_replacer($message['body'], $params['tokens']);
+            break;
+
+        default:
+            break;
+    }
+	
+	//$message['body'] = nl2br ( $message['body'] );
+
+}
+
+/**
+ * Implementation of hook_mail_alter()
+ */
+function teligence_cart_mail_alter(&$message){
+	
+	// make all emails HTML
+	//$message['headers']['Content-Type'] = 'text/html; charset=UTF-8; format=flowed';
+	
+}
+
+/**
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function teligence_cart_preprocess_page(&$variables) {
+	
+	switch (request_uri()) {
+		case '/cart/add-card':
+		case '/cart/add-time':
+		case '/cart/getlocalnumber':
+		case '/cart/change-web-password':
+		case '/cart/order-history':
+		case '/cart/ivr-passcode':
+		//case '/cart/billing-address':
+		case '/cart/buy':
+		case '/cart/login':
+		case '/cart/signup':
+		case '/cart/contact-perm':
+		case '/cart/find-packages':
+
+			$scripts = drupal_add_js();
+			//drupal_set_message('<pre>'.print_r($scripts,true).'</pre>');
+			
+			if(!isset($scripts['core']['misc/jquery.js']))
+			{
+				$scripts['core']['misc/jquery.js'] = array('cache' => 1, 'preprocess' => 1);
+			}
+			
+			if(!isset($scripts['module'][drupal_get_path('module', 'teligence_cart') . '/js/jquery.button.js']))
+			{
+				$scripts['module'][drupal_get_path('module', 'teligence_cart') . '/js/jquery.button.js'] = array('cache' => 1, 'preprocess' => 1);
+			}
+			$variables['scripts'] = drupal_get_js('header', $scripts);
+			
+			//$variables['form'] = drupal_render($form);
+			//$variables['template_files'][] = 'teligence-cart-account';
+			//$variables['form'] = 
+		
+		break;
+		
+		default:
+			//drupal_set_message('<pre>'.check_plain(print_r($variables,true)).'</pre>');
+		break;
+	}
+	//$variables['emsMemberId'] = $_SESSION['emsMembershipId'];
+}
+
+/**
+ * Implementation of hook_block()
+ */
+function teligence_cart_block($op = 'list', $delta = 0, $edit = array()) {
+	
+	switch ($op) {
+		case 'list':
+			$blocks['memberships'] = array(
+				'info' => t('Cart EMS Memberships'),
+			);
+			return $blocks;
+		break;
+		
+		case 'view':
+			switch ($delta) {
+				case 'memberships':
+					$block = array(
+						//'subject' => t('Title of block #1'),
+	          			'content' => drupal_get_form('teligence_cart_memberships_form')
+					);
+					return $block;
+				break;
+			}
+		break;
+	}
+}
+
+/********************************************
+ ********* HELPER FUNCTIONS *****************
+ ********************************************/
+
+
+/*
+ * settings form EXPORT
+ */
+function teligence_cart_settings_export($form_state)
+{
+	$output = '$settings = array();' . "\n\r";
+	$result = db_query('SELECT name FROM {variable} WHERE name LIKE "%teligence_cart%" OR name LIKE "%wsdl_url%"');
+	while($name = db_fetch_array($result))
+	{
+		$output .= '$settings["' . $name['name'] . '"] = \'' . addslashes (variable_get($name['name'],'')) . '\';' . "\n\r";
+	}
+	
+	$form['settings_export'] = array(
+		'#type' => 'textarea',
+		'#title' => t('CART Export all settings'),
+		'#default_value' => $output,
+		'#description' => t("Copy this script. It contains all the settings for teligence_cart module"),
+		'#rows' => 50,
+  	);
+  	
+  	return $form;
+}
+
+/*
+ * settings form IMPORT
+ */
+function teligence_cart_settings_import($form_state)
+{
+	$form['settings_import'] = array(
+		'#type' => 'fieldset',
+	);	
+
+	$form['settings_import']['script'] = array(
+		'#type' => 'textarea',
+		'#title' => t('Paste CART settings here'),
+		'#description' => t("Paste script here."),
+		'#required' => true,
+		'#rows' => 20,
+		'#description' => t("Don't wrap in php tags."),
+  	);
+
+	$form['settings_import']['button'] = array(
+		'#type' => 'submit',
+		'#value' => t('Import Settings'),
+	);
+	
+	return $form;
+}
+
+
+/*
+ * submit form for settings import
+ */
+function teligence_cart_settings_import_submit($form, &$form_state)
+{
+	//$output = drupal_eval($form_state['values']['script']);
+	$settings = null;	
+
+	//extract variables from pasted script text
+	@eval($form_state['values']['script']);
+	
+	// Preliminary error trapping, must have valid arrays to work with.
+  	if ( !isset($settings) || !is_array($settings) ) 
+  	{
+    	form_set_error('script', t('The import data is not valid import text.'));
+    	return;
+	}
+	
+	foreach((array)$settings as $key => $value)
+	{
+		variable_set($key, stripslashes ($value));
+	}
+	
+	drupal_set_message(t("Settings successfully saved. !count variables saved.", array('!count' => count($settings))));
+	//drupal_set_message('<pre>'.print_r($name, true).'</pre>');
+}
+
+/*
+ * show blank page to show messages better
+ */
+function teligence_cart_blank_page(){
+	return '';
+}
+
+/*
+ * populate state/province drop down select box
+ */
+function teligence_cart_populate_state(){
+	
+	$options = _teligence_cart_file_to_options(drupal_get_path('module', 'teligence_cart').'/states/'.$_REQUEST['country'].'.txt');
+	
+	foreach((array)$options as $value){
+		$output .= '<option value="'. check_plain($value) .'">'. check_plain($value) .'</option>';
+	}
+	
+	print drupal_json(array('content'=>$output));
+	exit;
+}
+
+/*
+ * contact permissions form
+ */
+function teligence_cart_contact_perm_form($form_state) {
+	
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['perm_group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Manage Contact Permissions'),
+	);
+	
+	global $user;
+	$address = teligence_cart_edit_billing_address_form($form_state);
+	$params = new stdClass ();
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+	$params->ani = teligence_cart_format_phonenumber($address['group']['Ani']['#value']);
+	$params->email = trim($user->mail);
+
+	$result = teligence_cart_soap_call($params, 'GetPermissionToContact', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->GetPermissionToContactResult->ResponseCode) {
+	
+		case 'Success':
+			//$address = teligence_cart_edit_billing_address_form($form_state);
+			$form['perm_group']['channels'] = array(
+			  '#type' => 'checkboxes', 
+			  '#title' => t('Contact Channels'),
+			  '#options' => array(
+			    'sms' => t('Contact me via SMS to !ani', array('!ani' => $address['group']['Ani']['#value'])), 
+			    'email' => t('Contact me via Email to !email', array('!email' => $user->mail)),
+				//'telemarketing' => t('I want to receive Telemarketing'),
+				//'email_notifications' => t('I want to receive Email Notifications'),
+				//'ani_notifications' => t('I want to receive Phone Notifications'),
+			  ),
+			  '#description' => t('Allows us to contact you via the channels selected above.'),
+			  '#default_value' => array(
+			  	$result['result']->GetPermissionToContactResult->EmailPtc ? 'email' : '',
+			  	$result['result']->GetPermissionToContactResult->AniSmsPtc ? 'sms' : '',
+				//$result['result']->GetPermissionToContact->aniTelemarketingPtc ? 'telemarketing' : '',
+				//$result['result']->GetPermissionToContact->aniNotificationsPtc ? 'ani_notifications' : '',
+				//$result['result']->GetPermissionToContact->emailNotificationsPtc ? 'email_notifications' : '',
+			  ),
+			);
+			$form_state['storage']['email'] = $user->mail;
+			$form_state['storage']['ani'] = $address['group']['Ani']['#value'];
+			
+			$form['submit'] = array(
+				'#type' => 'submit',
+				'#value' => t('Update Status'),
+			);
+			
+		break;
+		case 'EmptyDbRecordset':
+			//$address = teligence_cart_edit_billing_address_form($form_state);
+			if(empty($address['group']['Ani']['#value']))
+			{
+				drupal_set_message(t('To update your contact permissions we need your home address first.'));
+				drupal_goto('cart/billing-address', 'destination=cart/contact-perm');
+			}
+			
+			// set contact permissions to defaults
+			$perms['storage']['ani'] = $address['group']['Ani']['#default_value'];
+			$perms['storage']['email'] = $user->mail;
+			$perms['values']['channels']['sms'] = true;
+			$perms['values']['channels']['email'] = true;
+			$perms['storage']['EmptyDbRecordset'] = true;
+			teligence_cart_contact_perm_form_submit($form, $perms);
+		default:
+			drupal_set_message($result['debug']);
+			
+			$form['perm_group']['error'] = array(
+				'#type' => 'item',
+				'#value' => t('No information available at the moment. Please try again later.'),
+			);
+		break;
+	}
+	
+	return $form;
+}
+
+/*
+ * contact permissions form submit
+ */
+function teligence_cart_contact_perm_form_submit($form, &$form_state) 
+{	
+	$params = new stdClass ();
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+	$params->ani = teligence_cart_format_phonenumber($form_state['storage']['ani']);
+	$params->email = trim($form_state['storage']['email']);
+	$params->aniTelemarketingPtc = $params->aniNotificationsPtc = true;
+	$params->emailNotificationsPtc = true;
+	$params->aniSmsPtc = ($form_state['values']['channels']['sms'] ? true : false);
+	$params->emailPtc = ($form_state['values']['channels']['email'] ? true : false);
+	
+	$result = teligence_cart_soap_call($params, 'UpdatePermissionToContact', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->UpdatePermissionToContactResult->ResponseCode) {
+		case 'Success':
+			if(!$form_state['storage']['EmptyDbRecordset'])
+			{
+				drupal_set_message(t('!link were set successfully.', array('!link' => l('Contact Permissions', 'cart/contact-perm'))));
+			}
+		break;
+		
+		default:
+			drupal_set_message($result['debug']);
+		break;
+	}
+	
+	//drupal_goto('cart/blank');
+	//drupal_set_message('<pre>'.check_plain(print_r($form_state, true)).'</pre>');
+}
+
+/*
+ * set permissions to contact
+ */
+function teligence_cart_set_contact_perms($params)
+{
+	
+}
+
+/*
+ * add time form
+ */
+function teligence_cart_add_time_form($form_state) 
+{	
+	$moresteps = true;
+	$nextlabel = t('Next >>');
+	$form['#theme'] = 'teligence_cart_autosignup';
+	$form['#pre_render'] = array('teligence_cart_autosignup_per_render');
+	
+	if ( empty($form_state['storage']['step']))
+    {
+        // we are coming in without a step, so default to step 1
+        $form_state['storage']['step'] = 1;
+    }
+	
+	//don't show back button on first tab
+    if ($form_state['storage']['step'] > 1)
+    {
+        $form['previous'] = array (
+        	'#type'=>'submit',
+        	'#value'=> t('<< Previous'),
+			'#weight' => 101,
+        );
+    }
+	
+	// steps indicator for user
+	$step_indicator[] = array('data' => t('Step 1'));
+	$step_indicator[] = array('data' => t('Step 2'));
+	
+	$step_indicator[$form_state['storage']['step']-1]['class'] = 'active';
+	
+	$rows[] = $step_indicator;
+	
+	$form['step_indicator'] = array(
+		'#type' => 'fieldset',
+		'#description' => theme('table', array('', '') ,$rows, array('class' => 'step-indicator')),
+	);
+
+    switch($form_state['storage']['step'])
+    {
+    case 1:
+	default:
+		
+		$form['page_title'] = array('#type' => 'hidden', '#value' => t('Add Time'));
+	
+		$form['packages_group'] = array(
+			'#type' => 'fieldset',
+		);
+		
+		$params = new stdClass ();			
+	    //$params->emsBrandId = $_SESSION['EmsBrandId'];
+		//$params->marketId = $_SESSION['MarketId'];
+		//$params->packageType = 'SpeedyRenewal';
+		$params->emsMembershipId = $_SESSION['emsMembershipId'];
+	    $result = teligence_cart_soap_call($params, 'GetPackagesByMembership', variable_get('wsdl_url', ''));
+		$options = array();
+		switch ($result['result']->GetPackagesByMembershipResult->ResponseCode) 
+		{
+			case 'Success':				
+				if(!is_array($result['result']->GetPackagesByMembershipResult->WebPackages->WebPackage)): 
+					$WebPackages = array($result['result']->GetPackagesByMembershipResult->WebPackages->WebPackage);
+				else:
+					$WebPackages = $result['result']->GetPackagesByMembershipResult->WebPackages->WebPackage;
+				endif;
+				foreach ((array)$WebPackages as $WebPackage) 
+				{
+					$options[$WebPackage->PackageId] = array (
+	        			'minutes'=> $WebPackage->Minutes,
+						'currency' => $WebPackage->Currency,
+						'price' => $WebPackage->PackagePriceCents,
+	        		);
+				}
+				$form['packages_group']['packages'] = array (
+	    			'#type'=> 'radios',
+	    			'#options'=>$options,
+					'#required' => true,
+	    			'#theme'=> 'teligence_cart_packages',
+	    			'#default_value'=>$form_state['storage']['values'][1]['packages'] ? $form_state['storage']['values'][1]['packages'] : key($options),
+	    		);
+			break;
+			default:
+				if(variable_get('teligence_cart_debug_mode', 0))
+					watchdog('teligence_cart',$result['debug']);
+				
+				$form['packages_group']['packages'] = array (
+					'#type' => 'item',
+					'#title' => t('Message'),
+					'#value' => 'Cannot load information at the moment. Please try again later.',
+				);
+				$moresteps = false;
+			break;
+		}
+		
+		$params = new stdClass ();
+	    $params->emsMembershipId = $_SESSION['emsMembershipId'];
+		$result = teligence_cart_soap_call($params, 'GetPaymethods', variable_get('wsdl_url_2', ''));
+		switch ($result['result']->GetPaymethodsResult->ResponseCode) 
+		{
+			case 'Success':
+				
+				$form['cc_list'] = array(
+					'#type' => 'fieldset',
+					'#title' => t('Credit Cards on File'),
+					'#theme'=> 'teligence_cart_credit_cards',
+					'#pre_render' => array('teligence_cart_credit_cards_pre_render'),
+				);
+				
+	
+				if(!is_array($result['result']->GetPaymethodsResult->WebPaymethods->WebPaymethod)): 
+					$WebPaymethods = array($result['result']->GetPaymethodsResult->WebPaymethods->WebPaymethod);
+				else:
+					$WebPaymethods = $result['result']->GetPaymethodsResult->WebPaymethods->WebPaymethod;
+				endif;
+				$options = '';
+				foreach ((array)$WebPaymethods as $WebPaymethod) 
+				{	
+					$options[$WebPaymethod->PaymethodId] = $WebPaymethod->PaymethodId;
+					
+					$form['cc_list']['items'][$WebPaymethod->PaymethodId]['cc_number'] = array(
+						'#value' => $WebPaymethod->AccountNo,
+					);	
+					$form['cc_list']['items'][$WebPaymethod->PaymethodId]['cc_type'] = array(
+						'#value' => $WebPaymethod->PaymethodType,
+					);
+					$form['cc_list']['items'][$WebPaymethod->PaymethodId]['cc_expire'] = array(
+						'#value' => substr($WebPaymethod->ExpiryDateMMYY,0,2).'/'.substr($WebPaymethod->ExpiryDateMMYY,2,2),
+					);	
+					$form['cc_list']['items'][$WebPaymethod->PaymethodId]['cc_csc_'.$WebPaymethod->PaymethodId] = array(
+						'#type'=>'textfield',
+						'#size' => 4,
+        				'#maxlength' => 4,
+						'#default_value' => $form_state['storage']['values'][1]['cc_csc_'.$WebPaymethod->PaymethodId],
+					);
+				}
+				$form['cc_list']['creditcards'] = array(
+					'#type' => 'radios',
+					'#options' => $options,
+					'#default_value' => $form_state['storage']['values'][1]['creditcards'],
+					'#suffix' => l(t('Add new credit card'), 'cart/add-card', array('query' => array('destination' => 'cart/add-time'))),
+				);
+				
+			break;
+			
+			default:
+				//$form = array();
+				
+				//drupal_set_message(t("You don't have any active credit cards in our records."), 'warning');
+				//drupal_set_message(l(t('Add a new credit card.'), 'cart/add-card'), 'warning');
+				//drupal_set_message(t('Or call customer service: @csnumber', array('@csnumber' => variable_get('teligence_cart_customer_service_phone', ''))), 'warning');
+
+				
+				$form['nocreditcards'] = array(
+					'#type' => 'item',
+					'#value' => l(t('Add new credit card'), 'cart/add-card', array('query' => array('destination' => 'cart/add-time'))),
+				);
+				
+				if(variable_get('teligence_cart_debug_mode', 0))
+					watchdog('teligence_cart',$result['debug']);
+				
+				//return $form;
+				$moresteps = false;
+			break;
+		}
+		
+		
+		
+	break;
+	
+	case 2:
+		$nextlabel = t('Place Order');
+		$form['page_title'] = array('#type' => 'hidden', '#value' => t('Confirm Order Information'));		
+				
+		// ORDER CONFIRMATION SCREEN
+		$form['order_confirm'] = array (
+        	'#type'=>'fieldset',
+        	'#title'=>t('Confirm Order Information'),
+			'#attributes' => array('class' => 'left-label'),
+        );
+		
+		
+		$form['order_confirm']['package_value'] = array (
+        	'#type'=>'item',
+        	'#title'=>t('Package Value'),
+        	'#value'=>'$'.number_format((int)$form_state['storage']['values'][1]['PackageAmountCents']/100, 2),	
+        );
+        
+        if((int)$form_state['storage']['values'][1]['PromoAmountCents']):
+			$form['order_confirm']['promo_amount'] = array (
+	        	'#type'=>'item',
+	        	'#title'=>t('Promo Amount'),
+	        	'#value'=>'$'.number_format((int)$form_state['storage']['values'][1]['PromoAmountCents']/100, 2),	
+	        );
+        endif;
+        
+        if((int)$form_state['storage']['values'][1]['TaxesAmountCents']):
+			$form['order_confirm']['taxes_amount'] = array (
+	        	'#type'=>'item',
+	        	'#title'=>t('Tax'),
+	        	'#value'=>'$'.number_format((int)$form_state['storage']['values'][1]['TaxesAmountCents']/100, 2),	
+	        );
+        else:
+	        $form['order_confirm']['taxes_amount'] = array (
+	            '#type'=>'item',
+	            '#title'=>t('Tax'),
+	            '#value'=>'Tax Included',	
+	        );
+        endif;
+        
+		$form['order_confirm']['package_minutes'] = array (
+        	'#type'=>'item',
+        	'#title'=>t('Package Minutes'),
+        	'#value'=>$form_state['storage']['values'][1]['PackageMinutes'],	
+        );
+        
+		if((int)$form_state['storage']['values'][1]['PromoMinutes']):
+	        $form['order_confirm']['promo_minutes'] = array (
+	        	'#type'=>'item',
+	        	'#title'=>t('Promo Minutes'),
+	        	'#value'=>$form_state['storage']['values'][1]['PromoMinutes'],	
+	        );
+        endif;
+        
+        $form['order_confirm']['order_total'] = array (
+        	'#type'=>'item',
+        	'#title'=>t('Order Total'),
+        	'#value'=>'$'.number_format((int)$form_state['storage']['values'][1]['TotalAmountCents']/100, 2),
+        );
+        
+		$form['order_confirm']['cc_csc'] = array (
+        	'#type'=>'item',
+        	'#title'=>t('Credit Card Security Code'),
+        	'#description'=>t('For your safety and security, Teligence requires that you enter your ').
+					l('Card Security Code (CSC) <a name="#csc" />','',
+						array('html' => true, 'fragment' => '#csc', 'external' => TRUE, 'attributes' => array(
+							'alt' => 'For MasterCard or Visa, it\'s the last three digits in the signature area on the back of your card. For American Express, it\'s the four digits on the front of the card.', 
+							'title' => 'For MasterCard or Visa, it\'s the last three digits in the signature area on the back of your card. For American Express, it\'s the four digits on the front of the card.')
+						)),
+        	'#size'=>4,
+        	'#maxlength'=>4,
+        	'#value'=>$form_state['storage']['values'][1]['cc_csc_'.$form_state['storage']['values'][1]['creditcards']],
+        );		
+	break;
+	
+	}
+	
+	//show next button not all the time
+	if($moresteps){
+		$form['next'] = array (
+    		'#type'=>'submit',
+    		'#value'=>$nextlabel,
+			'#weight' => 100,
+    	);
+	}
+
+	
+	return $form;
+}
+
+/*
+ * submit add time form
+ */
+function teligence_cart_add_time_form_submit($form, & $form_state) {
+	
+	//save the values for the current step into the storage array
+    $form_state['storage']['values'][$form_state['storage']['step']] = $form_state['values'];
+	
+	// validate auto signup
+	if($form_state['storage']['step'] == 1 && $form_state['clicked_button']['#id'] == 'edit-next')
+	{	
+		unset($_SESSION['guid']);
+		
+		$params = new stdClass ();
+		$params->emsMembershipId = $_SESSION['emsMembershipId'];
+		$params->packageId = $form_state['storage']['values'][1]['packages'];
+		$params->paymethodId = $form_state['storage']['values'][1]['creditcards'];
+		
+		$result = teligence_cart_soap_call($params, 'ValidateSrPurchase', variable_get('wsdl_url_5', ''));
+		
+		switch ($result['result']->ValidateSrPurchaseResult->ResponseCode) {
+			case 'Success':
+				$form_state['storage']['values'][$form_state['storage']['step']]['orderId'] = $result['result']->ValidateSrPurchaseResult->OrderId;
+				$form_state['storage']['values'][$form_state['storage']['step']]['TotalAmountCents'] = $result['result']->ValidateSrPurchaseResult->TotalAmountCents;
+				$form_state['storage']['values'][$form_state['storage']['step']]['PackageAmountCents'] = $result['result']->ValidateSrPurchaseResult->PackageAmountCents;
+				$form_state['storage']['values'][$form_state['storage']['step']]['PromoAmountCents'] = $result['result']->ValidateSrPurchaseResult->PromoAmountCents;
+				$form_state['storage']['values'][$form_state['storage']['step']]['TaxesAmountCents'] = $result['result']->ValidateSrPurchaseResult->TaxesAmountCents;
+				$form_state['storage']['values'][$form_state['storage']['step']]['PackageMinutes'] = $result['result']->ValidateSrPurchaseResult->PackageMinutes;
+				$form_state['storage']['values'][$form_state['storage']['step']]['PromoMinutes'] = $result['result']->ValidateSrPurchaseResult->PromoMinutes;
+			break;
+			default:
+				drupal_set_message($result['debug']);
+				drupal_set_message(t('We were not able to perform this operation.'), 'warning');
+				drupal_set_message(variable_get('teligence_cart_error_call_cs', ''), 'warning');
+				$form_state['storage']['step'] -= 2;
+			break;
+		}
+		
+	}
+	
+	// process payment
+	if($form_state['storage']['step'] == 2 && $form_state['clicked_button']['#id'] == 'edit-next')
+	{
+		$params = new stdClass ();
+		$params->orderId = $form_state['storage']['values'][1]['orderId'];
+		$params->paymethodId = $form_state['storage']['values'][1]['creditcards'];
+		$params->cvn = $form_state['storage']['values'][1]['cc_csc_'.$form_state['storage']['values'][1]['creditcards']];		
+		$result = teligence_cart_soap_call($params, 'ProcessPayment', variable_get('wsdl_url_5', ''));
+		
+		switch($result['result']->ProcessPaymentResult->ResponseCode)
+		{
+			case 'Success':
+
+                global $user;
+				$tokens['tokens']['[minutes-purchased]'] = $form['order_confirm']['package_minutes']['#value'];
+				$tokens['tokens']['[package-price]'] = $form['order_confirm']['package_value']['#value'];
+				$tokens['tokens']['[package-tax]'] = $form['order_confirm']['taxes_amount']['#value'];
+				$tokens['tokens']['[package-total-price]'] = $form['order_confirm']['order_total']['#value'];
+				$tokens['tokens']['[promo-minutes]'] = $form['order_confirm']['promo_amount']['#value'];
+                drupal_mail('teligence_cart', 'time_purchase', $user->mail, language_default(), $tokens);
+				drupal_set_message(t("Your transaction was processed successfully. Please check your email for more details."));
+				watchdog("CART SR", "<pre>" . print_r($tokens, true) . "</pre>");
+				drupal_goto('cart/show-balance');
+				
+			break;
+			
+			case 'RtmFailure':
+			case 'TechnicalError':
+			case 'AuthorizationTechnicalIssue':
+				drupal_set_message(t('We are having technical issues. Sorry for the inconvenience. Please try again later.'), 'warning');
+			case 'AuthorizationDeclined':
+				drupal_set_message(t("Your transaction couldn't be processed."), 'warning');
+				drupal_set_message(variable_get('teligence_cart_error_call_cs',''), 'warning');
+				drupal_set_message($result['debug']);				
+				return;
+			break;
+			
+			default:
+				$form_state['storage']['step'] = 0;
+				drupal_set_message($result['debug']);
+				return;
+			break;
+		}
+	}
+	
+	//tell Drupal we are redrawing the same form
+    $form_state['rebuild'] = TRUE;
+
+    // check the button that was clicked and action the step change
+    if ($form_state['clicked_button']['#id'] == 'edit-previous')
+    {
+        $form_state['storage']['step']--;
+    } 
+	elseif ($form_state['clicked_button']['#id'] == 'edit-next')
+    {
+        $form_state['storage']['step']++;
+    }
+    
+    //drupal_set_message('<pre>'.print_r($form_state['storage'], true).'</pre>');
+}
+
+/*
+ * add time form validate
+ */
+function teligence_cart_add_time_form_validate($form, & $form_state) {
+	
+	if($form_state['storage']['step'] == 1 && $form_state['clicked_button']['#id'] == 'edit-next')
+	{
+		if(!is_numeric($form_state['values']['creditcards']))
+		{
+			form_set_error('creditcards', 'Please select a credit card');
+		}
+		elseif($form_state['storage']['step'] == 1 && $form_state['clicked_button']['#id'] == 'edit-next')
+		{	
+			if(strlen($form_state['values']['cc_csc_'.$form_state['values']['creditcards']]) < 3 
+			|| !is_numeric($form_state['values']['cc_csc_'.$form_state['values']['creditcards']]))
+			{
+				form_set_error('cc_csc_'.$form_state['values']['creditcards'], variable_get('teligence_cart_error_invalid_csc', ''));
+			}	
+		};	
+	}
+	
+	//drupal_set_message('<pre>'.print_r($form_state['values'], true).'</pre>');
+}
+
+/*
+ * show current blance
+ */
+function teligence_cart_show_balance_form($form_state){
+	
+	$form['#theme'] = 'teligence_cart_autosignup';
+
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Current Balance'),
+		'#theme' => 'teligence_cart_current_balance',
+	);
+	
+	return $form;
+}
+
+/*
+ * ems memeberships form used in block
+ */
+function teligence_cart_memberships_form($form_state) {
+	
+	$form['#theme'] = 'teligence_cart_autosignup';
+
+	foreach((array)$_SESSION['emsMemberships'] as $key => $value){
+		$options[$key] = $value->IvrMembershipNumber;
+		//$localaccessnumbers[] = $value->LocalAccessNumbers->LocalAccessNumber->City.' '.$value->LocalAccessNumbers->LocalAccessNumber->Ani;
+	}
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Memebership Selection'),
+	);
+	
+	/*
+	$form['group']['localaccessnumbers'] = array(
+		'#type' => 'item',
+		'#title' => t('Local Access Numbers'),
+		'#value' => theme('item_list', $localaccessnumbers),
+	);
+	*/
+	
+	//$options = drupal_map_assoc(array_keys((array)$_SESSION['emsMemberships']));
+	$tokens = teligence_cart_tokens();
+	$form['group']['emsMembershipIds'] = array(
+		'#type' => 'select',
+		'#title' => t('@brand Membership Number', array('@brand' => $tokens['[brand-name]'])),
+		'#default_value' => $_SESSION['emsMembershipId'],
+		'#options' => (array)$options,
+		'#disabled' => (count($options) == 1 ? true : false),
+		'#description' => t('This number and your passcode: [%passcode] will be requested when calling.', array('%passcode' => $_SESSION['IvrPasscode'])),
+	);
+	
+	if(count($options) > 1){
+		$form['group']['select'] = array(
+			'#type' => 'submit',
+			'#value' => t('Select'),
+		);	
+	}
+	/*
+	$form['group']['ivrpasscode'] = array(
+		'#type' => 'item',
+		'#title' => t('Your IVR Passcode'),
+		'#value' => $_SESSION['IvrPasscode'],
+		'#description' => t('This passcode will be requested when calling.'),
+	);
+	*/
+	
+	//drupal_rebuild_theme_registry();
+	return $form;
+}
+
+/*
+ * ems membership selection form submit
+ */
+function teligence_cart_memberships_form_submit($form, &$form_state) 
+{	
+	//set session variables
+	$_SESSION['IvrPasscode'] = $_SESSION['emsMemberships'][$form_state['values']['emsMembershipIds']]->IvrPasscode;
+	$_SESSION['EmsBrandId'] = $_SESSION['emsMemberships'][$form_state['values']['emsMembershipIds']]->EmsBrandId;
+	$_SESSION['MarketId'] = $_SESSION['emsMemberships'][$form_state['values']['emsMembershipIds']]->MarketId;
+	$_SESSION['emsMembershipId'] = $form_state['values']['emsMembershipIds'];
+	
+	//drupal_set_message('<pre>'.print_r($form_state,true).'</pre>');
+	drupal_set_message(t('Membership number !num was selected', array('!num' => $_SESSION['emsMemberships'][$_SESSION['emsMembershipId']]->IvrMembershipNumber)));
+	
+}
+
+/*
+ * membership set session variables to first item in collection
+ */
+function teligence_cart_memberships_set_session_vars($emsMemberId) {
+	
+	$params = new stdClass ();
+    $params->emsMemberId = $emsMemberId;
+	$params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+
+    $result = teligence_cart_soap_call($params, 'GetActiveMemberships', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->GetActiveMembershipsResult->ResponseCode) 
+	{	
+		case 'Success':
+			if(!is_array($result['result']->GetActiveMembershipsResult->WebActiveMemberships->WebActiveMembership)): 
+				$WebActiveMemberships = array($result['result']->GetActiveMembershipsResult->WebActiveMemberships->WebActiveMembership);
+			else:
+				$WebActiveMemberships = $result['result']->GetActiveMembershipsResult->WebActiveMemberships->WebActiveMembership;
+			endif;
+			foreach ($WebActiveMemberships as $WebActiveMembership) 
+			{
+				$_SESSION['emsMemberships'][$WebActiveMembership->EmsMembershipId] = $WebActiveMembership;
+			}
+			
+			$options = array_keys((array)$_SESSION['emsMemberships']);
+			$_SESSION['IvrPasscode'] = $_SESSION['emsMemberships'][$options[0]]->IvrPasscode;
+			$_SESSION['EmsBrandId'] = $_SESSION['emsMemberships'][$options[0]]->EmsBrandId;
+			$_SESSION['MarketId'] = $_SESSION['emsMemberships'][$options[0]]->MarketId;
+			$_SESSION['emsMembershipId'] = $options[0];
+			
+			//drupal_set_message('<pre>'.print_r($result['result'],true).'</pre>');
+			return true;
+			//drupal_set_message($result['debug']);
+			//drupal_set_message('<pre>'.print_r($_SESSION['emsMemberId'],true).'</pre>');
+			//drupal_set_message('<pre>'.print_r($_SESSION['emsMemberships'],true).'</pre>');
+			//drupal_set_message('<pre>'.print_r($form_state['storage']['emsMembershipIds'],true).'</pre>');
+		break;
+		
+		default:			
+			drupal_set_message($result['debug']);
+			
+			return false;
+		break;
+	}
+}
+
+/*
+ * add new credit card form
+ */
+function teligence_cart_add_new_cc_form($form_state) 
+{	
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['cc_info'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Credit Card Info'),
+		'#weight' => 100,
+		'#attributes' => array('class' => 'left-label'),
+	);
+	
+	$form['cc_info']['cc_number'] = array (
+    	'#type'=>'textfield',
+    	'#title'=>t('Card #'),
+    	'#size'=>20,
+    	'#maxlength'=>16,
+    );
+
+	$form['cc_info']['cc_expiration'] = array (
+    	'#type'=>'date',
+    	'#title'=>t('Expiration Date'),
+    	'#description'=>t('Enter expiration date on card'),
+		'#theme' => 'teligence_cart_select_expiration_date',
+    );
+	
+	$form['cc_info']['add'] = array(
+		'#type' => 'submit',
+		'#value' => t('Add'),
+		'#submit' => array('teligence_cart_add_new_cc_form_submit'),
+	);
+	
+	$params = new stdClass ();
+    $params->emsMembershipId = $_SESSION['emsMembershipId'];
+	
+	$result = teligence_cart_soap_call($params, 'GetPaymethods', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->GetPaymethodsResult->ResponseCode) 
+	{
+		case 'Success':
+			
+			$form['cc_list'] = array(
+				'#type' => 'fieldset',
+				'#title' => t('Credit Cards on File'),
+				'#tree' => true,
+				'#theme' => 'teligence_cart_edit_cc',
+			);
+
+			if(!is_array($result['result']->GetPaymethodsResult->WebPaymethods->WebPaymethod)): 
+				$WebPaymethods = array($result['result']->GetPaymethodsResult->WebPaymethods->WebPaymethod);
+			else:
+				$WebPaymethods = $result['result']->GetPaymethodsResult->WebPaymethods->WebPaymethod;
+			endif;
+			foreach ((array)$WebPaymethods as $WebPaymethod) {
+				$form['cc_list']['items'][$WebPaymethod->PaymethodId]['PaymethodId'] = array(
+					'#type' => 'hidden',
+					'#value'=> $WebPaymethod->PaymethodId,
+				);
+				$form['cc_list']['items'][$WebPaymethod->PaymethodId]['PaymethodType'] = array(
+					'#type' => 'hidden',
+					'#value'=> $WebPaymethod->PaymethodType,
+				);
+				$form['cc_list']['items'][$WebPaymethod->PaymethodId]['AccountNo'] = array(
+					'#type' => 'hidden',
+					'#value'=> $WebPaymethod->AccountNo,
+				);
+				$form['cc_list']['items'][$WebPaymethod->PaymethodId]['IsExpired'] = array(
+					'#type' => 'hidden',
+					'#value' => $WebPaymethod->IsExpired,
+				);
+				$form['cc_list']['items'][$WebPaymethod->PaymethodId]['ExpiryDateMMYY'] = array(
+					'#type' => 'date',
+					'#theme' => 'teligence_cart_select_expiration_date',
+					'#default_value' => array('year' => (int)substr($WebPaymethod->ExpiryDateMMYY,2,2), 'month' => (int)substr($WebPaymethod->ExpiryDateMMYY,0,2), 'day' => 1),
+				);
+				$form['cc_list']['items'][$WebPaymethod->PaymethodId]['update_cc'] = array(
+					'#type' => 'checkbox',
+					'#default_value' => ($_REQUEST['cc'] == $WebPaymethod->PaymethodId ? 1 : 0),
+				);
+			}
+			$form['cc_list']['update'] = array(
+				'#type' => 'submit',
+				'#value' => t('Update'),
+				'#submit' => array('teligence_cart_update_cc'),
+				'#validate'=>array('teligence_cart_update_cc_validate'),
+			);
+			
+		break;
+		
+		default:
+			if(variable_get('teligence_cart_debug_mode', 0)) 
+				watchdog('teligence_cart',$result['debug']);
+		break;
+	}
+	
+	return $form;
+}
+
+/*
+ * validate update credit card
+ */
+function teligence_cart_update_cc_validate($form, &$form_state) 
+{
+	foreach ($form_state['values']['cc_list']['items'] as $key => $value) 
+	{
+		if ($value['update_cc']) 
+		{
+			date_default_timezone_set('America/Los_Angeles');
+			$expires = mktime(0,0,0,$value['ExpiryDateMMYY']['month'], 1, $value['ExpiryDateMMYY']['year']);
+			if ($expires <= time())
+		    {
+		        form_set_error('cc_list[items]['.$key.'][ExpiryDateMMYY]', t('Invalid expiration date.'));
+		    }
+		}
+	}
+}
+
+/*
+ * delete credit card DeactivatePaymentMethod
+ */
+function teligence_cart_deactivate_payment($key)
+{
+	if (is_numeric($key)) 
+	{
+		$params = new stdClass ();
+	    $params->paymethodId = $key;
+	    $result = teligence_cart_soap_call($params, 'DeactivatePaymentMethod', variable_get('wsdl_url_2', ''));
+		
+		switch ($result['result']->DeactivatePaymentMethodResult->ResponseCode) 
+		{
+			case 'Success':
+				drupal_set_message(t('Credit Card successfully deleted.'));
+			break;
+			
+			default:
+				drupal_set_message($result['debug']);
+			break;
+		};
+	}
+	else
+	{
+		drupal_set_message('Invalid request;');
+	}
+	
+	drupal_goto('cart/add-card');
+}
+
+
+/*
+ * update credit card
+ */
+function teligence_cart_update_cc($form, &$form_state) 
+{	
+	//drupal_set_message('<pre>'.print_r($form_state['values']['cc_list']['items'][$form_state['clicked_button']['#parents'][2]], true).'</pre>');
+	
+	//drupal_set_message('<pre>'.print_r($form_state['values'],true).'</pre>');
+	
+	foreach ($form_state['values']['cc_list']['items'] as $key => $value) {
+		
+		if ($value['update_cc']) {
+			$params = new stdClass ();
+		    $params->paymethodId = $key;
+			$params->expiryDateMMYY = str_pad ($value['ExpiryDateMMYY']['month'], 2, 0, STR_PAD_LEFT).str_pad ($value['ExpiryDateMMYY']['year'], 2, 0, STR_PAD_LEFT);
+		
+		    $result = teligence_cart_soap_call($params, 'UpdateCreditCardExpiryDate', variable_get('wsdl_url_2', ''));
+			
+			switch ($result['result']->UpdateCreditCardExpiryDateResult->ResponseCode) 
+			{
+				case 'Success':
+					drupal_set_message(t('Credit Card !num updated successfully.', array('!num' => $value['AccountNo'])));
+				break;
+				
+				case 'InvalidExpiryDate':
+					form_set_error('][ExpiryDateMMYY][', 'Invalid Expiry Date');
+				break;
+				
+				default:
+					drupal_set_message($result['debug']);
+				break;
+			};
+		}
+	}		
+}
+/*
+ * add credit card form submit
+ */ 
+function teligence_cart_add_new_cc_form_submit($form, &$form_state) {
+	
+	//drupal_set_message('<pre>'.print_r($form_state['values'], true).'</pre>');
+	
+	$params = new stdClass ();
+    $params->emsMembershipId = $_SESSION['emsMembershipId'];
+	$params->creditCardNumber = $form_state['values']['cc_number'];
+	$params->expiryDateMMYY = str_pad ($form_state['values']['cc_expiration']['month'], 2, 0, STR_PAD_LEFT).$form_state['values']['cc_expiration']['year'];
+
+    $result = teligence_cart_soap_call($params, 'AddCreditCard', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->AddCreditCardResult->ResponseCode) {
+		case 'Success':
+			drupal_set_message(t('Credit Card added successfully.'));
+		break;
+		
+		case 'InvalidCreditCardNo':
+			form_set_error('cc_number', t('Invalid credit card number.'));
+		break;
+		
+		case 'MembershipNotFound':
+		case 'PaymethodBelongsToOtherMember':
+		case 'CanadianNotVerifiedStatus':
+		case 'FraudulentPaymethod':
+		case 'InactivePaymethod':
+		case 'NoAddressForMember':
+		case 'TechnicalError':
+			//drupal_set_message('Error: '.$result['result']->AddCreditCardResult->ResponseCode, 'error');
+			drupal_set_message(t('We were not able to perform this operation.'), 'warning');
+			drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+		default:
+			drupal_set_message($result['debug']);
+		break;
+	}
+	
+}
+
+/*
+ * validate add new credit card 
+ */
+function teligence_cart_add_new_cc_form_validate($form, &$form_state) {
+	
+	//drupal_set_message('<pre>'.print_r($form_state['values'], true).'</pre>');
+	if($form_state['values']['op'] <> 'Add')
+	{
+		return;
+	}	
+
+	if (!teligence_cart_valid_card_number($form_state['values']['cc_number']))
+    {
+        form_set_error('cc_number', t('Invalid credit card number.'));
+    }
+	date_default_timezone_set('America/Los_Angeles');
+	$expires = mktime(0,0,0,$form_state['values']['cc_expiration']['month'], 1, $form_state['values']['cc_expiration']['year']);
+	if ($expires <= time())
+    {
+        form_set_error('cc_expiration', t('Invalid expiration date.'));
+    }
+}
+
+/*
+ * change IVR passcode 
+ */
+function teligence_cart_change_ivr_passcode_form($form_state) 
+{
+	//drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.password.js');
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['ivr_password'] = array (
+    '#type'=>'fieldset',
+    '#title'=>t('Change Passcode'),
+	'#attributes' => array('class' => 'left-label'),
+	//'#description' => 'Current Passcode: <em>'.$_SESSION['IvrPasscode'].'</em>',
+    );
+    $form['ivr_password']['current'] = array (
+    '#type'=>'password',
+    '#title'=>t('Current Passcode'),
+    '#required'=>true,
+    '#description'=>'Enter your existing passcode.',
+    '#maxlength'=>4,
+    '#size'=>4,
+    );
+    $form['ivr_password']['password'] = array (
+    '#type'=>'password',
+    '#title'=>t('New Passcode'),
+    '#required'=>true,
+    '#description'=>'Must be at least 4 digits in length',
+    '#maxlength'=>4,
+    '#size'=>4,
+    );
+    $form['ivr_password']['confirm_password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Confirm Passcode'),
+    '#required'=>true,
+    '#maxlength'=>4,
+    '#size'=>4,
+    );
+    $form['ivr_password']['submit'] = array (
+    '#type'=>'submit',
+    '#value'=>t('Change Passcode'),
+    '#weight'=>100,
+    );
+	
+	$form['#validate'] = array('teligence_cart_change_ivr_passcode_form_validate');
+
+    return $form;
+}
+
+/*
+ * validate ivr passcode change form
+ */
+function teligence_cart_change_ivr_passcode_form_validate($form, & $form_state)
+{
+	if ($form_state['values']['current'] <> $_SESSION['IvrPasscode'])
+    {
+        form_set_error('current', t("Your current passcode doesn't match."));
+    }
+    
+	if ($form_state['values']['password'] <> $form_state['values']['confirm_password'])
+    {
+        form_set_error('confirm_password', t("Passcodes don't match."));
+    }
+
+    if (strlen($form_state['values']['password']) < 4)
+    {
+        form_set_error('password', t('Passcode is too short.'));
+    }
+    
+	if (!is_numeric($form_state['values']['password']))
+    {
+        form_set_error('password', t('Passcode must be a number.'));
+    }
+}
+
+/*
+ * ivr passcode
+ */
+function teligence_cart_change_ivr_passcode_form_submit($form, &$form_state) {
+	
+	unset($_SESSION['guid']);
+	
+	$params = new stdClass ();
+    $params->emsMembershipId = $_SESSION['emsMembershipId'];
+	$params->newIvrPasscode = $form_state['values']['password'];
+
+    $result = teligence_cart_soap_call($params, 'UpdateIvrPasscode', variable_get('wsdl_url_4', ''));
+	
+	switch ($result['result']->UpdateIvrPasscodeResult->ResponseCode) {
+		case 'Success':
+			drupal_set_message(t('Passcode changed successfully.'));
+			teligence_cart_memberships_set_session_vars($_SESSION['emsMemberId']);
+			//$_SESSION['IvrPasscode'] = $form_state['values']['password'];
+		break;
+		
+		default:
+			drupal_set_message($result['debug']);
+		break;
+	}
+	
+}
+
+/*
+ * edit billing address form
+ */
+function teligence_cart_edit_billing_address_form($form_state) 
+{		
+	$params = new stdClass ();
+    $params->emsMemberId = $_SESSION['emsMemberId'];
+
+    $result = teligence_cart_soap_call($params, 'GetAddress', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->GetAddressResult->ResponseCode) {
+		case 'Success':
+			
+			$form['#theme'] = 'teligence_cart_autosignup';
+			
+			$form['group'] = array (
+    			'#type'=>'fieldset',
+				'#attributes' => array('class' => 'left-label'),
+    		);
+			
+			$form['group']['Ani'] = array(
+				'#type' => 'hidden',
+				//'#title' => t('Phone Number'),
+				'#value' => teligence_cart_format_fancy_phonenumber($result['result']->GetAddressResult->Ani),
+				//'#required' => true,
+				//'#description' => t('Please enter the number in the form of (xxx) xxx-xxx'),
+			);
+			$form['group']['Apartment'] = array(
+				'#type' => 'hidden',
+				//'#title' => t('Apartment'),
+				'#default_value' => $result['result']->GetAddressResult->Apartment,
+			);
+			$form['group']['AddressLine1'] = array(
+				'#type' => 'textfield',
+				'#title' => t('Address Line 1'),
+				'#default_value' => $result['result']->GetAddressResult->AddressLine1,
+				'#required' => true,
+			);
+			$form['group']['AddressLine2'] = array(
+				'#type' => 'textfield',
+				'#title' => t('Address Line 2'),
+				'#default_value' => $result['result']->GetAddressResult->AddressLine2,
+			);
+			$form['group']['Zip'] = array(
+				'#type' => 'textfield',
+				'#title' => t('Zip'),
+				'#default_value' => $result['result']->GetAddressResult->Zip,
+				'#required' => true,
+			);
+			$form['group']['City'] = array(
+				'#type' => 'textfield',
+				'#title' => t('City'),
+				'#default_value' => $result['result']->GetAddressResult->City,
+				'#required' => true,
+			);
+			$form['group']['Country'] = array(
+				'#type' => 'select',
+				'#title' => t('Country'),
+				'#default_value' => $result['result']->GetAddressResult->Country,
+				'#options' => array('USA' => 'USA', 'Canada' => 'Canada'),
+				'#required' => true,
+			);	
+			$form['group']['State'] = array(
+				'#type' => 'select',
+				'#title' => t('State/Province'),
+				'#default_value' => $result['result']->GetAddressResult->State,
+				'#pre_render' => array('teligence_cart_pre_render_states'),
+				'#attributes' => array('class' => $result['result']->GetAddressResult->Country),
+				'#required' => true,
+			);
+			
+			$form['update'] = array(
+				'#type' => 'submit',
+				'#value' => t('Update'),
+			);
+			
+		break;
+		
+		default:
+			drupal_set_message($result['debug']);
+		break;
+	}
+	
+	return $form;
+}
+
+/*
+ * #pre_render function for states
+ */
+function teligence_cart_pre_render_states($element){
+	
+	drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.states.js', 'module');
+	
+	//drupal_set_message('<pre>'.print_r($element, true).'</pre>');
+	if($element['#post']['Country']){
+		$name = $element['#post']['Country'];
+	}else{
+		$name = ($element['#attributes']['class'] ? $element['#attributes']['class'] : 'USA');
+	}
+	
+	$element['#options'] = _teligence_cart_file_to_options(drupal_get_path('module', 'teligence_cart').'/states/'.$name.'.txt');
+	
+	return $element;
+}
+
+/*
+ * edit billing address submit
+ */
+function teligence_cart_edit_billing_address_form_submit($form, &$form_state) {
+
+	$params = new stdClass ();
+    $params->emsMemberId = $_SESSION['emsMemberId'];
+	$params->ani = teligence_cart_format_phonenumber($form_state['values']['Ani']);
+	$params->apartment = $form_state['values']['Apartment'];
+	$params->addressLine1 = $form_state['values']['AddressLine1'];
+	$params->addressLine2 = $form_state['values']['AddressLine2'];
+	$params->zip = $form_state['values']['Zip'];
+	$params->city = $form_state['values']['City'];
+	$params->state = $form_state['values']['State'];
+	$params->country = $form_state['values']['Country'];
+
+    $result = teligence_cart_soap_call($params, 'UpdateAddress', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->UpdateAddressResult->ResponseCode) {
+		case 'Success':
+			drupal_set_message('Your Billing Address has been updated.');
+		break;
+		
+		default:
+			drupal_set_message($result['debug']);
+		break;
+	}
+	
+}
+
+
+/*
+ * edit billing address submit
+ */
+function teligence_cart_edit_billing_address_form_validate($form, &$form_state) {
+	
+	if(!teligence_cart_valid_phone_number($form_state['values']['Ani'])){
+		form_set_error('Ani', 'Invalid phone number.');
+	}
+	
+	if($form_state['values']['Country'] == 'Canada' && !teligence_cart_valid_ca_zipcode($form_state['values']['Zip']))
+    {
+    	form_set_error('Zip', t('Invalid Postal Code.'));
+    }
+	if($form_state['values']['Country'] == 'USA' && !teligence_cart_valid_us_zipcode($form_state['values']['Zip']))
+    {
+    	form_set_error('Zip', t('Invalid Zip Code.'));
+    }
+}
+
+/**
+ * Convert a valid North American phone number into standard 14448675309 format
+ * 
+ * @param $phonenumber must be a valid ten-digit number
+ * 
+ */
+function teligence_cart_format_phonenumber($phonenumber){
+	
+	$phonenumber = trim($phonenumber);
+	
+	if(empty($phonenumber)){
+		return '';
+	}
+	
+	// define regular expression   
+  	$regex = "/
+    ^\D*          # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    ([02-9]\d{2}) # capture area code       
+    \D*           # optional separator
+    (\d{3})       # capture 3-digit prefix
+    \D*           # optional separator
+    (\d{4})       # capture 4-digit line number                       
+    \D*           # optional separator
+    (\d*)         # capture optional extension                       
+    \D*$          # ignore trailing non-digits
+  	/x"; 
+    
+  	// get digits of phone number
+  	preg_match($regex, $phonenumber, $matches);
+	
+  	/*
+	if ($matches[1] != "1") {
+  		$phonenumber = "1" . $matches[2].$matches[3]; 
+    }else{
+    	$phonenumber = $matches[1].$matches[2].$matches[3];
+    }
+    */
+    
+  	//drupal_set_message($matches[1].$matches[2].$matches[3]);
+    return $matches[1].$matches[2].$matches[3];
+}
+
+function teligence_cart_format_fancy_phonenumber($phonenumber){
+	
+	$phonenumber = trim($phonenumber);
+	
+	if(empty($phonenumber)){
+		return '';
+	}
+	
+	// define regular expression   
+  	$regex = "/
+    ^\D*          # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    ([02-9]\d{2}) # capture area code       
+    \D*           # optional separator
+    (\d{3})       # capture 3-digit prefix
+    \D*           # optional separator
+    (\d{4})       # capture 4-digit line number                       
+    \D*           # optional separator
+    (\d*)         # capture optional extension                       
+    \D*$          # ignore trailing non-digits
+  	/x"; 
+    
+  	// get digits of phone number
+  	preg_match($regex, $phonenumber, $matches);
+	
+  	/*
+	if ($matches[1] != "1") {
+  		$phonenumber = "1" . $matches[2].$matches[3]; 
+    }else{
+    	$phonenumber = $matches[1].$matches[2].$matches[3];
+    }
+    */
+    
+  	//drupal_set_message($matches[1].$matches[2].$matches[3]);
+    return '('.$matches[1].') '.$matches[2].'-'.$matches[3];
+}
+
+/**  
+ * Verifies that $phonenumber is a valid ten-digit North American phone number
+ *
+ * @param string $phonenumber
+ * @return boolean Returns boolean FALSE if the phone number is not valid. 
+ */
+
+function teligence_cart_valid_phone_number($phonenumber) {
+   	
+  $phonenumber = trim($phonenumber);
+   
+  if(empty($phonenumber)){
+	return '';
+  }
+  // define regular expression
+  $regex = "/
+    \D*           # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    [02-9]\d{2}   # area code (can't start with 1)
+    \D*           # optional separator
+    [02-9]\d{2}   # 3-digit prefix (can't start with 1)    
+    \D*           # optional separator
+    \d{4}         # 4-digit line number
+    \D*           # optional separator
+    \d*           # optional extension
+    \D*           # ignore trailing non-digits
+    /x";
+  // return true if valid, false otherwise
+  return (bool) preg_match($regex, $phonenumber); 
+} 
+
+/*
+ * view order history form
+ */
+function teligence_cart_view_order_history_form($form_state) 
+{
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['select_group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Set Days of Order History'),
+	);
+	$form['select_group']['days'] = array(
+		'#type' => 'select',
+		'#title' => t('Order History for'),
+		'#default_value' => $form_state['storage']['values']['days'],
+		'#options' => drupal_map_assoc(range(10, 30, 10), '_teligence_cart_view_order_history_day'),
+	);
+	$form['select_group']['button'] = array(
+		'#type' => 'submit',
+		'#value' => t('View'),
+	);
+	$form['results'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Results'),
+	);
+	$form['results']['list'] = array(
+		'#type' => 'markup',
+		'#value' => $form_state['values']['days'],
+		'#theme' => 'teligence_cart_order_history'
+	);
+
+	return $form;
+}
+
+
+
+/*
+ * theme output of day selection form
+ */
+function _teligence_cart_view_order_history_day($value){
+	
+	return 'Last '.$value.' days';
+	
+}
+
+/*
+ * view order history form submit
+ */
+function teligence_cart_view_order_history_form_submit($form, &$form_state) {
+	
+	// save values
+	$form_state['storage']['values'] = $form_state['values'];
+	
+	// tell Drupal we are redrawing the same form
+    $form_state['rebuild'] = TRUE;
+	
+}
+
+/*
+ * render date time from yyMMddhhmmss format
+ */
+function teligence_cart_timestamp($yyMMddhhmmss)
+{	
+	date_default_timezone_set('America/Los_Angeles');
+	$year = substr($yyMMddhhmmss, 0, 2);
+	$mont = substr($yyMMddhhmmss, 2, 2);
+	$day = substr($yyMMddhhmmss, 4, 2);
+	$hour = substr($yyMMddhhmmss, 6, 2);
+	$min = substr($yyMMddhhmmss, 8, 2);
+	$sec = substr($yyMMddhhmmss, 10, 2);
+	$timestamp = mktime($hour, $min, $sec, $mont, $day, $year);
+	
+	return $timestamp;
+}
+
+/*
+ * file reader to use in options
+ */
+function _teligence_cart_file_to_options($location){
+	
+	if (!file_exists($location)) {
+		return array();
+	}
+	
+	$filename = $location;
+	$handle = @fopen($filename, "r");
+	while (!feof($handle)) {
+  		$line = trim(fgets($handle, filesize($filename)));
+		$rows[$line] = $line;
+	}
+	fclose($handle);
+	
+	return $rows;
+}
+
+
+/*
+ * change password page
+ */
+function teligence_cart_change_web_password_form($form_state)
+{
+	drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.password.js');
+	$form['#theme'] = 'teligence_cart_autosignup';
+    
+	$form['web_password'] = array (
+    '#type' => 'fieldset',
+    '#title' => t('Change Password'),
+    '#attributes' => array('class' => 'left-label'),
+    );
+    if(isset($_SESSION['webPassword'])):
+	    $form['web_password']['current_password'] = array (
+		    '#type'=>'password',
+		    '#title'=>t('Current Password'),
+		    '#required'=>true,
+		    '#description'=>'Must be at least 6 characters in length. Max 8 characters.',
+		    '#maxlength'=>8,
+		    '#size'=>10,
+	    );
+    endif;
+    $form['web_password']['password'] = array (
+    '#type'=>'password',
+    '#title'=>t('New Password'),
+    '#required'=>true,
+    '#description'=>'Must be at least 6 characters in length. Max 8 characters.',
+    '#maxlength'=>8,
+    '#size'=>10,
+    );
+    $form['web_password']['confirm_password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Confirm Password'),
+    '#required'=>true,
+    '#maxlength'=>8,
+    '#size'=>10,
+    );
+    $form['web_password']['submit'] = array (
+    '#type'=>'submit',
+    '#value'=>t('Change Password'),
+    '#weight'=>100,
+    );
+    $form['message_1'] = array(
+    '#type' => 'hidden',
+    '#value' => t('Password successfully changed.'),
+    );
+    $form['message_2'] = array(
+    '#type' => 'hidden',
+    '#value' => t('Please sign in below.'),
+    );
+
+    $form['#redirect'] = false;
+
+    return $form;
+}
+
+/*
+ * validate password change form
+ */
+function teligence_cart_change_web_password_form_validate($form, & $form_state)
+{
+
+    if(isset($_SESSION['webPassword']) && $_SESSION['webPassword'] <> md5($form_state['values']['current_password']) )
+    {
+    	form_set_error('current_password', t("Your current password doesn't match"));
+    }
+	
+	if ($form_state['values']['password'] <> $form_state['values']['confirm_password'])
+    {
+        form_set_error('confirm_password', t(variable_get('teligence_cart_error_password_match', "Passwords don't match. Please re-enter your password.")));
+    }
+
+    if (strlen($form_state['values']['password']) < 6)
+    {
+        form_set_error('password', t('Password is too short'));
+    }
+
+}
+
+/*
+ * submit password change form
+ */
+function teligence_cart_change_web_password_form_submit($form, & $form_state)
+{
+    $params = new stdClass ();
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+    $params->webMemberId = $_SESSION['webMemberId'];
+    $params->newPassword = $form_state['values']['password'];
+
+    $result = teligence_cart_soap_call($params, 'ChangePassword', variable_get('wsdl_url_3', ''));
+
+    switch($result['result']->ChangePasswordResult->ResponseCode)
+    {
+        case 'Success':
+            drupal_set_message($form_state['values']['message_1']);
+            if (user_access('access logged in pages'))
+            {
+                $_SESSION['webPassword'] = md5($form_state['values']['password']);
+            	drupal_goto('cart/change-web-password');
+            } 
+			else
+            {
+                unset ($_SESSION['webMemberId']);
+                drupal_set_message($form_state['values']['message_2']);
+                drupal_goto('cart/login');
+            }
+        break;
+
+        default:
+            drupal_set_message($result['debug']);
+        break;
+	}
+}
+
+/*
+ * access callback for reset password from link on email
+ */
+function teligence_cart_reset_id($id)
+{
+	if (is_numeric($_SESSION['webMemberId']))
+    {
+    	return drupal_get_form('teligence_cart_change_web_password_form');
+    }
+    else
+    {
+        $params = new stdClass ();
+        $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+        $params->passwordResetId = $id;
+
+        $result = teligence_cart_soap_call($params, 'ResetPassword', variable_get('wsdl_url_3', ''));
+
+        switch($result['result']->ResetPasswordResult->ResponseCode)
+        {
+            case 'Success':
+                $_SESSION['webMemberId'] = $result['result']->ResetPasswordResult->WebMemberId;
+                return drupal_get_form('teligence_cart_change_web_password_form');
+                break;
+
+            default:
+                drupal_set_message(variable_get('teligence_cart_error_link_expired', 'Your link expired.'), 'error');
+                drupal_goto('cart/login');
+                break;
+        }
+    }
+}
+
+/*
+ * validate web account
+ */
+function teligence_cart_validate_web_account($validation_code = null)
+{
+    $params = new stdClass ();   
+    $params->validationCode = $validation_code;
+    $result = teligence_cart_soap_call($params, 'ValidateWebAccount', variable_get('wsdl_url_3', ''));
+
+    if ($result['result']->ValidateWebAccountResult->ResponseCode == 'Success')
+    {
+        drupal_set_message(variable_get('teligence_cart_error_valid_account', 'Your account has been validated. Please sign in below.'));
+        drupal_goto('cart/login');
+    } 
+    else
+    {
+        drupal_set_message(variable_get('teligence_cart_error_link_expired', 'Your link expired.'), 'error');
+        drupal_goto();
+    }
+
+}
+
+/*
+ * get local number page
+ */
+function teligence_cart_get_local_number()
+{
+    $output = '';
+
+	// if(!isset($_REQUEST['area_code']) || empty($_REQUEST['area_code']))
+	// {
+		// $output .= drupal_get_form('teligence_cart_aera_code_form');
+	// }
+	// else
+	// {
+		// $output .= teligence_cart_local_numbers_table();
+	// }
+	
+	$output .= drupal_get_form('teligence_cart_aera_code_form');
+
+    return $output;
+}
+
+/*
+ * area code form
+ */
+function teligence_cart_aera_code_form($form_state, $ivr_brand_id = null)
+{
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	if(empty($form_state['storage']['values']['local_numbers']) && $_REQUEST['area_code'])
+    {
+        // we are coming in without a step, so default to step 1
+        $form_state['values']['ivr_brand_id'] = $ivr_brand_id;
+        teligence_cart_aera_code_form_submit($form, $form_state);
+		// $form_state['storage']['step'] = 1;
+    }
+	
+    $form['local_number'] = array (
+	    '#type'=>'fieldset',
+    );
+    $form['local_number']['area_code'] = array (
+	    '#type'=>'textfield',
+	    '#title'=>t('Area Code'),
+	    '#maxlength'=>3,
+	    '#size'=>6,
+	    '#required'=>true,
+	    '#default_value'=>$form_state['storage']['values']['area_code'] ? $form_state['storage']['values']['area_code'] : $_REQUEST['area_code'],
+    );
+	
+    $form['local_number']['find'] = array (
+	    '#type'=>'submit',
+	    '#value'=>t('Find'),
+	    '#weight'=>100,
+    );
+    $form['ivr_brand_id'] = array(
+		'#type' => 'hidden',
+		'#default_value' => $ivr_brand_id,
+	);
+
+	if($form_state['storage']['values']['local_numbers']['failure'])
+	{
+		$form['results'] = array (
+	    	'#type'=>'fieldset',
+    	);
+		$form['results']['error'] = array(
+    		'#value' => variable_get('teligence_cart_customer_access_phone_fullmessage', ''), 
+    	);
+		unset($form_state['storage']);
+	}
+	
+	if($form_state['storage']['values']['local_numbers']['success'])
+    {
+    	$form['results'] = array (
+	    	'#type'=>'fieldset',
+    	);
+    	$form['results']['numbers'] = array(
+    		'#value' => $form_state['storage']['values']['local_numbers']['success'], 
+    	);
+		unset($form['results']['error']);
+		unset($form_state['storage']);
+    }
+   
+    return $form;
+}
+
+/*
+ * validate get local access numbers
+ */
+function teligence_cart_aera_code_form_validate($form, &$form_state)
+{
+	// if($form_state['clicked_button']['#id'] == 'edit-back')
+	// {
+		// return;
+	// }
+	
+	if(!is_numeric ($form_state['values']['area_code']))
+	{
+		form_set_error('area_code', t('Invalid Area Code.'));
+	}
+	
+	$blacklisted = _teligence_cart_file_to_options(drupal_get_path('module', 'teligence_cart').'/blacklists/areacodes.txt');
+	if(in_array(substr($form_state['values']['area_code'], 0, 1), $blacklisted) || 
+		in_array($form_state['values']['area_code'], $blacklisted))
+	{
+		form_set_error('area_code', t('Invalid Area Code.'));
+	}
+	
+	
+}
+
+/*
+ * form submit get local access numbers
+ */
+function teligence_cart_aera_code_form_submit($form, &$form_state)
+{
+    //save the values for the current step into the storage array
+    // $form_state['storage']['values'] = $form_state['values'];
+	// $form_state['storage']['step'] = 2;
+    
+    // global $user;
+	// check the button that was clicked and action the step change
+    // if ($form_state['clicked_button']['#id'] == 'edit-back')
+    // {
+        // $form_state['storage']['step']--;
+        // return;
+    // } 
+	// elseif ($form_state['clicked_button']['#id'] == 'edit-find' && !$user->uid)
+    // {
+        // $form_state['storage']['step']++;
+    // }
+	
+    // $table = teligence_cart_local_numbers_table($form_state['values']['area_code']);
+    if($table = teligence_cart_local_numbers_table_null($form_state['values']['area_code'], $form_state['values']['ivr_brand_id']))
+	{
+		$form_state['storage']['values']['local_numbers']['success'] = $table;
+	}
+	else
+	{
+		$form_state['storage']['values']['local_numbers']['failure'] = true;
+	}
+	// else
+	// {
+		// $form_state['storage']['values']['local_numbers']['error'] = $result['error'];
+	// }
+}
+
+/**
+ * VALIDATE AREA CODE with IVR rules
+ */
+function teligence_cart_valid_areacode($areacode)
+{
+	if(!ctype_digit($areacode))return false;
+	if(strlen($areacode) != 3)return false;
+	if(strpos($areacode, "1") === 0)return false;
+	if(strpos($areacode, "99") === 0)return false;
+	if(in_array($areacode, array(800, 855, 866, 877, 888, 900)))return false;
+	
+	return true;
+}
+
+
+/*
+ * generate table with local access numbers from post or get params, 
+ * this is a stand alone function to be used in stand alone pages
+ */
+function teligence_cart_local_numbers_table($area_code = null, $ivr_brand_id = null)
+{
+	if(is_null($area_code))
+	{
+		$area_code = $_REQUEST['area_code'];
+	}
+
+	if(!teligence_cart_valid_areacode($area_code))
+	{
+		//drupal_set_message(t('Invalid Area Code.'), 'error');
+		$rows = array();
+		$rows['toll-free'] = array ('data'=> array ('Toll Free Number', variable_get('teligence_cart_customer_access_phone', '1-800-xxx-xxxx')),'class'=>'local-number');
+		$rows['free-trial-code'] = array ('data'=> array ('Free Trial Code', variable_get('teligence_cart_free_trial_code', '1-800-xxx-xxxx')),'class'=>'local-number');
+		return theme('teligence_cart_local_number_lookup', $rows);
+	}
+    
+    $params = new stdClass ();
+    $params->ivrBrandId = !empty($ivr_brand_id) ? $ivr_brand_id : variable_get('teligence_cart_brand', 1);
+    $params->areaCode = check_plain($area_code);
+    $result = teligence_cart_soap_call($params, 'GetLocalAccessNumberByAreaCode', variable_get('wsdl_url_6', ''));
+    	
+    switch($result['result']->GetLocalAccessNumberByAreaCodeResult->ResponseCode)
+    {	
+    	case 'Success':
+	        if(!is_array($result['result']->GetLocalAccessNumberByAreaCodeResult->LocalAccessNumbers->LocalAccessNumber)): 
+				$LocalAccessNumbers = array($result['result']->GetLocalAccessNumberByAreaCodeResult->LocalAccessNumbers->LocalAccessNumber);
+			else:
+				$LocalAccessNumbers = $result['result']->GetLocalAccessNumberByAreaCodeResult->LocalAccessNumbers->LocalAccessNumber;
+			endif;
+	    	foreach ((array)$LocalAccessNumbers as $LocalAccessNumber)
+	        {
+	            /*
+	             * striping out " 2" from $LocalAccessNumber->City as per request from Ivelina on Nov 04 2010 noon 
+	             */
+	        	$rows[] = array (
+					'data'=> array (str_replace('2', '', $LocalAccessNumber->City) . ', ' . $LocalAccessNumber->Region, $LocalAccessNumber->Ani),'class'=>'local-number'
+				);
+	        }
+	        //drupal_set_message('<pre>'.print_r($rows, true).'</pre>');
+	        
+        break;
+        
+    	case 'NoLocalAccessNumbersAvailable':
+    		//$rows[] = array ('data'=> array ('Toll Free Number', variable_get('teligence_cart_customer_access_phone', '1-800-xxx-xxxx')),'class'=>'local-number');
+	    	//$rows[] = array ('data'=> array ('Free Trial Code', variable_get('teligence_cart_free_trial_code', '1-800-xxx-xxxx')),'class'=>'local-number');
+    	break;
+		
+    	default:
+	    	if(variable_get('teligence_cart_debug_mode', 0))
+				watchdog('teligence_cart','<pre>'.print_r($rows, true).'</pre>');
+    	break;
+    }
+	$rows['toll-free'] = array ('data'=> array ('Toll Free Number', variable_get('teligence_cart_customer_access_phone', '1-800-xxx-xxxx')),'class'=>'local-number');
+	$rows['free-trial-code'] = array ('data'=> array ('Free Trial Code', variable_get('teligence_cart_free_trial_code', '1-800-xxx-xxxx')),'class'=>'local-number');
+    
+    return theme('teligence_cart_local_number_lookup', $rows);
+
+    // theme('table', array ('Location', 'Number'), $rows, array('id' => 'local-access-numbers'));
+}
+
+
+/*
+ * clone of teligence_cart_local_numbers_table
+ * but returns null if no local number found 
+ */
+function teligence_cart_local_numbers_table_null($area_code = null, $ivr_brand_id = null)
+{
+	// $response = array();
+	if(is_null($area_code))
+	{
+		$area_code = $_REQUEST['area_code'];
+	}
+	if(is_null($ivr_brand_id) || empty($ivr_brand_id))
+	{
+		$ivr_brand_id = variable_get('teligence_cart_brand', 1);
+	}
+
+	if(strlen($area_code) < 3 || !is_numeric($area_code))
+	{
+		//drupal_set_message(t('Invalid Area Code.'), 'error');
+		// $rows = array();
+		// $rows['toll-free'] = array ('data'=> array ('Toll Free Number', variable_get('teligence_cart_customer_access_phone', '1-800-xxx-xxxx')),'class'=>'local-number');
+		// $rows['free-trial-code'] = array ('data'=> array ('Free Trial Code', variable_get('teligence_cart_free_trial_code', '1-800-xxx-xxxx')),'class'=>'local-number');
+		// return theme('teligence_cart_local_number_lookup', $rows);
+		// $response['error'] = t('No area code provided');
+		return null;
+	}
+    
+    $params = new stdClass ();
+    $params->ivrBrandId = $ivr_brand_id;
+    $params->areaCode = check_plain($area_code);
+    $result = teligence_cart_soap_call($params, 'GetLocalAccessNumberByAreaCode', variable_get('wsdl_url_6', ''));
+    	
+    switch($result['result']->GetLocalAccessNumberByAreaCodeResult->ResponseCode)
+    {	
+    	case 'Success':
+	        if(!is_array($result['result']->GetLocalAccessNumberByAreaCodeResult->LocalAccessNumbers->LocalAccessNumber)): 
+				$LocalAccessNumbers = array($result['result']->GetLocalAccessNumberByAreaCodeResult->LocalAccessNumbers->LocalAccessNumber);
+			else:
+				$LocalAccessNumbers = $result['result']->GetLocalAccessNumberByAreaCodeResult->LocalAccessNumbers->LocalAccessNumber;
+			endif;
+	    	foreach ((array)$LocalAccessNumbers as $LocalAccessNumber)
+	        {
+	            /*
+	             * striping out " 2" from $LocalAccessNumber->City as per request from Ivelina on Nov 04 2010 noon 
+	             */
+	        	$rows[] = array (
+					'data'=> array (str_replace('2', '', $LocalAccessNumber->City) . ', ' . $LocalAccessNumber->Region, $LocalAccessNumber->Ani),'class'=>'local-number'
+				);
+	        }
+
+		    if(variable_get('teligence_cart_debug_mode', 0))
+				watchdog('teligence_cart','<pre>'.print_r($LocalAccessNumbers, true).'</pre>');
+			
+	        return theme('teligence_cart_local_number_lookup', $rows);
+        break;
+        
+    	case 'NoLocalAccessNumbersAvailable':
+    		//$rows[] = array ('data'=> array ('Toll Free Number', variable_get('teligence_cart_customer_access_phone', '1-800-xxx-xxxx')),'class'=>'local-number');
+	    	//$rows[] = array ('data'=> array ('Free Trial Code', variable_get('teligence_cart_free_trial_code', '1-800-xxx-xxxx')),'class'=>'local-number');
+    	// break;
+		
+    	default:
+	    	// $response['error'] = t('!message', array('!message' => $result['debug']));
+	    	//drupal_set_message(t('Invalid Area Code.'), 'error');
+	    	if(variable_get('teligence_cart_debug_mode', 0))
+				watchdog('teligence_cart','<pre>'.print_r($result, true).'</pre>');
+			return null;
+    	break;
+    }
+	// $rows['toll-free'] = array ('data'=> array ('Toll Free Number', variable_get('teligence_cart_customer_access_phone', '1-800-xxx-xxxx')),'class'=>'local-number');
+	// $rows['free-trial-code'] = array ('data'=> array ('Free Trial Code', variable_get('teligence_cart_free_trial_code', '1-800-xxx-xxxx')),'class'=>'local-number');
+    
+    // return theme('teligence_cart_local_number_lookup', $rows);
+
+    // theme('table', array ('Location', 'Number'), $rows, array('id' => 'local-access-numbers'));
+	
+	// return $response;
+}
+
+/*
+ * pre render for credit cards add time list
+ */
+function teligence_cart_credit_cards_pre_render($elements)
+{
+	//drupal_add_js(drupal_get_path('module', 'teligence_cart') . '/js/jquery.csc.js');
+	
+	return $elements;
+}
+
+
+/*
+ * login page
+ */
+function teligence_cart_login_page()
+{
+    $output = '';
+
+    $output .= drupal_get_form('teligence_cart_login_form');
+
+    return $output;
+}
+
+/*
+ * forgot password page
+ */
+function teligence_cart_forgot_password_page()
+{
+	$output = '';
+
+    $output .= drupal_get_form('teligence_cart_forgot_pass_form');
+
+    return $output;
+}
+
+/*
+ * login form
+ */
+function teligence_cart_login_form($form_state)
+{
+	//drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.password.js');
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+    $form['login'] = array (
+    '#type'=>'fieldset',
+    '#title'=>t('Log-in'),
+	'#attributes' => array('class' => 'left-label'),
+    );
+
+    $form['login']['email'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('Email'),
+    '#required'=>true,
+    '#default_value'=>urldecode($_REQUEST['email']),
+    );
+
+    $form['login']['password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Password'),
+    '#required'=>true,
+    '#description'=>'Must be at least 6 characters in length. Max 8 characters.',
+    '#maxlength'=>8,
+    '#size'=>10,
+    );
+
+    $form['login']['button'] = array (
+    '#type'=>'submit',
+    '#value'=>'Log-in',
+    '#suffix' => l('Forgot password?', 'cart/forgot-password'),
+    );
+
+    return $form;
+}
+
+/*
+ * submit login form
+ */
+function teligence_cart_login_form_submit($form, & $form_state)
+{
+	$form_state['values']['email'] = trim($form_state['values']['email']);
+    
+	$params = new stdClass ();
+    $params->email = $form_state['values']['email'];
+    $params->password = $form_state['values']['password'];
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+
+    $result = teligence_cart_soap_call($params, 'Login', variable_get('wsdl_url_3', ''));
+
+    switch($result['result']->LoginResult->ResponseCode)
+    {
+        case 'Success':
+        	$activemember = teligence_cart_memberships_set_session_vars($result['result']->LoginResult->EmsMemberId);
+        	$_SESSION['webPassword'] = md5($form_state['values']['password']);
+			$redirect = 'cart/add-time';
+            
+			# create new user or loggin existing user in drupal
+            // Default implementation of name generation
+            $namenew = preg_replace('/@.*$/', '', $form_state['values']['email']);
+            
+			// if username generated from email record already exists, append underscore and number eg:(chris_123)
+            if (db_result(db_query("SELECT count(*) FROM {users} WHERE LOWER(name) = LOWER('%s')", $namenew)) > 0)
+            {
+                // find the next number available to append to the name
+                $sql = "SELECT SUBSTRING_INDEX(name,'_',-1) FROM {users} WHERE name REGEXP '%s' ORDER BY CAST(SUBSTRING_INDEX(name,'_',-1) AS UNSIGNED) DESC LIMIT 1";
+                $nameidx = db_result(db_query($sql, '^'.$namenew.'_[0-9]+$'));
+                $namenew .= '_'.($nameidx+1);
+            }
+			
+			global $user;
+			// EXISTNG USER
+            if ($user = user_load( array( 'mail' => $form_state['values']['email'] )))
+            {
+                // Message
+				//drupal_set_message('Welcome back.');
+				
+				// Update the user table timestamp noting user has logged in.
+            	// This is also used to invalidate one-time login links.
+            	$user->access = time();
+			
+				//db_query("UPDATE {users} SET login = %d WHERE uid = %d", $user->login, $user->uid);
+				$user = user_save($user, (array)$user);				
+				
+            	if(!$activemember){	
+					
+					/*
+					// remove role
+					$rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'ivr_user'));
+          			$roles = array_diff($user->roles, array($rid => 'ivr_user'));
+          			$user = user_save($user, array('roles' => $roles));
+				
+					// add role
+					$rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'ivr_user_inactive'));
+					$roles = $user->roles + array($rid => 'ivr_user_inactive');
+          			$user = user_save($user, array('roles' => $roles));
+          			
+          			$redirect = 'cart/getlocalnumber';
+          			*/
+					
+					watchdog('user', 'Session closed for %name.', array('%name' => $user->name));
+
+  					// Load the anonymous user
+  					$user = drupal_anonymous_user();
+  					
+  					//ivr_user_inactive
+  					drupal_get_messages();
+  					$tokens = teligence_cart_tokens();
+					drupal_set_message('Your '.$tokens['[brand-name]'].' Account is not active.');
+					drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');					
+					drupal_goto('cart/login');
+
+				}
+            } 
+			// NEW USER
+			else
+            {
+				$rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'ivr_user'));
+				
+				$newuser = array(
+					'name' => $namenew,
+					'mail' => $form_state['values']['email'],
+					'status' => 1,
+  					'pass' => $form_state['values']['password'],
+					'roles' => array($rid => 'ivr_user'),
+					'init' => $form_state['values']['email'],
+					'access' => time(),
+				);
+				
+				// create new user
+				$user = user_save("", $newuser);
+				
+				// Message
+				//drupal_set_message('You are now logged in.');	
+            }
+			
+			watchdog('user', 'Session opened for %name.', array ('%name'=>$user->name));
+            
+			// Regenerate the session ID to prevent against session fixation attacks.
+            sess_regenerate();
+			
+			// set session variables
+			$_SESSION['webMemberId'] = $result['result']->LoginResult->WebMemberId;
+			$_SESSION['emsMemberId'] = $result['result']->LoginResult->EmsMemberId;
+			
+			// Redirect to first page after login
+			drupal_goto($redirect);
+			
+        break;
+
+        case 'Failure':
+            //drupal_set_message('The username or password you entered is incorrect. Did you forget your password?', 'error');
+			form_set_error('', 'The username or password you entered is incorrect. Did you ' . l('forget your password', 'cart/forgot-password') . '?');
+            break;
+
+        case 'NotValidated':
+            $tokens['tokens']['[url]'] = url('cart/validate/'.$result['result']->LoginResult->ValidationCode, array ('absolute'=>true));
+            drupal_mail('teligence_cart', 'validate', $form_state['values']['email'], language_default(), $tokens);
+            drupal_set_message('Please validate your account. Further instructions have been sent to your e-mail address.');
+            break;
+
+        default:
+            drupal_set_message($result['debug']);
+            break;
+	}
+
+}
+
+/*
+ * password recovery form
+ */
+function teligence_cart_forgot_pass_form($form_state)
+{
+    $form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['forgot'] = array (
+    	'#type'=>'fieldset',
+    	'#title'=>t('Forgot your password?'),
+		'#attributes' => array('class' => 'left-label'),
+    );
+    $form['forgot']['email'] = array (
+    	'#type'=>'textfield',
+    	'#title'=>t('Email'),
+    	'#required'=>true,
+    	'#default_value'=>$_REQUEST['forgot_email'],
+    );
+    $form['button'] = array (
+    	'#type'=>'submit',
+    	'#value'=> 'Send password-reset email',
+    );
+
+    return $form;
+}
+
+/*
+ * password recovery form validate
+ */
+function teligence_cart_forgot_pass_form_validate($form, &$form_state)
+{
+	if(!valid_email_address($form_state['values']['email']))
+	{
+		form_set_error('email', 'Invalid email address.');
+	}
+}
+
+/*
+ * password recovery submit
+ */
+function teligence_cart_forgot_pass_form_submit($form, & $form_state)
+{
+    $params = new stdClass ();
+    $params->email = $form_state['values']['email'];
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+
+    $result = teligence_cart_soap_call($params, 'GetPasswordResetId', variable_get('wsdl_url_3', ''));
+
+    switch($result['result']->GetPasswordResetIdResult->ResponseCode)
+    {
+        case 'Success':
+            $tokens['tokens']['[url]'] = url('cart/password-reset/'.$result['result']->GetPasswordResetIdResult->PasswordResetId, array ('absolute'=>true));
+            $tokens['tokens']['[user-email]'] = $form_state['values']['email'];
+            drupal_mail('teligence_cart', 'forgot', $form_state['values']['email'], language_default(), $tokens);
+            drupal_set_message('Further instructions have been sent to your e-mail address.');
+            break;
+
+        case 'Failure':
+            drupal_set_message('You don\'t have an account with us. '.l('Sign up now!', 'cart/buy'), 'warning');
+            break;
+
+        default:
+            drupal_set_message($result['debug']);
+            break;
+    }
+    
+    return $result['result']->GetPasswordResetIdResult->ResponseCode;
+
+}
+
+/*
+ * teligence_cart_logout_page
+ */
+function teligence_cart_logout_page() 
+{	
+	if (!function_exists('user_logout')) {
+		include_once(drupal_get_path('module', 'user').'/user.pages.inc');
+	}
+	
+	user_logout();
+}
+
+/*
+ * sign up for web account
+ */
+function teligence_cart_signup_web_form($form_state)
+{
+	drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.password.js');
+    $form['#theme'] = 'teligence_cart_autosignup';
+
+    $form['ivr_account'] = array (
+    '#type'=>'fieldset',
+    '#title'=>t('IVR Account Info'),
+	'#attributes' => array('class' => 'left-label'),
+    );
+    $form['web_account'] = array (
+    '#type'=>'fieldset',
+    '#title'=>t('Web Account Info'),
+	'#attributes' => array('class' => 'left-label'),
+    );
+	
+    $form['web_account']['email'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('Email'),
+    '#required'=>true,
+    );
+    $form['web_account']['password'] = array (
+    '#type'=>'password',
+    '#title'=>t('New Password'),
+    '#required'=>true,
+    '#description'=>'Must be at least 6 characters in length. Max 8 characters.',
+    '#maxlength'=>8,
+    '#size'=>10,
+    );
+    $form['web_account']['confirm_password'] = array (
+    '#type'=>'password',
+    '#title'=>t('Confirm Password'),
+    '#required'=>true,
+    '#maxlength'=>8,
+    '#size'=>10,
+    );
+    $form['ivr_account']['area_code'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('Area Code'),
+    '#size'=>6,
+    '#maxlength'=>3,
+    '#default_value'=>$_REQUEST['area_code'],
+    '#required'=>true,
+    );
+    $form['ivr_account']['ivr_number'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('Membership Number'),
+    '#required'=>true,
+    '#size'=>10,
+    '#maxlength'=>5,
+    );
+    $form['ivr_account']['ivr_passcode'] = array (
+    '#type'=>'password',
+    '#title'=>t('Passcode'),
+    '#required'=>true,
+    '#size'=>6,
+    '#maxlength'=>4,
+    '#description'=>'Must be a 4 digit number with no spaces or extra characters',
+    );
+
+    $form['submit'] = array (
+    '#type'=>'submit',
+    '#value'=>'Sign Up'
+    );
+
+    return $form;
+}
+
+/*
+ * submit sign up for web account form
+ */
+function teligence_cart_signup_web_form_submit($form, &$form_state)
+{
+    teligence_cart_signup_web_account($form_state);
+	switch($form_state['ResponseCode'])
+	{
+		case 'NotFound':
+			$tokens = teligence_cart_tokens();
+			drupal_set_message("You don't have an ". $tokens['[brand-name]'] ." account. Please proceed here to sign up for a new account.", 'warning');
+	        drupal_goto('cart/buy', array ('area_code'=>$form_state['values']['area_code']));
+		break;
+		case 'FoundWithWebAccount':
+			drupal_set_message('You have an account with us already. Please login here.', 'warning');
+	        drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));
+		break;
+		case 'FoundWithWebAccountEmailNeedsValidation':
+			$tokens['tokens']['[url]'] = url('cart/validate/'.$form_state['ems_validation_code'], array ('absolute'=>true));
+	        drupal_mail('teligence_cart', 'validate', $form_state['values']['email'], language_default(), $tokens);
+	        drupal_set_message('Your new web account has been created. An email has been sent. Please check your inbox and verify your account.');
+	        drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));
+		break;
+		case 'Success':
+			$tokens['tokens']['[url]'] = url('cart/validate/'.$form_state['signup_validation_code'], array ('absolute'=>true));
+	        $tokens['tokens']['[web-password]'] = $form_state['values']['password'];
+	        $tokens['tokens']['[user-email]'] = $form_state['values']['email'];
+	        $tokens['tokens']['[ivr-number]'] = $form_state['values']['ivr_number'];
+	        $tokens['tokens']['[ivr-passcode]'] = $form_state['values']['ivr_passcode'];
+	        drupal_mail('teligence_cart', 'signup', $form_state['values']['email'], language_default(), $tokens);
+	        drupal_set_message(variable_get('teligence_cart_error_new_account', 'Your new web account has been created. Further instructions have been sent to your e-mail address.'));
+			drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));		
+		break;
+		case 'WebAcountAlreadyExists':
+			drupal_set_message(variable_get('teligence_cart_error_existing_account', 'You already have an account with us. Did you '. l('forget your password', 'cart/forgot-password') .'?'));
+	        drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));
+		break;
+		case 'TechnicalError':
+			drupal_set_message("We are having technical issues. Sorry for the inconvenience. Please don't close this window and try again later.", 'warning');
+			drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+	        drupal_set_message($result['debug']);
+	        drupal_goto('cart/blank');
+		break;
+		default:
+		break;
+	}
+}
+
+/*
+ * SignUp - sign up for web account
+ */
+function teligence_cart_signup_web_account(&$form_state)
+{
+	$params = new stdClass ();
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+    $params->ivrMembershipNumber = $form_state['values']['ivr_number'];
+    $params->ivrPasscode = $form_state['values']['ivr_passcode'];
+    $params->areaCode = $form_state['values']['area_code'];
+
+    $result = teligence_cart_soap_call($params, 'GetEmsMember', variable_get('wsdl_url_3', ''));
+
+    switch($result['result']->GetEmsMemberResult->ResponseCode)
+    {
+        case 'NotFound':
+            $form_state['ResponseCode'] = 'NotFound';
+        break;
+
+        case 'FoundWithWebAccount':
+            $form_state['ResponseCode'] = 'FoundWithWebAccount';
+        break;
+
+        case 'FoundWithWebAccountEmailNeedsValidation':
+            $form_state['ResponseCode'] = 'FoundWithWebAccountEmailNeedsValidation';
+            $form_state['ems_validation_code'] = $result['result']->GetEmsMemberResult->ValidationCode;
+        break;
+
+        case 'FoundNoWebAccount':
+
+        	$form_state['ems_validation_code'] = $result['result']->GetEmsMemberResult->ValidationCode;
+        	
+			$params = new stdClass ();
+			$params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+        	$params->email = $form_state['values']['email'];
+            $params->password = $form_state['values']['password'];
+            $params->emsMemberId = $result['result']->GetEmsMemberResult->EmsMemberId;
+
+            $result = teligence_cart_soap_call($params, 'SignUp', variable_get('wsdl_url_3', ''));
+
+            switch($result['result']->SignUpResult->ResponseCode)
+            {
+                case 'Success':
+                	$form_state['signup_validation_code'] = $result['result']->SignUpResult->ValidationCode;
+					$form_state['ResponseCode'] = 'Success';
+                    break;
+
+                case 'WebAcountAlreadyExists':
+                    $form_state['ResponseCode'] = 'WebAcountAlreadyExists';
+                    break;
+
+                case 'TechnicalError':
+                    $form_state['ResponseCode'] = 'TechnicalError';
+                    break;
+
+                default:
+                    drupal_set_message($result['debug']);
+                    break;
+        	}
+        break;
+
+	    default:
+	        drupal_set_message($result['debug']);
+	    break;
+	}
+}
+
+/*
+ * validate sign up for web account form
+ */
+function teligence_cart_signup_web_form_validate($form, & $form_state)
+{
+	$form_state['values']['email'] = trim($form_state['values']['email']);
+    if (!teligence_cart_check_email($form_state['values']['email']))
+    {
+        form_set_error('email', t('Invalid email address'));
+    }
+
+    if ($form_state['values']['password'] <> $form_state['values']['confirm_password'])
+    {
+        form_set_error('confirm_password', t('Password doesn\'t match'));
+    }
+
+    if (strlen($form_state['values']['password']) < 6)
+    {
+        form_set_error('password', t('Password is too short'));
+    }
+
+    if (strlen($form_state['values']['area_code']) < 3)
+    {
+        form_set_error('area_code', t('Area Code must be 3 digits long'));
+    }
+
+    if (strlen($form_state['values']['ivr_number']) < 5)
+    {
+        form_set_error('ivr_number', t('IVR Membership Number must be 5 digits long'));
+    }
+}
+
+
+/**
+ * stand alone rates lookup page
+ */
+function teligence_cart_find_packages($form_state)
+{
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		//'#title' => t('Enter your phone number.'),
+		//'#description' => t('Enter your phone number.'),
+	);
+    $form['group']['area_code'] = array (
+        '#prefix' => '<div class="ani"><div class="parenthesys">(</div>',
+        '#suffix' => '<div class="parenthesys">)</div>',
+        '#type'=>'textfield',
+        //'#title'=>t('Area Code'),
+        '#size'=>4,
+        '#maxlength'=>3,
+        '#default_value'=>$form_state['storage']['values']['area_code'],
+        '#pre_render'=>array('teligence_cart_find_packages_pre_render'),
+    );
+    $form['group']['phone_number'] = array (
+        '#suffix' => '</div>',
+        '#type'=>'textfield',
+        //'#title'=>t('Number'),
+        '#size'=>8,
+    	'#maxlength'=>7,
+       	'#default_value'=>$form_state['storage']['values']['phone_number'],
+	    '#pre_render'=>array('teligence_cart_find_packages_pre_render'),
+    );
+    
+    $form['group']['find_packages'] = array ('#type'=>'submit', '#value' => t('Find Packages'));
+	
+    if(is_numeric($form_state['storage']['ani']))
+    {
+	    $params = new stdClass ();			
+	    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+		$params->ani = $form_state['storage']['ani'];						
+	    $result = teligence_cart_soap_call($params, 'GetPackagesByBrandAni', variable_get('wsdl_url', ''));
+		
+		$options = array();
+		switch ($result['result']->GetPackagesByBrandAniResult->ResponseCode) {
+			case 'Success':	
+				foreach ((array)$result['result']->GetPackagesByBrandAniResult->WebPackages->WebPackage as $WebPackage) 
+				{
+					$options[$WebPackage->PackageId] = array (
+	        			'minutes'=> $WebPackage->Minutes,
+						'currency' => $WebPackage->Currency,
+						'price' => $WebPackage->PackagePriceCents,
+	        		);
+					$form['package_details'][$WebPackage->PackageId] = array(
+						'#type' => 'hidden',
+						'#value' => $WebPackage->Minutes.' minutes ' . 
+									$WebPackage->Currency.'$'. 
+									substr($WebPackage->PackagePriceCents, 0, 
+									strlen($WebPackage->PackagePriceCents)-2) . 
+									'.' . 
+									substr($WebPackage->PackagePriceCents, -2),
+					);
+				}
+				$form['group']['packages'] = array (
+	                '#type'=> 'radios',
+	                //'#title'=> t('Select Package'),
+	                '#options'=>$options,
+	                '#theme'=> 'teligence_cart_packages_stand_alone',
+	                '#default_value'=>($form_state['storage']['values'][3]['packages'] ? $form_state['storage']['values'][3]['packages'] : key($options)),
+	            );
+				/**
+				 * make middle package selected by default
+				 */
+				$middle = abs(floor(count((array)$form['group']['packages']['#options'])/2)-1);
+				$keys = array_keys((array)$form['group']['packages']['#options']);
+				$form['group']['packages']['#default_value'] = $keys[$middle];
+			break;
+	
+			default:
+				drupal_set_message($result['debug']);
+				
+			case 'NoPackages':
+				$form['group']['no_packages'] = array (
+					'#type' => 'item',
+					'#value' => 'No packages available at the moment. Please try again later.',
+				);
+			break;
+		}
+		
+		if(user_access('access buy now'))
+		{
+			$form['buynow'] = array('#type' => 'submit', '#value' => t('Buy Now'));
+		}
+		
+    }
+    
+    return $form;
+}
+
+/*
+ * per render ani fields for find packages form
+ */
+function teligence_cart_find_packages_pre_render($element)
+{
+	if(count(drupal_get_messages('error', false)))
+	{
+		$element['#attributes']['class'] .= ' error';
+	}
+
+	return $element;
+}
+
+/*
+ * submit find packages form
+ */
+function teligence_cart_find_packages_submit($form, &$form_state)
+{
+	//drupal_set_message('<pre>' . print_r($form_state, true) . '</pre>');
+	
+	//tell Drupal we are redrawing the same form
+    $form_state['rebuild'] = TRUE;
+
+	if($form_state['clicked_button']['#id'] == 'edit-find-packages')
+	{
+		if(!strlen($form_state['values']['area_code']) && !strlen($form_state['values']['phone_number']))
+		{
+			form_set_error('phone_number', t(variable_get('teligence_cart_error_phone_number', 'Phone number is required. Please enter your phone number.')));
+			form_set_error('area_code', t(variable_get('teligence_cart_error_phone_number', 'Phone number is required. Please enter your phone number.')));
+			array_pop($_SESSION['messages']['error']);
+		}
+		elseif(!teligence_cart_valid_phone_number($form_state['values']['area_code'].$form_state['values']['phone_number']))
+		{
+			drupal_set_message(t('Invalid phone number'), 'error');
+			//unset($form_state['storage']);
+			return;
+		}
+
+		$form_state['storage']['ani'] = $form_state['values']['area_code'].$form_state['values']['phone_number'];
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-buynow')
+	{
+		drupal_goto('cart/buy');
+	}
+	
+	$form_state['storage']['values'] = $form_state['values'];
+	
+	
+	
+}
+
+
+/*
+ * buy now pre render teligence_cart_autosignup_per_render
+ */
+function teligence_cart_autosignup_per_render($form)
+{
+	drupal_set_title($form['page_title']['#value']);
+	
+	//drupal_set_message('<pre>' . print_r(form_get_errors(), true) . '</pre>');
+	//drupal_set_message('<pre>' . print_r($form['web_account']['contact_perms']['age'], true) . '</pre>');
+	
+	if(array_key_exists('age', (array)form_get_errors()))
+	{
+		$form['web_account']['age']['#attributes'] = array("class" => "error");
+	}
+	
+	if(isset($form['web_account']['password']))
+	{
+		drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.password.js');
+	}
+
+	return $form;
+}
+
+/*
+ * buy now form
+ * ASU multi step form
+ */
+function teligence_cart_select_package_form($form_state)
+{
+	$moresteps = true;
+	$nextlabel = t('Next >>');
+	$form['#theme'] = 'teligence_cart_autosignup';
+	$form['#pre_render'] = array('teligence_cart_autosignup_per_render');
+
+    if ( empty($form_state['storage']['step']))
+    {
+        // we are coming in without a step, so default to step 1
+        $form_state['storage']['step'] = 1;
+        
+    }
+    		
+	// steps indicator for user
+	for($i = 1; $i < 8; $i++){
+		$step_indicator[] = array('data' => t('Step '.$i));
+	}
+	
+	// build steps table
+	$step_indicator[$form_state['storage']['step']-1]['class'] = 'active';
+	$form['step_indicator'] = array(
+		'#type' => 'fieldset',
+		'#description' => theme('table', array() ,array($step_indicator), array('class' => 'step-indicator')),
+		'#weight' => -100,
+	);
+	
+    switch($form_state['storage']['step'])
+    {
+        	case 1:
+			default:
+				$form['page_title'] = array('#type' => 'hidden', '#value' => t('Membership Status'));
+                $form['membership'] = array (
+                	'#type'=>'fieldset',
+                	//'#title'=>t(' Membership Status '),
+                	'#description'=>t('Please select your membership status below.'),
+                );
+                $form['membership']['membership_status'] = array (
+                	'#type'=>'radios',
+                	'#title'=>t('Membership Status'),
+                	'#options'=> array ('new_member'=>'New Member', 'returning_member'=>'Returning Member'),
+                	'#default_value'=>$form_state['storage']['values'][1]['membership_status'],
+					'#required' => true,
+                );
+            break;
+			
+			case 2:
+				drupal_add_css(drupal_get_path('module', 'teligence_cart').'/styles.css');
+				$form['page_title'] = array('#type' => 'hidden', '#value' => t('Enter your phone number'));
+				$form['group'] = array(
+					'#type' => 'fieldset',
+					//'#title' => t('Enter your phone number.'),
+					//'#description' => t('Enter your phone number.'),
+				);
+	            $form['group']['area_code'] = array (
+	            	'#prefix' => '<div class="ani"><div class="parenthesys">(</div>',
+	            	'#suffix' => '<div class="parenthesys">)</div>',
+	            	'#type'=>'textfield',
+	            	//'#title'=>t('Area Code'),
+	            	'#size'=>4,
+	            	'#maxlength'=>3,
+	            	'#default_value'=>$_REQUEST['area_code']?$_REQUEST['area_code']:$form_state['storage']['values'][2]['area_code'],
+	            );
+	            $form['group']['phone_number'] = array (
+	            	'#suffix' => '</div>',
+	            	'#type'=>'textfield',
+	            	//'#title'=>t('Number'),
+	            	'#size'=>8,
+	            	'#maxlength'=>7,
+	            	'#default_value'=>$_REQUEST['phone_number']?$_REQUEST['phone_number']:$form_state['storage']['values'][2]['phone_number'],
+	            );
+	            $form['group']['ie8bug'] = array (
+	            	'#type'=>'textfield',
+	            	'#title'=>'',
+	            	'#size'=>1,
+	            	'#attributes' => array('style' => 'display:none;'),
+	            );
+            break;
+
+            case 3:
+            	$form['page_title'] = array('#type' => 'hidden', '#value' => t('Select Package'));
+				$params = new stdClass ();			
+			    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+				$params->ani = $form_state['storage']['values'][2]['ani'];						
+			    $result = teligence_cart_soap_call($params, 'GetPackagesByBrandAni', variable_get('wsdl_url', ''));
+				
+				$options = array();
+				switch ($result['result']->GetPackagesByBrandAniResult->ResponseCode) 
+				{
+					case 'Success':
+						if(!is_array($result['result']->GetPackagesByBrandAniResult->WebPackages->WebPackage)): 
+							$WebPackages = array($result['result']->GetPackagesByBrandAniResult->WebPackages->WebPackage);
+						else:
+							$WebPackages = $result['result']->GetPackagesByBrandAniResult->WebPackages->WebPackage;
+						endif;
+						foreach ((array)$WebPackages as $WebPackage) 
+						{
+							$options[$WebPackage->PackageId] = array (
+			        			'minutes'=> $WebPackage->Minutes,
+								'currency' => $WebPackage->Currency,
+								'price' => $WebPackage->PackagePriceCents,
+			        		);
+							$form['package_details'][$WebPackage->PackageId] = array(
+								'#type' => 'hidden',
+								'#value' => $WebPackage->Minutes.' minutes ' . 
+											$WebPackage->Currency.'$'. 
+											substr($WebPackage->PackagePriceCents, 0, 
+											strlen($WebPackage->PackagePriceCents)-2) . 
+											'.' . 
+											substr($WebPackage->PackagePriceCents, -2),
+							);
+						}
+						$form['packages'] = array (
+                			'#type'=> 'radios',
+                			'#options'=>$options,
+                			'#theme'=> 'teligence_cart_packages',
+                			'#default_value'=>($form_state['storage']['values'][3]['packages'] ? $form_state['storage']['values'][3]['packages'] : key($options)),
+                		);
+					break;
+					default:	
+					case 'NoPackages':
+						$form['packages'] = array (
+							'#type' => 'fieldset',
+							'#description' => 'No packages available at the moment. Please try again later.',
+						);
+						
+						$form['previous'] = array (
+				        	'#type'=>'submit',
+				        	'#value'=> t('<< Previous'),
+							'#weight' => 101,
+				        );
+				        
+				        $moresteps = false;
+				    
+						if(variable_get('teligence_cart_debug_mode', 0))
+							watchdog('teligence_cart',$result['debug']); 
+					break;
+				}
+            break;
+
+            case 4:
+            	
+            	$form['page_title'] = array('#type' => 'hidden', '#value' => t('Account Info'));
+				// WEB ACCOUNT INFO
+                $form['web_account'] = array (
+                	'#type'=>'fieldset',
+                	'#title'=>t('Account Info'),
+					'#attributes' => array('class' => 'left-label'),
+                	'#description' => t('* indicates field is required.'),
+                );
+
+                $form['web_account']['email'] = array (
+                	'#type'=>'textfield',
+                	'#title'=>t('Email*'),
+                	'#default_value'=>$form_state['storage']['values'][$form_state['storage']['step']]['email'],
+                );
+                $form['web_account']['password'] = array (
+                	'#type'=>'password',
+                	'#title'=>t('Password*'),
+                	'#default_value'=>$form_state['storage']['values'][$form_state['storage']['step']]['password'],
+                	'#description'=>'Must be at least 6 characters in length. Max 8 characters.',
+					'#maxlength'=>8,
+    				'#size'=>10,
+                );
+                $form['web_account']['confirm_password'] = array (
+                	'#type'=>'password',
+                	'#title'=>t('Confirm Password*'),
+                	'#default_value'=>$form_state['storage']['values'][$form_state['storage']['step']]['confirm_password'],
+					'#maxlength'=>8,
+    				'#size'=>10,
+                );
+                
+                $form['web_account']['contact_perms'] = array (
+                	'#type'=> 'checkboxes',
+                	'#options'=>array('email' => 'Contact me via Email', 'sms' => 'Contact me via SMS'),
+                	'#default_value'=> $form_state['storage']['values'][4]['contact_perms'] ? $form_state['storage']['values'][4]['contact_perms'] : array(0, 0, 0),
+                	//'#options' => array('email' => 'Contact me via Email'),
+                	'#theme' => 'teligence_cart_selection_boxes',
+                );
+                
+                $form['web_account']['age'] = array(
+                	'#type' => 'checkbox',
+                	'#title' => t('I am 18 years old or older'),
+                );
+                
+
+				// BILLING ADDRESS
+				$form['billing_address'] = array (
+                	'#type'=>'fieldset',
+                	'#title'=>t('Billing Address'),
+					'#attributes' => array('class' => 'left-label'),
+					'#description' => t('* indicates field is required.'),
+                );
+				$form['billing_address']['firstName'] = array(
+					'#type' => 'textfield',
+					'#title' => t('First Name*'),
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['firstName'],
+				);
+				$form['billing_address']['lastName'] = array(
+					'#type' => 'textfield',
+					'#title' => t('Last Name*'),
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['lastName'],
+				);
+				$form['billing_address']['Ani'] = array(
+					'#type' => 'textfield',
+					'#title' => t('Phone Number*'),
+					'#default_value' => teligence_cart_format_fancy_phonenumber(($form_state['storage']['values'][4]['Ani'] ? $form_state['storage']['values'][4]['Ani'] : $form_state['storage']['values'][2]['ani'])),
+					'#description' => t('Please enter the number in the form of (xxx) xxx-xxx'),
+				);
+				$form['billing_address']['Apartment'] = array(
+					'#type' => 'hidden',
+					//'#title' => t('Apartment'),
+					//'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['Apartment'],
+					'#value' => '',
+				);
+				$form['billing_address']['AddressLine1'] = array(
+					'#type' => 'textfield',
+					'#title' => t('Address Line 1*'),
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['AddressLine1'],
+				);
+				$form['billing_address']['AddressLine2'] = array(
+					'#type' => 'textfield',
+					'#title' => t('Address Line 2'),
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['AddressLine2'],
+				);
+				$form['billing_address']['Zip'] = array(
+					'#type' => 'textfield',
+					'#title' => t('Zip/Postal Code*'),
+					'#weight' => 10,
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['Zip'],
+				);
+				$form['billing_address']['City'] = array(
+					'#type' => 'textfield',
+					'#title' => t('City*'),
+					'#weight' => 7,
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['City'],
+				);
+				$form['billing_address']['Country'] = array(
+					'#type' => 'select',
+					'#title' => t('Country*'),
+					'#weight' => 8,
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['Country'],
+					'#options' => array('USA' => 'USA', 'Canada' => 'Canada'),
+				);
+				$form['billing_address']['State'] = array(
+					'#type' => 'select',
+					'#title' => t('State/Province*'),
+					'#weight' => 9,
+					'#default_value' => $form_state['storage']['values'][$form_state['storage']['step']]['State'],
+					'#pre_render' => array('teligence_cart_pre_render_states'),
+					'#attributes' => array(
+						'class' => ($form['billing_address']['Country']['#default_value'] ? $form['billing_address']['Country']['#default_value'] : 'USA')
+					),
+				);
+				
+               
+            break;
+			
+			case 5:
+				// CREDIT CARD
+				$form['page_title'] = array('#type' => 'hidden', '#value' => t('Credit Card'));
+				$form['payment'] = array (
+                	'#type'=>'fieldset',
+                	'#title'=>t('Credit Card'),
+					'#attributes' => array('class' => 'left-label'),
+					'#description' => t('* indicates field is required.'),
+                );
+				
+				$form['payment']['package_details'] = array(
+					'#type' => 'item',
+					'#title' => t('Package Details'),
+					'#value' => $form_state['storage']['values'][3][$form_state['storage']['values'][3]['packages']],
+				);
+
+                $form['payment']['cc_number'] = array (
+                	'#type'=>'textfield',
+                	'#title'=>t('Card Number*'),
+                	'#size'=>16,
+                	'#maxlength'=>16,
+                	'#default_value'=>$form_state['storage']['values'][$form_state['storage']['step']]['cc_number'],
+                );
+
+				$form['payment']['cc_expiration'] = array (
+                	'#type'=>'date',
+                	'#title'=>t('Expiration date*'),
+                	'#description'=>t('Enter expiration date on card'),
+                	'#default_value'=>$form_state['storage']['values'][$form_state['storage']['step']]['cc_expiration'],
+					'#theme' => 'teligence_cart_select_expiration_date',
+                );
+                
+                $form['payment']['cc_csc'] = array (
+                	'#type'=>'textfield',
+                	'#title'=>t('CSC Code*'),
+                	'#description'=>t('For your safety and security, Teligence requires that you enter your '.
+					l('Card Security Code (CSC) <a name="#csc" />','',
+						array('html' => true, 'fragment' => '#csc', 'external' => TRUE, 'attributes' => array(
+							'alt' => 'For MasterCard or Visa, it\'s the last three digits in the signature area on the back of your card. For American Express, it\'s the four digits on the front of the card.', 
+							'title' => 'For MasterCard or Visa, it\'s the last three digits in the signature area on the back of your card. For American Express, it\'s the four digits on the front of the card.')
+						))),
+        			'#size'=>4,
+                	'#maxlength'=>4,
+                	'#default_value'=>$form_state['storage']['values'][$form_state['storage']['step']]['cc_csc'],
+                );
+                break;
+                
+			case 6:
+				// Review info and place order
+				$form['page_title'] = array('#type' => 'hidden', '#value' => t('Place Order'));
+				$nextlabel = t('Place Order');
+				
+                $form['summary'] = array (
+                	'#type'=>'item',
+                	'#title' => t('Summary'),
+                	'#value'=> array_merge($form_state['storage']['values'][4], $form_state['storage']['values'][5]),
+                	'#theme' => 'teligence_cart_summary',	
+                );
+				
+                // Package info values
+				$form['order_confirm']['package_minutes'] = array (
+                	'#type'=>'hidden',
+                	'#title'=>t('Package Minutes'),
+                	'#value'=>$form_state['storage']['values'][5]['PackageMinutes'],	
+                );
+				$form['order_confirm']['package_value'] = array (
+                	'#type'=>'hidden',
+                	'#title'=>t('Package Value'),
+                	'#value'=>'$'.number_format((int)$form_state['storage']['values'][5]['PackageAmountCents']/100, 2),	
+                );
+				
+                if((int)$form_state['storage']['values'][5]['PromoAmountCents']):
+	                $form['order_confirm']['promo_amount'] = array (
+	                	'#type'=>'hidden',
+	                	'#title'=>t('Promo Amount'),
+	                	'#value'=>'$'.number_format((int)$form_state['storage']['values'][5]['PromoAmountCents']/100, 2),	
+	                );
+                endif;
+				
+                if((int)$form_state['storage']['values'][5]['TaxesAmountCents']):
+	                $form['order_confirm']['taxes_amount'] = array (
+	                	'#type'=>'hidden',
+	                	'#title'=>t('Tax'),
+	                	'#value'=>'$'.number_format((int)$form_state['storage']['values'][5]['TaxesAmountCents']/100, 2),	
+	                );
+                else:
+	                $form['order_confirm']['taxes_amount'] = array (
+	                	'#type'=>'hidden',
+	                	'#title'=>t('Tax'),
+	                	'#value'=>'Tax Included',	
+	                );
+                endif;
+                $form['order_confirm']['order_total'] = array (
+                	'#type'=>'hidden',
+                	'#title'=>t('Order Total'),
+                	'#value'=>'$'.number_format((int)$form_state['storage']['values'][5]['TotalAmountCents']/100, 2),
+                );
+				
+                
+                if((int)$form_state['storage']['values'][5]['PromoMinutes']):
+				$form['order_confirm']['promo_minutes'] = array (
+                	'#type'=>'hidden',
+                	'#title'=>t('Promo Minutes'),
+                	'#value'=>$form_state['storage']['values'][5]['PromoMinutes'],	
+                );
+                endif;
+                
+            break;
+            
+			case 7:
+				$form['page_title'] = array('#type' => 'hidden', '#value' => t('Successful Order'));
+				$moresteps = false;
+				$form['finish'] = array(
+					'#value' => teligence_cart_token_replacer(variable_get('teligence_cart_asu_screen', '' ), $form_state['storage']['values'][7]['tokens']),				
+				);
+			break;
+                
+    }
+
+	//show next button not all the time
+	if($moresteps)
+	{
+		$form['next'] = array (
+    		'#type'=>'submit',
+    		'#value'=>$nextlabel,
+			'#weight' => 100,
+    	);
+		//don't show back button on first tab or last step
+	    if ( $form_state['storage']['step'] > 1 && $moresteps )
+	    {
+	        $form['previous'] = array (
+	        	'#type'=>'submit',
+	        	'#value'=>t('<< Previous'),
+				'#weight' => 101,
+	        );
+	    }
+	}
+
+    return $form;
+}
+
+/**
+ * pre render
+ */
+// function teligence_cart_packages_options_prerender($element)
+// {
+	// /**
+	 // * make middle package selected by default
+	 // */
+	// // $middle = abs(floor(count((array)$form['packages']['#options'])/2)-1);
+	// $middle = (int)ceil(count((array)$element['#options'])/2);
+	// // $keys = array_keys((array)$form['packages']['#options']);
+	// // $form['packages']['#default_value'] = $keys[$middle];
+	// $c = 0;
+	// foreach($element['#options'] as $k => $v)
+	// {
+		// $c++;
+		// if($c == $middle)
+		// {
+			// $element[$k]['#default_value'] = 1;
+			// $element['#default_value'] = $k;
+		// }
+	// }
+// 	
+	// // drupal_set_message('<pre>'.print_r($element, true).'</pre>');
+// 	
+	// return $element;
+// }
+
+/*
+ * validate ValidateAsuPurchase
+ * store billing address
+ */
+function teligence_cart_validate_asu_purchase(&$form_state)
+{
+	// drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+	
+	unset($_SESSION['guid']);
+	
+	$params = new stdClass ();
+	$params->lastName = $form_state['values']['lastName'];
+    $params->firstName = $form_state['values']['firstName'];
+	$params->ani = teligence_cart_format_phonenumber($form_state['values']['Ani']);
+	$params->apartment = $form_state['values']['Apartment'];
+	$params->addressLine1 = $form_state['values']['AddressLine1'];
+	$params->addressLine2 = $form_state['values']['AddressLine2'];
+	$params->zip = $form_state['values']['Zip'];
+	$params->city = $form_state['values']['City'];
+	$params->state = $form_state['values']['State'];
+	$params->country = $form_state['values']['Country'];
+	$params->creditCardNumber = $form_state['values']['cc_number'];	
+	$params->expiryDateMmyy = str_pad ($form_state['values']['cc_expiration']['month'], 2, 0, STR_PAD_LEFT).str_pad ($form_state['values']['cc_expiration']['year'], 2, 0, STR_PAD_LEFT);
+	$params->packageId = $form_state['storage']['values'][3]['packages'];
+    
+	$result = teligence_cart_soap_call($params, 'ValidateAsuPurchase', variable_get('wsdl_url_5', ''));
+    
+	switch($result['result']->ValidateAsuPurchaseResult->ResponseCode)
+    {
+        case 'Success':
+			$form_state['storage']['values'][$form_state['storage']['step']]['orderId'] = $result['result']->ValidateAsuPurchaseResult->OrderId;
+			$form_state['storage']['values'][$form_state['storage']['step']]['TotalAmountCents'] = $result['result']->ValidateAsuPurchaseResult->TotalAmountCents;
+			$form_state['storage']['values'][$form_state['storage']['step']]['PackageAmountCents'] = $result['result']->ValidateAsuPurchaseResult->PackageAmountCents;
+			$form_state['storage']['values'][$form_state['storage']['step']]['PromoAmountCents'] = $result['result']->ValidateAsuPurchaseResult->PromoAmountCents;
+			$form_state['storage']['values'][$form_state['storage']['step']]['TaxesAmountCents'] = $result['result']->ValidateAsuPurchaseResult->TaxesAmountCents;
+			$form_state['storage']['values'][$form_state['storage']['step']]['PackageMinutes'] = $result['result']->ValidateAsuPurchaseResult->PackageMinutes;
+			$form_state['storage']['values'][$form_state['storage']['step']]['PromoMinutes'] = $result['result']->ValidateAsuPurchaseResult->PromoMinutes;
+			$form_state['storage']['values'][$form_state['storage']['step']]['paymethodId'] = $result['result']->ValidateAsuPurchaseResult->PaymethodId;
+			
+			//drupal_set_message($result['debug']);
+			//drupal_set_message('<pre>'.print_r($result['result']->ValidateAsuPurchaseResult, true).'</pre>');
+
+			return true;
+        break;
+        	
+        default:
+			drupal_set_message($result['debug']);
+            return false;
+        break;
+	}
+	
+	//return $result['result']->ValidateAsuPurchaseResult->ResponseCode;
+}
+
+/*
+ * submit package selection form
+ * 
+ */
+function teligence_cart_select_package_form_submit($form, &$form_state)
+{
+	//save the values for the current step into the storage array
+    $form_state['storage']['values'][$form_state['storage']['step']] = $form_state['values'];
+	
+	// redirect when not new customer
+    if ($form_state['values']['membership_status'] == 'returning_member')
+    {
+        drupal_set_message(variable_get('teligence_cart_returning_member',''));
+    	drupal_goto('cart/login');
+    } 
+	
+    //store ani
+    if($form_state['storage']['step'] == 2 && $form_state['clicked_button']['#id'] == 'edit-next')
+    {
+    	$form_state['storage']['values'][2]['ani'] = $form_state['values']['area_code'].$form_state['values']['phone_number'];
+    }
+    
+	// validate auto signup
+	if($form_state['storage']['step'] == 4 && $form_state['clicked_button']['#id'] == 'edit-next')
+	{	
+		// validate cerdit card and account and populate confirmation screen
+		// teligence_cart_validate_asu_purchase($form_state);
+		
+		//prepare summary
+		$form_state['storage']['values'][4]['email'][$form['web_account']['email']['#title']] = $form_state['values']['email'];
+		foreach($form['billing_address'] as $key => $value)
+		{
+			$form_state['storage']['values'][4]['billing_address'][$value['#title']] = $form_state['values'][$key];
+		}	
+	}
+	
+	if($form_state['storage']['step'] == 5 && $form_state['clicked_button']['#id'] == 'edit-next')
+	{	
+		//drupal_set_message('<pre>'.print_r($form_state['storage']['values'][4], true).'</pre>');
+		
+		// validate cerdit card and account and populate confirmation screen
+		$form_state['values'] += (array)$form_state['storage']['values'][4];
+		if(!teligence_cart_validate_asu_purchase($form_state))
+		{
+			// Looks like you already have an account with us.
+			// We could not validate your credit card information.
+			drupal_set_message('We could not validate your payment information at this moment.', 'warning');
+			drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+            //drupal_goto('cart/login');
+			//form_set_error('', 'Looks like you already have an account with us.');
+			//form_set_error('', variable_get('teligence_cart_error_call_cs', ''));
+			return;
+		}
+		
+		foreach((array)$form['payment'] as $key => $value)
+		{
+			$form_state['storage']['values'][4]['payment'][$value['#title']] = $form_state['values'][$key];
+		}
+	}
+	
+	// process payment
+	if($form_state['storage']['step'] == 6 && $form_state['clicked_button']['#id'] == 'edit-next')
+	{	
+		
+		foreach($form['order_confirm'] as $key => $value)
+		{
+			$form_state['storage']['values'][6]['order_confirm'][$value['#title']] = $value['#value'];
+		}
+		
+		$params = new stdClass ();
+		$params->orderId = $form_state['storage']['values'][5]['orderId'];
+		$params->paymethodId = $form_state['storage']['values'][5]['paymethodId'];
+		$params->cvn = $form_state['storage']['values'][5]['cc_csc'];
+		
+		$result = teligence_cart_soap_call($params, 'ProcessPayment', variable_get('wsdl_url_5', ''));
+		
+		switch($result['result']->ProcessPaymentResult->ResponseCode)
+		{
+			case 'Success':
+				
+				// prepare tokens
+				$tokens['tokens']['[telephone-number]'] = $form_state['storage']['values'][4]['Ani'];
+				$tokens['tokens']['[first-name]'] = $form_state['storage']['values'][4]['firstName'];
+				$tokens['tokens']['[last-name]'] = $form_state['storage']['values'][4]['lastName'];
+				$tokens['tokens']['[minutes-purchased]'] = $form['order_confirm']['package_minutes']['#value'];
+				$tokens['tokens']['[package-price]'] = $form['order_confirm']['package_value']['#value'];
+				$tokens['tokens']['[package-tax]'] = $form['order_confirm']['taxes_amount']['#value'];
+				$tokens['tokens']['[package-total-price]'] = $form['order_confirm']['order_total']['#value'];
+				$tokens['tokens']['[promo-minutes]'] = $form['order_confirm']['promo_amount']['#value'];
+				$tokens['tokens']['[ivr-number]'] = $result['result']->ProcessPaymentResult->IvrMembershipNumber;
+				$tokens['tokens']['[ivr-passcode]'] = $result['result']->ProcessPaymentResult->IvrPasscode;
+				$tokens['tokens']['[web-password]'] = $form_state['storage']['values'][4]['password'];
+				$tokens['tokens']['[user-email]'] = $form_state['storage']['values'][4]['email'];
+				$tokens['tokens']['[url]'] = url('cart/login', array('absolute' => true));
+			
+			
+                //SignUp new member and redirect to 7th screen with summary
+				$signup_values['values']['ivr_number'] = $result['result']->ProcessPaymentResult->IvrMembershipNumber;
+				$signup_values['values']['ivr_passcode'] = $result['result']->ProcessPaymentResult->IvrPasscode;
+				$signup_values['values']['area_code'] = $form_state['storage']['values'][2]['area_code'];
+				$signup_values['values']['email'] = $form_state['storage']['values'][4]['email'];
+				$signup_values['values']['password'] = $form_state['storage']['values'][4]['password'];
+				teligence_cart_signup_web_account($signup_values);
+				switch($signup_values['ResponseCode'])
+				{
+					case 'NotFound':
+						$tokens = array_merge($tokens['tokens'], (array)teligence_cart_tokens());
+						drupal_set_message("You don't have an".$tokens['[brand-name]']."account. Please ". l('sign-up', 'cart/signup') ." for a new account.", 'warning');
+				        //drupal_goto('cart/buy', array ('area_code'=>$form_state['values']['area_code']));
+					break;
+					case 'FoundWithWebAccount':
+						drupal_set_message('You have an account with us already. Please ' . l('login', 'cart/login'), 'warning');
+				        //drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));
+					break;
+					case 'FoundWithWebAccountEmailNeedsValidation':
+						$tokens['tokens']['[url]'] = url('cart/validate/' . $signup_values['ems_validation_code'], array ('absolute'=>true));
+				        drupal_mail('teligence_cart', 'validate', $form_state['storage']['values'][4]['email'], language_default(), $tokens);
+				        drupal_set_message('Looks like you have an account with us already. An email has been sent. Please check your inbox and verify your account.');
+				 		drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+				        //drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));
+					break;
+					case 'Success':
+						$tokens['tokens']['[url]'] = url('cart/validate/'. $signup_values['signup_validation_code'], array ('absolute'=>true));
+				        
+				        drupal_set_message(variable_get('teligence_cart_error_new_account', 'Your new web account has been created. Further instructions have been sent to your e-mail address.'));
+				        
+				        // STORE VALUES TO SHOW ON LAST STEP
+				        $form_state['storage']['values'][7]['tokens'] = $tokens['tokens'];
+				        
+				        // send email with new membership/account details
+				        drupal_mail('teligence_cart', 'signup', $form_state['storage']['values'][4]['email'], language_default(), $tokens);
+				        
+				        // send email with order details
+		                drupal_mail('teligence_cart', 'time_purchase', $form_state['storage']['values'][4]['email'], language_default(), $tokens);
+				        
+		                // set contact permissions
+						$perms['storage']['ani'] = $form_state['storage']['values'][2]['ani'];
+						$perms['storage']['email'] = $form_state['storage']['values'][4]['email'];
+						$perms['values']['channels']['sms'] = (bool)$form_state['storage']['values'][4]['contact_perms']['sms'];
+						$perms['values']['channels']['email'] = (bool)$form_state['storage']['values'][4]['contact_perms']['email'];
+						teligence_cart_contact_perm_form_submit($form, $perms);
+						
+						watchdog("CART ASU", "<pre>" . print_r($tokens, true) . "</pre>");
+						//drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));	
+				        //drupal_set_message('<pre>' . print_r($result['result'], true) . '</pre>');
+				        
+					break;
+					case 'WebAcountAlreadyExists':
+						drupal_set_message(variable_get('teligence_cart_error_existing_account', 'You already have an account with us. Did you '. l('forget your password', 'cart/forgot-password') .'?'));
+				        //drupal_goto('cart/login', array ('email'=>$form_state['values']['email']));
+					break;
+					case 'TechnicalError':
+						drupal_set_message("We are having technical issues. Sorry for the inconvenience. Please don't close this window and try again later.", 'warning');
+						drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+				        drupal_set_message($result['debug']);
+				        //drupal_goto('cart/blank');
+					break;
+					default:
+					break;
+				}
+				
+			break;
+			
+			case 'RtmFailure':
+			case 'TechnicalError':
+			case 'AuthorizationTechnicalIssue':
+				drupal_set_message(t("Your transaction couldn't be processed."), 'warning');
+				drupal_set_message(t("We are having technical issues. Sorry for the inconvenience. Please don't close this window and try again later."), 'warning');
+				drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+				//drupal_goto('cart/blank');
+				drupal_set_message($result['debug'], 'error');				
+				return;
+			break;
+			
+			case 'AuthorizationDeclined':
+				drupal_set_message('Please check your credit card information and try again. Authorization of your card was declined', 'warning');
+				drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+				//drupal_goto('cart/blank');
+				drupal_set_message($result['debug'], 'error');
+				return;
+			break;
+				
+			default:
+				drupal_set_message(variable_get('teligence_cart_error_call_cs', 'Please call our customer service: '.variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')), 'warning');
+				drupal_set_message($result['debug'], 'error');
+				//drupal_goto('cart/blank');
+				return;
+			break;
+		}
+		
+		
+		/*
+		 * fake screen for testing
+		 */
+		/*
+		$tokens['tokens']['[telephone-number]'] = $form_state['storage']['values'][4]['Ani'];
+		$tokens['tokens']['[first-name]'] = $form_state['storage']['values'][4]['firstName'];
+		$tokens['tokens']['[last-name]'] = $form_state['storage']['values'][4]['lastName'];
+		$tokens['tokens']['[minutes-purchased]'] = $form['order_confirm']['package_minutes']['#value'];
+		$tokens['tokens']['[package-price]'] = $form['order_confirm']['package_value']['#value'];
+		$tokens['tokens']['[package-tax]'] = $form['order_confirm']['taxes_amount']['#value'];
+		$tokens['tokens']['[package-total-price]'] = $form['order_confirm']['order_total']['#value'];
+		$tokens['tokens']['[promo-minutes]'] = $form['order_confirm']['promo_amount']['#value'];
+		$tokens['tokens']['[ivr-number]'] = $result['result']->ProcessPaymentResult->IvrMembershipNumber;
+		$tokens['tokens']['[ivr-passcode]'] = $result['result']->ProcessPaymentResult->IvrPasscode;
+		$tokens['tokens']['[web-password]'] = $form_state['storage']['values'][4]['password'];
+		$tokens['tokens']['[user-email]'] = $form_state['storage']['values'][4]['email'];
+		$tokens['tokens']['[url]'] = url('cart/validate/'.$result['result']->SignUpResult->ValidationCode, array ('absolute'=>true));
+        
+		// STORE VALUES TO SHOW ON LAST STEP
+        $form_state['storage']['values'][7]['tokens'] = $tokens['tokens'];
+		*/
+	}
+	
+    //tell Drupal we are redrawing the same form
+    $form_state['rebuild'] = TRUE;
+
+    // check the button that was clicked and action the step change
+    if ($form_state['clicked_button']['#id'] == 'edit-previous')
+    {
+    	if($form_state['storage']['step'] == 5)
+		{
+			unset($_SESSION['guid']);
+		}
+		
+        $form_state['storage']['step']--;
+		
+    } 
+	elseif ($form_state['clicked_button']['#id'] == 'edit-next')
+    {
+        $form_state['storage']['step']++;
+    }
+    
+	//drupal_set_message('<pre>'.print_r($form_state['storage']['values'][3], true).'</pre>');
+
+}
+
+/*
+ * validate auto sign up form
+ */
+function teligence_cart_select_package_form_validate($form, & $form_state)
+{	
+	//drupal_set_message('<pre>'.print_r($form_state, true).'</pre>');
+	if ($form_state['clicked_button']['#id'] == 'edit-next') 
+	{	
+		if($form_state['storage']['step'] == 2)
+		{	
+			if(!strlen($form_state['values']['area_code']) && !strlen($form_state['values']['phone_number']))
+			{
+				form_set_error('phone_number', t(variable_get('teligence_cart_error_phone_number', 'Phone number is required. Please enter your phone number.')));
+				form_set_error('area_code', t(variable_get('teligence_cart_error_phone_number', 'Phone number is required. Please enter your phone number.')));
+				array_pop($_SESSION['messages']['error']);
+			}
+			else
+			{
+				if(!teligence_cart_valid_phone_number($form_state['values']['area_code'].$form_state['values']['phone_number']))
+				{
+					form_set_error('phone_number', t('Invalid Phone Number'));
+				}
+				
+				if (!is_numeric($form_state['values']['area_code']) || strlen($form_state['values']['area_code']) < 3)
+	    		{
+	        		form_set_error('area_code', t('Area Code must be 3 digits long'));
+	    		}
+				
+	    		$blacklisted = _teligence_cart_file_to_options(drupal_get_path('module', 'teligence_cart').'/blacklists/areacodes.txt');
+				if(in_array(substr($form_state['values']['area_code'], 0, 1), $blacklisted) || in_array($form_state['values']['area_code'], $blacklisted))
+				{
+					form_set_error('area_code', 'Invalid Area Code.');
+				}	
+			}
+		}
+		
+		if($form_state['storage']['step'] == 3)
+		{
+			if (empty($form_state['values']['packages'])) 
+			{
+				form_set_error('packages', t('Please select a package.'));;
+			}
+		}
+
+		if ($form_state['storage']['step'] == 4) 
+		{		
+			/* change request on email from Shantel Shave on Tuesday, June 29, 2010 4:20 PM
+			 * Implement the soap call to CheckWebAccount
+			 */	
+			$params = new stdClass ();
+			$params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+			$params->email = $form_state['values']['email'];
+			$result = teligence_cart_soap_call($params, 'CheckWebAccount', variable_get('wsdl_url_3', ''), true);
+			switch($result['result']->CheckWebAccountResult->ResponseCode)
+			{
+				case 'WebAccountFound':
+					form_set_error('email', variable_get('teligence_cart_error_existing_account',''));
+				break;
+				
+				case 'WebAccountNotFound':
+					
+				break;
+				
+				default:
+					form_set_error('email', variable_get('teligence_cart_error_existing_account',''));
+					drupal_set_message($result['debug']);
+				break;
+			}
+				
+		    if($form_state['values']['Country'] == 'Canada' && !teligence_cart_valid_ca_zipcode($form_state['values']['Zip']))
+		    {
+		    	form_set_error('Zip', t('Invalid Postal Code.'));
+		    }
+			if($form_state['values']['Country'] == 'USA' && !teligence_cart_valid_us_zipcode($form_state['values']['Zip']))
+		    {
+		    	form_set_error('Zip', t('Invalid Zip Code.'));
+		    }
+			if (strlen($form_state['values']['firstName']) < 2)
+		    {
+		        form_set_error('firstName', t('Please enter your name.'));
+		    }
+			if (strlen($form_state['values']['lastName']) < 2)
+		    {
+		        form_set_error('lastName', t('Please enter your last name.'));
+		    }
+			if(!teligence_cart_valid_phone_number($form_state['values']['Ani']))
+			{
+				form_set_error('Ani', 'Invalid phone number.');
+			}
+			if (!teligence_cart_check_email($form_state['values']['email']))
+		    {
+		        form_set_error('email', t('Invalid email address'));
+		    }
+		    if ($form_state['values']['password'] <> $form_state['values']['confirm_password'])
+		    {
+		        form_set_error('confirm_password', t(variable_get('teligence_cart_error_password_match', "Passwords don't match. Please re-enter your password.")));
+		    }
+		    if (strlen($form_state['values']['password']) < 6)
+		    {
+		        form_set_error('password', t('Password is too short'));
+		    }
+			if (strlen($form_state['values']['Ani']) < 10) 
+			{
+				form_set_error('Ani', t('Invalid phone number.'));
+			}
+			if (empty($form_state['values']['AddressLine1'])) 
+			{
+				form_set_error('AddressLine1', t('Invalid address number.'));
+			}
+			if (empty($form_state['values']['City']))
+			{
+				form_set_error('City', t('Enter your city name.'));
+			}
+			if (empty($form_state['values']['State']))
+			{
+				form_set_error('State', t('Enter your State/Province name.'));
+			}
+			if (empty($form_state['values']['age']))
+			{
+				form_set_error('age', t("You must be 18 years of age or older"));
+			}
+			if(count(form_get_errors()))
+			{
+				form_set_error('', variable_get('teligence_cart_error_password_re_enter', "Please re-enter your password."));
+			}
+			
+		}
+		
+		if ($form_state['storage']['step'] == 5)
+		{
+			if (strlen($form_state['values']['cc_csc']) < 3)
+			{
+			   form_set_error('cc_csc', variable_get('teligence_cart_error_invalid_csc', "Invalid security code. Please re-enter your security code."));
+			}
+			date_default_timezone_set('America/Los_Angeles');	    
+			$expires = mktime(0,0,0,$form_state['values']['cc_expiration']['month'], 1, $form_state['values']['cc_expiration']['year']);
+			if ($expires <= time())
+			{
+				form_set_error('cc_expiration', t('Invalid expiration date.'));
+			}
+				    
+			if (!teligence_cart_valid_card_number($form_state['values']['cc_number']))
+			{
+			    form_set_error('cc_number', t('Invalid credit card number.'));
+			}
+
+		}
+	}
+	
+}
+
+/*
+ * test page
+ */
+function teligence_cart_test_page()
+{
+	// $items[] = 'This page shows print_r results from call to method GetLocalAccessNumber in Provisioning.svc?WSDL';
+	$items[] = 'This page shows print_r results from call to method GetLocalAccessNumberByAreaCode in Localization.svc?WSDL';
+	$items[] = 'This gives a quick way to test access to the webservices.';
+	
+	$output = theme('item_list', $items);
+	
+    $params = new stdClass ();
+    $params->ivrBrandId = variable_get('teligence_cart_brand', 1);
+    $params->areaCode = 604;
+    // $result = teligence_cart_soap_call($params, 'GetLocalAccessNumber', variable_get('wsdl_url', ''));
+    $result = teligence_cart_soap_call($params, 'GetLocalAccessNumberByAreaCode', variable_get('wsdl_url_6',''));
+	
+    $output .= '<pre>' . print_r($result, true) . '</pre>';
+    
+	return $output;
+}
+
+/*
+ * SOAP send
+ * wrap the php soap function so we can handle any errors or exceptions
+ */
+function teligence_cart_soap_call($params, $method_name, $wsdl, $renewGUID = null)
+{
+	$output = array ();
+	
+	if(!class_exists('SoapClient')){
+		$output['result'] = 'SoapClient Missing';
+		$output['debug'] = 'We are having technical problems. Plase try again later.';
+		return $output;
+	}
+	
+	$params->sequenceId = teligence_cart_uuid($renewGUID);
+	
+    // send xml
+    try
+    {
+    	// Create the stream context
+		$context = stream_context_create(array(
+		    'http' => array(
+		        'timeout' => 3      // Timeout in seconds
+		    )
+		));
+    	if(!@file_get_contents($wsdl,0,$context)) 
+    	{
+        	throw new SoapFault('Server', 'No WSDL found at ' . $wsdl);
+    	}
+		
+		// set up the service client using WSDL
+		// TODO: remove/add array('cache_wsdl'=>WSDL_CACHE_NONE) as parameter for live/dev
+		if(variable_get('teligence_cart_cache_wsdl', 1))
+		{
+			$client = new SoapClient($wsdl);
+		}
+		else
+		{
+			$client = new SoapClient($wsdl, array('cache_wsdl'=>WSDL_CACHE_NONE));
+		}
+    	
+        $result = $client->{ $method_name }($params);
+
+        $output['debug'] = 'Response Code for '.$method_name.': '.$result->{ $method_name.'Result' }->ResponseCode;		
+		$output['result'] = $result;
+    } 
+	catch(SoapFault $e) 
+    {
+    	// error logging
+    	watchdog('teligence_cart',"@errorId - @cause - @resol - @methodName - @responseCode - @ErrMsg - !input - !output", 
+			array(
+				'@errorId' => 'BWTC001',
+				'@cause' => 'Cause: SOAP brand websites cannot connect to Back-end WSDL; Connection times out or response is invalid.',
+				'@resol' => "Resolution: open network connection on port 80 from webserver to $wsdl. Try telnet to WSDL from webserver.", 
+				'@methodName' => 'Method Name = '.$method_name,
+				'@responseCode' => 'SoapFault = ' . $e->getMessage(),
+				'@ErrMsg' => $output->{$method_name . "Result"}->ErrMsg,
+				'!input' => 'Input Parameters: <pre>'.print_r($params,1).'</pre>',
+				'!output' => 'Output Parameters: <pre>'.print_r($output->{$method_name . "Result"},1).'</pre>',
+			), WATCHDOG_ALERT);
+		
+        $output['error'] = $method_name.' <pre>'.check_plain(print_r($e->getMessage(), true)).'</pre>';
+        
+        if(check_plain(print_r($e->getMessage(), true)) == 'Error Fetching http headers')
+        {
+        	$output['debug'] = t('There has been a technical problem with your transaction. Please call our customer service: @message', array('@message' => variable_get('teligence_cart_customer_service_phone', '1-800-xxx-xxxx')));
+        	drupal_set_message($output['debug']);
+        	return;
+        }
+        else
+        {
+        	$output['debug'] = $method_name.' Soap Error Code: '.check_plain(print_r($e->getMessage(), true));
+        }
+        
+    }
+	
+    $output['debug'] = (variable_get('teligence_cart_debug_mode', 0) ? $output['debug'] : 'This operation could not be completed. Please try again later.');
+	    
+    return $output;
+}
+
+/*
+ * GUID global universal identifier generator.
+ * One per session.
+ */
+function teligence_cart_uuid($renewGUID = null)
+{
+
+    // The field names refer to RFC 4122 section 4.1.2
+    if ( isset($_SESSION['guid']) && !$renewGUID )
+    {
+        return $_SESSION['guid'];
+    }
+    else
+    {
+        $_SESSION['guid'] = sprintf('%04x%04x-%04x-%03x4-%04x-%04x%04x%04x',
+        mt_rand(0, 65535), mt_rand(0, 65535), // 32 bits for "time_low"
+        mt_rand(0, 65535), // 16 bits for "time_mid"
+        mt_rand(0, 4095), // 12 bits before the 0100 of (version) 4 for "time_hi_and_version"
+        bindec(substr_replace(sprintf('%016b', mt_rand(0, 65535)), '01', 6, 2)),
+        // 8 bits, the last two of which (positions 6 and 7) are 01, for "clk_seq_hi_res"
+        // (hence, the 2nd hex digit after the 3rd hyphen can only be 1, 5, 9 or d)
+        // 8 bits for "clk_seq_low"
+        mt_rand(0, 65535), mt_rand(0, 65535), mt_rand(0, 65535) // 48 bits for "node"
+        );
+        return $_SESSION['guid'];
+    }
+}
+
+/*
+ * email validator
+ */
+function teligence_cart_check_email($email)
+{
+    return valid_email_address($email);
+}
+
+/**
+ * Validates a credit card number during checkout.
+ * See: http://www.merriampark.com/anatomycc.htm
+ */
+function teligence_cart_valid_card_number($number) {
+  
+  if (!ctype_digit($number)) {
+    return FALSE;
+  }
+
+  for ($i = 0; $i < strlen($number); $i++) {
+    $digit = substr($number, $i, 1);
+    if ((strlen($number) - $i - 1) % 2) {
+      $digit *= 2;
+      if ($digit > 9) {
+        $digit -= 9;
+      }
+    }
+    $total += $digit;
+  }
+
+  if ($total % 10 != 0) {
+    return FALSE;
+  }
+  
+  $cards = array(
+        "visa" => "(4\d{12}(?:\d{3})?)",
+        "amex" => "(3[47]\d{13})",
+        "jcb" => "(35[2-8][89]\d\d\d{10})",
+        "maestro" => "((?:5020|5038|6304|6579|6761)\d{12}(?:\d\d)?)",
+        "solo" => "((?:6334|6767)\d{12}(?:\d\d)?\d?)",
+        "mastercard" => "(5[1-5]\d{14})",
+        "switch" => "(?:(?:(?:4903|4905|4911|4936|6333|6759)\d{12})|(?:(?:564182|633110)\d{10})(\d\d)?\d?)",
+        "discover" => "([6011]{4})([0-9]{12})",
+    );
+    $names = array("Visa", "American Express", "JCB", "Maestro", "Solo", "Mastercard", "Switch", "Discover");
+    $matches = array();
+    $pattern = "#^(?:".implode("|", $cards).")$#";
+    $result = preg_match($pattern, str_replace(" ", "", $number), $matches);
+
+    return ($result>0)?true:false;
+
+  return TRUE;
+}
+
+
+/**  
+ * Verification for Canadian zipcodes.  
+ *
+ * @param string $text
+ * @return boolean Returns boolean FALSE if the zipcode is not valid. 
+ * On success, returns a string containting the zipcode with some formatting.
+ */
+function teligence_cart_valid_ca_zipcode($zipcodestring) {
+
+  $zipcodestring = trim($zipcodestring);
+
+  if (!preg_match("/^\D{1}\d{1}\D{1}[ ]?\d{1}\D{1}\d{1}/i",$zipcodestring)) { 
+  	return FALSE; 
+  }
+  //Z5Z 5Z5 orZ5Z5Z5 
+  else 
+  {
+	return TRUE;
+  }
+} 
+
+/** 
+ * Verification for American zipcodes.  
+ *
+ * @param string $text
+ * @return boolean Returns boolean FALSE if the zipcode is not valid. 
+ * On success, returns a string containting the zipcode with some formatting.
+ */
+function teligence_cart_valid_us_zipcode($zipcodestring) {
+
+  $zipcodestring = trim($zipcodestring);
+
+  if (!preg_match("/(^\d{5}$)|(^\d{5}-\d{4}$)$/i",$zipcodestring)) { 
+  	return FALSE; 
+  }
+  //99999 or 99999-9999
+  else 
+  {
+	return TRUE;
+  }
+}
+
+/*
+ * define brands
+ */
+function teligence_cart_get_brand_name($brand_code = null)
+{
+	$brands = array (
+        1=>'Livelinks',
+        2=>'InteractiveMale',
+        3=>'Tango Personals',
+        4=>'Red Hot Dateline',
+        6=>'Mens Free Chatline',
+        7=>'VibeLine',
+        8=>'Fonochat',
+        12=>'Lavender Line',
+    );
+    
+    if(is_null($brand_code))
+    {
+    	return $brands;
+    }
+    else
+    {
+    	return $brands[$brand_code];
+    }
+}
+
+/*
+ * cart settings form
+ */
+function teligence_cart_settings_form($form_state)
+{
+	$form['#theme'] = 'teligence_cart_autosignup';
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#pre_render' => array('teligence_cart_settings_prerender'),
+	);
+	
+    $form['group']['teligence_cart_free_minutes'] = array(
+    '#type'=>'textfield',
+    '#size' => 5,
+    '#title'=>t('Free minutes for email collection campaign'),
+    '#default_value'=>variable_get('teligence_cart_free_minutes', 10),
+    );	
+	
+	$form['group']['teligence_cart_brand'] = array (
+    '#type'=>'select',
+    '#title'=>t('Select Brand'),
+    '#options'=> teligence_cart_get_brand_name(),
+    '#default_value'=>variable_get('teligence_cart_brand', 1),
+    );
+    
+    $form['group']['teligence_cart_debug_mode'] = array (
+    '#type'=>'select',
+    '#title'=>t('Debug mode'),
+    '#options'=> array (1 => 'True', 0 => 'False'),
+    '#default_value'=>variable_get('teligence_cart_debug_mode', 0),
+    '#description' => t('Set this to false to not show developer error messages on screen.'),
+    );
+    $form['group']['teligence_cart_cache_wsdl'] = array (
+    '#type'=>'select',
+    '#title'=>t('Cache the WSDL'),
+    '#options'=> array (1 => 'True', 0 => 'False'),
+    '#default_value'=>variable_get('teligence_cart_cache_wsdl', 0),
+    '#description' => t('Set this to false if you are developing, this will refresh the WSDL on every request.'),
+    );
+    
+    $form['group']['wsdl_url'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('WSDL URL #1 (Provisioning)'),
+    '#description'=>t('Enter the absolute url for the WSDL (Web Service Description Language) file here.'),
+    '#default_value'=>variable_get('wsdl_url', 'http://192.168.198.213/Teligence/Website/Services/Host/Provisioning.svc?WSDL'),
+    '#size'=>100,
+    );
+    $form['group']['wsdl_url_2'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('WSDL URL #2 (MemberManagement)'),
+    '#description'=>t('Enter the absolute url for the WSDL (Web Service Description Language) file here.'),
+    '#default_value'=>variable_get('wsdl_url_2', 'http://192.168.198.213/Teligence/WebSite/Services/Host/MemberManagement.svc?WSDL'),
+    '#size'=>100,
+    );
+    $form['group']['wsdl_url_3'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('WSDL URL #3 (MemberCredentials)'),
+    '#description'=>t('Enter the absolute url for the WSDL (Web Service Description Language) file here.'),
+    '#default_value'=>variable_get('wsdl_url_3', 'http://192.168.198.213/Teligence/Website/Services/Host/MemberCredentials.svc?WSDL'),
+    '#size'=>100,
+    );
+	$form['group']['wsdl_url_4'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('WSDL URL #4 (IvrRtm)'),
+    '#description'=>t('Enter the absolute url for the WSDL (Web Service Description Language) file here.'),
+    '#default_value'=>variable_get('wsdl_url_4', 'http://192.168.198.213/Teligence/Website/Services/Host/IvrRtm.svc?WSDL'),
+    '#size'=>100,
+    );
+	$form['group']['wsdl_url_5'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('WSDL URL #5 (OrderManagement)'),
+    '#description'=>t('Enter the absolute url for the WSDL (Web Service Description Language) file here.'),
+    '#default_value'=>variable_get('wsdl_url_5', 'http://192.168.198.213/Teligence/Website/Services/Host/OrderManagement.svc?WSDL'),
+    '#size'=>100,
+    );
+	$form['group']['wsdl_url_6'] = array (
+    '#type'=>'textfield',
+    '#title'=>t('WSDL URL #6 (Localization)'),
+    '#description'=>t('Enter the absolute url for the WSDL (Web Service Description Language) file here.'),
+    '#default_value'=>variable_get('wsdl_url_6', 'http://192.168.184.197/Teligence/Services/Hosts/BrandWebSite/Localization.svc?wsdl'),
+    '#size'=>100,
+    );
+    
+	$form['group']['teligence_cart_country_list'] = array (
+    '#type'=> 'textfield',
+    '#title'=>t('List of Countries file name. Relative to Drupal\'s root directory'),
+    '#default_value'=> variable_get('teligence_cart_country_list', drupal_get_path('module', 'teligence_cart').'/countries.txt'),
+    );
+	$form['group']['teligence_cart_subscriptions'] = array (
+    '#type'=> 'textfield',
+    '#title'=>t('Subscriptions file path'),
+    '#default_value'=> variable_get('teligence_cart_subscriptions', drupal_get_path('module', 'teligence_cart').'/subscriptions/unsubscribed.txt'),
+    );
+
+    return system_settings_form($form);
+}
+
+/*
+ * pre render teligence_cart_settings_prerender
+ */
+function teligence_cart_settings_prerender($form)
+{
+	foreach((array)element_children($form) as $key)
+	{
+		$form[$key]['#description'] .= " Variable Name: <strong>variable_get('" . $key . "', '' )</strong>";
+	}
+
+	return $form;
+}
+
+/*
+ * token replace function
+ * central place to put all the tokens and their values
+ * 
+ * @param $string
+ * 		the string you want to perform the replacements on.
+ * @param $merge
+ * 		optional array of tokens with their replacements
+ */
+function teligence_cart_token_replacer($string, $merge = array())
+{
+	
+	$result = array_merge((array)teligence_cart_tokens(), (array)$merge);
+	
+	//drupal_set_message('<pre>'.print_r($merge, true).'</pre>');
+	
+	foreach($result as $key => $value)
+	{
+		if(strlen($value))
+		{
+			$string = str_replace($key, $value, $string);
+		}
+		else
+		{
+			$string = str_replace($key, '', $string);
+		}
+	}
+	
+	return $string;
+}
+
+/*
+ * global teligence cart list of tokens
+ */
+function teligence_cart_tokens()
+{
+	global $user; 
+	//$settings_form_array = teligence_cart_settings_form(null);
+	return array(
+		'[ivr-number]' => $_SESSION['emsMemberships'][$_SESSION['emsMembershipId']]->IvrMembershipNumber,
+		'[ivr-passcode]' => $_SESSION['IvrPasscode'],
+		'[user-email]' => $user->mail,
+		'[web-password]' => '',
+		//'[brand-name]' => $settings_form_array['teligence_cart_brand']['#options'][variable_get('teligence_cart_brand', 1)],
+		'[brand-name]' => teligence_cart_get_brand_name(variable_get('teligence_cart_brand', 1)),
+		'[first-name]' => '',
+		'[last-name]' => '',
+		'[telephone-number]' => '',
+		'[minutes-purchased]' => '',
+		'[package-price]' => '',
+		'[package-tax]' => '',
+		'[package-total-price]' => '',
+		'[promo-minutes]' => '',
+		'[email-campaign-free-minutes]' => variable_get('teligence_cart_free_minutes', 10),
+		'[url]' => '',
+		'[customer-access-number]' => variable_get('teligence_cart_customer_access_phone', '' ),
+	);
+}
+
+/*********************************************************************************
+ * ************************* THEME FUNCTIONS *************************************
+ *********************************************************************************/
+/*
+ * theme expiration date field
+ */
+function theme_teligence_cart_select_expiration_date($form) 
+{
+  $form['day']['#type'] = 'hidden';
+  $form['day']['#value'] = 1;
+  $form['year']['#options'] = array();
+  date_default_timezone_set('America/Los_Angeles');
+  $years = drupal_map_assoc(range(date('Y'), (int)date('Y') + 5));
+  foreach($years as $key => $val){
+  	$form['year']['#options'][substr($key, 2, 2)] = $val;
+  }  
+  
+  return drupal_render($form);
+}
+
+/*
+ * theme function for radios on ASU
+ */
+function theme_teligence_cart_membership_radios($form)
+{
+	return drupal_render($form);
+}
+
+/*
+ * theme order ASU summary
+ */
+function theme_teligence_cart_summary($form)
+{	
+	$output = '';
+	
+	// Web Account
+	$output .= theme('table', array(array('data' => t('Web Account'), 'class' => 'left-table-header')), array(array(array('data' => 'Email: ', 'width' => 200) , $form['#value']['email'])), array('width' => '100%'));
+	
+	// Billing Info
+	$items = array();
+	foreach((array)$form['#value']['billing_address'] as $key => $value){
+		($value ? $items[] = array(array('data' => $key . ': ', 'width' => 200),  $value) : '');
+	}
+	$output .= theme('table', array(array('data' => t('Billing Info'), 'class' => 'left-table-header')), $items, array('width' => '100%'));
+	
+	// Payment Info
+	$items = array();
+	foreach((array)$form['#value']['payment'] as $key => $value)
+	{
+		if($key == 'Card Number*')
+		{
+			$value = substr_replace($value, '-----------------', 0, -4);
+		}		
+		//drupal_set_message('<pre>'.print_r($key, true).'</pre>');
+		($value ? $items[] = array(array('data' => $key . ': ', 'width' => 200), (is_array($value) ? $value['month'].'/'.$value['year'] : $value)) : '');
+	}
+	$output .= theme('table', array(array('data' => t('Payment Info'), 'class' => 'left-table-header')), $items, array('width' => '100%'));
+	
+	// Package Info
+	$items = array();
+	$items[] = array(array('data' => t('Package Minutes'), 'width' => 200), $form['#value']['PackageMinutes']);
+	$form['#value']['PromoMinutes'] ? $items[] = array(array('data' => t('Promo Minutes'), 'width' => 200), $form['#value']['PromoMinutes']) : null;
+	$items[] = array(array('data' => t('Package Price'), 'width' => 200), '$'.number_format((int)$form['#value']['PackageAmountCents']/100, 2));
+	$form['#value']['PromoAmountCents'] ? $items[] = array(array('data' => t('Promotion'), 'width' => 200), '$'.number_format((int)$form['#value']['PromoAmountCents']/100, 2)) : null;
+	$form['#value']['TaxesAmountCents'] ? $items[] = array(array('data' => t('Taxes'), 'width' => 200), '$'.number_format((int)$form['#value']['TaxesAmountCents']/100, 2)) : null;
+	$items[] = array(array('data' => t('Total'), 'width' => 200), '$'.number_format((int)$form['#value']['TotalAmountCents']/100, 2));
+	$output .= theme('table', array(array('data' => t('Package Info'), 'class' => 'left-table-header')), $items, array('width' => '100%'));
+	
+	$output = str_replace('*', '', $output);
+	
+	//drupal_set_message('<pre>'.print_r($form['#value'], true).'</pre>');
+		
+	return $output;
+}
+
+
+/*
+ * theme function for autosignup forms
+ */
+function theme_teligence_cart_autosignup($form) 
+{	
+	drupal_add_js(array('teligence_cart_short_password' => t("Password length too short")), 'setting');
+	drupal_add_js(array('teligence_cart' => array("button_processing" => array(variable_get('teligence_cart_button_processing', '')))), 'setting');
+	drupal_add_js(drupal_get_path('module', 'teligence_cart').'/js/jquery.button.js');
+	drupal_add_css(drupal_get_path('module', 'teligence_cart').'/styles.css', 'theme');
+	
+	$output  = drupal_render($form);
+	$output .= '<div style="clear:both;"></div>';
+	
+	return $output;
+}
+
+/*
+ * theme for credit cards add time list
+ */
+function theme_teligence_cart_credit_cards($form)
+{
+	$output = '';
+	//drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+	foreach ((array)$form['items'] as $key => $value) {
+		if(strstr($key, '#')){
+			break;
+		}
+		$form['creditcards'][$key]['#title'] = '';
+		$rows[] = array (
+			'data' => array (
+				array ('data' => drupal_render($form['creditcards'][$key])),
+				array ('data' => drupal_render($form['items'][$key]['cc_number'])),
+				array ('data' => drupal_render($form['items'][$key]['cc_type'])),
+				array ('data' => drupal_render($form['items'][$key]['cc_expire'])),
+				array ('data' => drupal_render($form['items'][$key]['cc_csc_'.$key])),
+				array ('data' => l(t('Edit'), 'cart/add-card', array('query' => array('destination' => 'cart/add-time', 'cc' => $key)))),
+			)
+		);
+	}
+	$output .= theme('table', array ('', t('Credit Card Number'), t('Type'), t('Expiration Date'), t('Credit Card Security Code'), t('Options')), $rows, array ('class'=>'package-table'));
+
+	//drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+	
+    $output .= drupal_render($form);
+	
+    
+    return $output;
+}
+
+/*
+ * theme function for all forms
+ */
+function theme_teligence_cart_account($form)
+{
+    $output = '';
+	
+	//$output .= '<div>'.$_SESSION['emsMembershipId'].'</div>';
+	$output .= drupal_render($form);
+	
+	return $output;
+}
+
+/*
+ * theme function for all forms
+ */
+function theme_teligence_cart_forms($form)
+{
+	return drupal_render($form);
+}
+
+/*
+ * theme function for stand alone packages page
+ */
+function theme_teligence_cart_packages_stand_alone($form)
+{
+    $output = '';
+	
+	foreach ((array)$form['#options'] as $key => $value) 
+	{
+		$form[$key]['#title'] = '';
+		$form[$key]['#type'] = 'hidden';
+		$rows[] = array (
+			'data' => array (
+				array ('data'=> drupal_render($form[$key])),
+				array ('data'=> t('@number minutes', array('@number' => $value['minutes'])), 'class'=>'time'),
+				array ('data'=> $value['currency'].'$'. substr($value['price'], 0, strlen($value['price'])-2) . '.' . substr($value['price'], -2), 'class'=>'price'),
+			),
+			//'class' => 'selectable-row'
+		);
+	}
+	$middle = floor(count($rows)/2);
+	$rows[$middle]['class'] = 'highlighted most-popular';
+	$output .= theme('table', array ('', t('Time Package'), t('Price')), $rows, array ('class'=>'package-table', 'width' => '100%'));
+
+	// drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+	
+    $output .= drupal_render($form);
+
+    return $output;
+}
+
+/*
+ * theme functions for packages, ASU and SR
+ */
+function theme_teligence_cart_packages($form)
+{
+    $output = '';
+	
+	$middle = ceil(count((array)$form['#options'])/2);
+	$keys = array_keys((array)$form['#options']);
+	$form['#default_value'] = $keys[$middle];
+	foreach ((array)$form['#options'] as $key => $value) 
+	{
+		$form[$key]['#title'] = '';
+		$rows[] = array (
+			'data' => array (
+				array ('data'=> drupal_render($form[$key])),
+				array ('data'=> t('@number minutes', array('@number' => $value['minutes'])), 'class'=>'time'),
+				array ('data'=> $value['currency'].'$'. substr($value['price'], 0, strlen($value['price'])-2) . '.' . substr($value['price'], -2), 'class'=>'price'),
+			),
+		);
+	}
+	$rows[$middle]['class'] = 'highlighted most-popular';
+	$output .= theme('table', array ('', t('Time Package'), t('Price')), $rows, array ('class'=>'package-table', 'width' => '100%'));
+
+	// drupal_set_message('<pre>'.print_r($middle, true).'</pre>');
+	
+    $output .= drupal_render($form);
+
+    return $output;
+}
+
+/*
+ * call method for view order history
+ */
+function theme_teligence_cart_order_history($form)
+{
+	$params = new stdClass ();
+    $params->emsMembershipId = $_SESSION['emsMembershipId'];
+    $params->daysOfHistory = ($form['#value'] ? $form['#value'] : 10);
+
+    $result = teligence_cart_soap_call($params, 'GetOrderHistory', variable_get('wsdl_url_2', ''));
+	
+	switch ($result['result']->GetOrderHistoryResult->ResponseCode) 
+	{	
+		case 'Success':
+			if(!is_array($result['result']->GetOrderHistoryResult->WebOrders->WebOrder)): 
+				$WebOrders = array($result['result']->GetOrderHistoryResult->WebOrders->WebOrder);
+			else:
+				$WebOrders = $result['result']->GetOrderHistoryResult->WebOrders->WebOrder;
+			endif;
+			foreach ((array)$WebOrders as $WebOrder) 
+			{
+				//$order = (array)$WebOrder;
+				$timestamp = teligence_cart_timestamp($WebOrder->OrderDateTime);
+				$rows[] = array(
+					'data' => array(
+						array('data' => $WebOrder->OrderId),
+						array('data' => format_date($timestamp, 'custom', 'F j, Y')),
+						array('data' => t($WebOrder->OrderStatus)),
+						//array('data' => $WebOrder->OrderType),
+						array('data' => t($WebOrder->PaymentType)),
+						array('data' => $WebOrder->Minutes),
+						array('data' => '$'.number_format($WebOrder->AmountCents/100, 2)),
+					),
+					'class' => 'order-history-item'
+				);
+			}
+			$headers = array(t('Order Id'), t('Date'), t('Order Status'), t('Payment Type'), t('Minutes'), t('Amount'));
+			return theme('table', $headers, $rows);			
+			//drupal_set_message($result['debug']);
+			//drupal_set_message('<pre>'.print_r((array)$result['result']->GetOrderHistoryResult->WebOrders->WebOrder, true).'</pre>');
+		break;
+		
+		case 'NoOrders':
+			return t('No Orders');
+		break;
+		
+		default:
+			drupal_set_message($result['debug']);
+		break;
+	};
+}
+
+/*
+ * theme credit card list
+ */
+function theme_teligence_cart_edit_cc($form) 
+{	
+	foreach ((array)$form['items'] as $key => $value) {
+		
+		if (is_numeric($key)) {
+			$rows[] = array(
+				'button' => drupal_render($form['items'][$key]['update_cc']),
+				'CC Number' => $value['AccountNo']['#value'],
+				'CC Type' => $value['PaymethodType']['#value'],
+				'Expiration Date' => drupal_render($form['items'][$key]['ExpiryDateMMYY']),
+				'Delete' => l('Delete', 'cart/delete-cc/' . $key )
+			);
+		}
+	}
+	$headers = array('', t('CC Number'), t('CC Type'), t('Expiration Date'), '');
+	$output .= theme('table', $headers, $rows, array ('class'=>'package-table'));
+	
+	//drupal_set_message('<pre>'.print_r($form['items'], true).'</pre>');
+	
+	$output .= drupal_render($form);
+	
+	return $output;
+}
+
+/*
+ * theme teligence_cart_current_balance
+ */
+function theme_teligence_cart_current_balance($form)
+{
+	$params = new stdClass ();
+	$params->emsMembershipId = $_SESSION['emsMembershipId'];
+	
+	$result = teligence_cart_soap_call($params, 'GetMembershipStats', variable_get('wsdl_url_4', ''));
+	$rows = array();
+	switch ($result['result']->GetMembershipStatsResult->ResponseCode) 
+	{
+		case 'Success':
+			$rows[] = array($result['result']->GetMembershipStatsResult->Balance.' minutes.');
+			if($result['result']->GetMembershipStatsResult->ExpiryBalance):
+				$rows[] = array($result['result']->GetMembershipStatsResult->ExpiryBalance.' minutes and expires on '.
+				format_date(teligence_cart_timestamp($result['result']->GetMembershipStatsResult->ExpiryBalanceDateTime)));
+				//$rows[] = array($result['result']->GetMembershipStatsResult->ExpiryBalanceDateTime);
+			endif;
+			/*
+			$form['group']['balance'] = array(
+				'#type' => 'item',
+				'#title' => t('Minutes Balance'),
+				'#value' => theme('table', array(''), $rows),
+			);
+			*/
+			//drupal_set_message('<pre>'.print_r($result, true).'</pre>');
+		break;
+		
+		default:
+			
+			drupal_set_message(variable_get('teligence_cart_error_call_cs', ''));
+			drupal_set_message($result['debug']);
+			//$rows[] = array($result['debug']);
+			
+		break;
+	}
+	$output = theme('table', array(''), $rows, array('id' => 'show-current-balance'));
+	
+	return $output;
+}
+
+/*
+ * theme local number lookup table
+ */
+function theme_teligence_cart_local_number_lookup($rows)
+{
+	return theme('table', array (t('Location'), t('Number')), (array)$rows, array('id' => 'local-number-lookup'));
+}
+
+/*
+ * theme selection boxes for ASU flow
+ */
+function theme_teligence_cart_selection_boxes($form)
+{
+	$output = '';
+	$rows = array();
+	
+	foreach((array)$form['#options'] as $key => $value)
+	{
+		$rows[] = array(array('width' => 200), drupal_render($form[$key]));
+	}
+	
+	$output .= theme('table', array('',''), $rows, array('id' => 'selection-boxes-table'));
+	$output .= drupal_render($form);
+	
+	//drupal_set_message('<pre>'.print_r($form, true).'</pre>');
+	
+	return $output;
+}

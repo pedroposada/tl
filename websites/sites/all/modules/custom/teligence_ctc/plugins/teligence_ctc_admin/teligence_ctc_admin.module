@@ -1,0 +1,325 @@
+<?php 
+
+
+/**
+ * DRUPAL HOOKS
+ */
+
+/*
+ * Implementation of hook_menu()
+ */
+function teligence_ctc_admin_menu()
+{
+	$items = array();
+
+	$items['ctc/logging/%/%/%'] = array(
+		'title' => 'Alerts',
+		'page callback' => 'teligence_ctc_admin_logareacodes',
+		'page arguments' => array(2,3,4),
+		'access callback' => true,
+		'type'=>MENU_CALLBACK,
+	);
+	$items['admin/ctc/alerts'] = array(
+		'title' => 'Alerts',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('teligence_ctc_admin_alerts_form'),
+		'access arguments' => array('access ctc alerts'),
+		'type'=>MENU_LOCAL_TASK,
+	);
+	
+	return $items;
+}
+
+/*
+ * Implementation of hook_nodeapi()
+ */
+function teligence_ctc_admin_nodeapi(&$node, $op, $a3 = null, $a4 = null)
+{
+//	switch($op)
+//	{
+//		case 'presave':
+//			if($node->type == 'missing_area_code')
+//			{
+//				
+//			}
+//		break;
+//	}
+}
+
+/*
+ * Implementation of hook_mail
+ */
+function teligence_ctc_admin_mail($key, &$message, $params)
+{
+	switch($key)
+    {
+        case 'areacode_alert':
+            $message['subject'] = $params['subject'];
+            $message['body'] = $params['body'];
+            break;
+    }
+}
+
+
+/**
+ * Implementation of hook_cron()
+ */
+function teligence_ctc_admin_cron()
+{
+	/**
+	 * create file with report of missing ctc aeracodes and send it to specific email addresses
+	 */
+	if(date('l') !== variable_get('teligence_ctc_admin_areacode_weekdays', ''))
+	return;
+	
+	if(!strlen(variable_get('teligence_ctc_admin_areacode_emails', '')))
+	return;
+	
+	if(!strlen(variable_get('teligence_ctc_admin_areacode_reporturl', '')))
+	return;
+	
+	$fileName = date('Ymd') . '.csv';
+	$filePath = file_directory_path() . '/' . $fileName;
+	if(!file_exists($filePath))
+	{
+		$result = drupal_http_request(variable_get('teligence_ctc_admin_areacode_reporturl', ''));
+		
+		// $url = variable_get('teligence_ctc_admin_areacode_reporturl', '');
+		// $curl = curl_init();
+		// curl_setopt($curl, CURLOPT_URL, $url);
+		// curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+		// curl_setopt($curl, CURLOPT_HEADER, false);
+		// $csv = curl_exec($curl);
+		// curl_close($curl);
+		
+		if($result->code == 200)
+		// if(strlen($csv))
+		{
+			file_save_data($result->data, $filePath);
+			
+			$attachments[]=array(         
+			  'filepath' => $filePath,
+			  'filemime' => file_get_mimetype($fileName),
+			  'filename' => $fileName,
+			);
+			
+			mimemail(
+				variable_get('site_mail', ini_get('sendmail_from')),		// from
+				variable_get('teligence_ctc_admin_areacode_emails', ''),	// to
+				'Missing Area Code Report',									// subject
+				'Please see attached report',								// body
+				NULL,							// plaintext; 1 or 0
+				array(),						// headers; optional
+				NULL,							// text; Optional plaintext portion of a multipart e-mail.
+				$attachments,					// attachments; An array of arrays which describe one or more attachments.
+				'missingAreaCodesReport'		// mailkey; An identifier for the message.
+			);
+			
+			watchdog('ctcReport', $result->data);
+			watchdog('ctcReport', $result->status_message);
+			
+			// file_save_data($csv, $filePath);
+			// watchdog('ctcReport', $csv);
+			
+			watchdog('ctcReport', 'File was created: ' . $filePath);
+		}
+		else
+		{
+			watchdog('ctcReport', $result->code);
+			watchdog('ctcReport', $result->status_message);
+		}
+	}
+	else
+	{
+		watchdog('ctcReport', 'File already exists: ' . $filePath);
+	}
+}
+
+/*
+ * HELPER FUNCTIONS
+ */
+
+/*
+ * ALERTS SETTINGS FORM
+ */
+function teligence_ctc_admin_alerts_form($form_state)
+{
+	$form = array();
+	
+	$form['teligence_ctc_admin_areacode_logging'] = array(
+		'#type' => 'select',
+		'#default_value' => variable_get('teligence_ctc_admin_areacode_logging', 0),
+		'#options' => array(0 => 'NO', 1 => 'YES'),
+		'#title' => t('Log missing areacodes?'),
+	);
+	$form['teligence_ctc_admin_areacode_reporturl'] = array(
+		'#type' => 'textfield',
+		'#default_value' => variable_get('teligence_ctc_admin_areacode_reporturl', ''),
+		'#title' => t('Location of report'),
+		'#description' => t('Enter full URL of report'),
+		'#required' => true,
+		'#element_validate' => array('teligence_ctc_admin_validurl'),
+	);
+	$form['teligence_ctc_admin_areacode_emails'] = array(
+		'#type' => 'textfield',
+		'#default_value' => variable_get('teligence_ctc_admin_areacode_emails', ''),
+		'#title' => t('Send Report to'),
+		'#required' => true,
+		'#description' => t('Enter one or more email addresses separated by commas.'),
+		'#element_validate' => array('teligence_ctc_admin_validemail'),
+	);
+	$form['teligence_ctc_admin_areacode_weekdays'] = array(
+		'#type' => 'select',
+		'#default_value' => variable_get('teligence_ctc_admin_areacode_weekdays', ''),
+		'#title' => t('Send Report on every'),
+		'#required' => true,
+		'#description' => t('Select the day of the week on which the report will be sent.'),
+		'#options' => array(
+			'Sunday'=>'Sunday',
+			'Monday'=>'Monday',
+			'Tuesday'=>'Tuesday',
+			'Wednesday'=>'Wednesday',
+			'Thursday'=>'Thursday',
+			'Friday'=>'Friday',
+			'Saturday'=>'Saturday',
+		),
+	);
+	
+	return system_settings_form($form); 
+}
+
+/**
+ * map days of the week
+ */
+function teligence_ctc_admin_map_weekdays($day) 
+{
+  return format_date(gmmktime(0, 0, 0, 1, $day, 1970), 'custom', 'l', 0);
+}
+
+/**
+ * validate url
+ */
+function teligence_ctc_admin_validurl($element, &$form_state)
+{
+	if(!valid_url($element['#value'], true))
+	{
+		form_error($element, 'Invalid URL');
+	}
+}
+
+/**
+ * validate email elements
+ */
+function teligence_ctc_admin_validemail($element, &$form_state)
+{
+	// drupal_set_message('<pre>'.print_r($element, true).'</pre>');
+	
+	if(is_array(explode(',', $element['#value'])))
+	{
+		$trimmed = array();
+		foreach((array)explode(',', $element['#value']) as $k => $v)
+		{
+			if(!valid_email_address(trim($v)))
+			{
+				form_error($element, 'Invalid email.');
+			}
+			$trimmed[] = trim($v);
+		}
+		$form_state['values']['teligence_ctc_admin_areacode_emails'] = implode(',', (array)$trimmed);
+	}
+	else
+	{
+		if(!valid_email_address(trim($element['#value'])))
+		{
+			form_error($element, 'Invalid email.');
+		}
+	}
+}
+
+
+/*
+ * validate function for on off switch
+ */
+function teligence_ctc_admin_send_alerts_validate($element, &$form_state)
+{
+	if(!strlen(variable_get('teligence_ctc_alert_emails', '')) && $form_state['values']['teligence_ctc_send_alerts'])
+	{
+		form_set_error('teligence_ctc_send_alerts', 'Please setup at least one valid email address first');
+		$form_state['values']['teligence_ctc_send_alerts'] = 0;	
+	}
+}
+/*
+ * validate function for multiple emails
+ */
+function teligence_ctc_admin_alert_emails_validate($element, &$form_state)
+{
+	if(strlen($form_state['values']['teligence_ctc_alert_emails']))
+	{
+		$form_state['values']['teligence_ctc_alert_emails'] = rtrim($form_state['values']['teligence_ctc_alert_emails'], ',');
+		$parts = explode(',', $form_state['values']['teligence_ctc_alert_emails']);
+		foreach((array)$parts as $email)
+		{
+			if(!valid_email_address(trim($email)))
+			{
+				form_set_error('teligence_ctc_alert_emails', 'Invalid email: '.$email);
+			}
+		}
+	}
+}
+
+/**
+ * programatically save node with 
+ * missing area codes using custom validation rules
+ */
+function teligence_ctc_admin_logareacodes($area_code, $brand_code, $strrequestorphone)
+{
+	if(variable_get('teligence_ctc_admin_areacode_logging', 0))
+	{
+		watchdog('CTC areacode', 'Received <pre>'. print_r($values, true) .'</pre>');
+	
+		$values['brandcode'] = $brand_code;
+		$values['areacode'] = $area_code;
+		$values['ani'] = $strrequestorphone;		
+		teligence_ctc_admin_missingareacode_node_save($values);
+	}
+}
+
+/**
+ * programmatically create missing_area_code node
+ */
+function teligence_ctc_admin_missingareacode_node_save($values)
+{
+	$node = new StdClass();
+	$node->type = 'missing_area_code';
+	$node->status = 1;
+	$node->uid = 1;
+	
+	// fields
+	$node->field_promt_set[0]['value'] = $values['areacode'];
+	$node->field_missing_area_code[0]['value'] = $values['brandcode'];
+	$node->field_ani[0]['value'] = $values['ani'];
+	
+	
+	//check for duplicates
+	$existing = db_fetch_array(db_query("SELECT nid, field_attempts_value  
+				FROM {content_type_missing_area_code} 
+				WHERE LOWER(field_promt_set_value) LIKE LOWER('%s') 
+				AND field_missing_area_code_value = %d
+				LIMIT 1", 
+				$node->field_promt_set[0]['value'],  $node->field_missing_area_code[0]['value']));
+	
+	watchdog('CTC areacode', 'Existing <pre>'. print_r($existing, true) .'</pre>');
+				
+	if($existing['nid'])
+	{
+		$node = node_load($existing['nid']);
+		$node->field_attempts[0]['value'] += 1; 
+	}
+	else
+	{
+		$node->field_attempts[0]['value'] = 1;
+	}
+
+	//save it and give it the rest of the attributes
+	node_save($node);
+}

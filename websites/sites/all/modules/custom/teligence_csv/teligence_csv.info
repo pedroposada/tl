@@ -1,0 +1,6 @@
+; $Id$
+name = Teligence CSV
+description = "Create CSV file from a table in database."
+dependencies[] = views
+package = Teligence
+core = 6.x

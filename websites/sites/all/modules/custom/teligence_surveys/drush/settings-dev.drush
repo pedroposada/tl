@@ -1,0 +1,18 @@
+#!/usr/bin/env drush php-script
+
+<?php
+
+if(module_exists('teligence_surveys'))
+{
+	variable_set('teligence_surveys_facebookJanuaryMiniContest_form_pageURL', "http://www.facebook.com/livelinkschat");
+	variable_set('teligence_surveys_facebookJanuaryMiniContest_form_canvasPageUrl', "http://apps.facebook.com/livelinks");
+	variable_set('teligence_surveys_facebookJanuaryMiniContest_form_appId', "297447953621289");
+	variable_set('teligence_surveys_facebookJanuaryMiniContest_form_appSecret', "e1bdebb9c885af07e900363ee62094bb");
+	variable_set('teligence_surveys_facebookJanuaryMiniContest_form_status', 1);
+	
+	// remove secure pages rule
+	$secure  = variable_get('teligence_secure_pages','');
+	variable_set('teligence_secure_pages',str_replace("\n"."surveys/secure/*", "",$secure));
+
+	drupal_set_message('Settings Variables were set successfully.');
+}

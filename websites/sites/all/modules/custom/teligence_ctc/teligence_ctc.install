@@ -1,0 +1,50 @@
+<?php
+
+/**
+ * Implements hook_schema()
+ */
+function teligence_ctc_schema()
+{
+	$schema['teligence_ctc_multivariant'] = array(
+	    'description' => 'Table to store multivariant scripts serialized, one record per node.', 
+	    'fields' => array(
+	      'nid' => array(
+	        'description' => 'The primary identifier for a node.', 
+	        'type' => 'int', 
+	        'unsigned' => TRUE, 
+	        'not null' => TRUE,
+	      ), 
+	      'scripts' => array(
+	        'description' => 'Serialized control-tracking script and conversion script.', 
+	        'type' => 'blob', 
+	        'not null' => FALSE, 
+	        'default' => '',
+	      ), 
+	    ), 
+	    'primary key' => array('nid'),
+	);
+	
+  	return $schema;
+}
+
+/**
+ * Implements hook_update_N()
+ */
+function teligence_ctc_update_6001(&$sandbox)
+{
+	$ret = array();
+	
+	$schema = teligence_ctc_schema();
+	if(!db_table_exists('teligence_ctc_multivariant')) 
+		db_create_table($ret, 'teligence_ctc_multivariant', $schema['teligence_ctc_multivariant']);
+	
+	return $ret;
+}
+
+/**
+ * Implements hook_uninstall()
+ */
+function teligence_ctc_uninstall()
+{
+	drupal_uninstall_schema('teligence_ctc');
+}

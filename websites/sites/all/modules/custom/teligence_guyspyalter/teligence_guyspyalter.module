@@ -1,0 +1,88 @@
+<?php
+
+function teligence_guyspyalter_form_alter(&$form, $form_state, $form_id) {
+    
+    switch ($form_id)
+    {
+    	case 'simplenews_block_form_1' :
+    		$form['mail']['#title'] = '';
+			$form['mail']['#default_value'] = 'Email Address';
+			$form['submit']['#type'] = 'image_button';
+			$form['submit']['#attributes']['src'] = 'sites/all/themes/guyspy/css/images/gsy_submit_btn_97x55.png';
+    		$form['submit']['#attributes']['title'] = t('Submit');
+    		
+    		$form['#submit'][0] = teligence_guyspyalter_block_form_submit;
+    		unset($form['action']['#options']);
+    		
+    		break;
+    	case 'simplenews_confirm_add_form' :
+    		$form['actions']['submit']['#attributes'] = array('class' => 'simplenews-subscribe');
+    		break;
+    		
+    	case 'simplenews_confirm_removal_form' :
+    		$form['actions']['submit']['#attributes'] = array('class' => 'simplenews-unsubscribe');
+    		break;
+    		
+    	case 'webform_client_form_5' :
+    	//drupal_set_message('<pre>'.check_plain(print_r($form, true)).'</pre>');
+    		$form['actions']['submit']['#attributes'] = array('class' => 'contact-submit');
+    		break;
+    		
+    	default: break;	
+    }
+    
+    //drupal_set_message('<pre>'.check_plain(print_r($form, true)).'</pre>');
+    //drupal_set_message('<pre>'.check_plain(print_r($form_state, true)).'</pre>');
+
+}
+
+function teligence_guyspyalter_block_form_submit($form, &$form_state) {
+  global $user;
+  $tid = $form['#tid'];
+  $account = _simplenews_user_load($form_state['values']['mail']);
+
+  // If email belongs to the current registered user, don't send confirmation.
+  $confirm = $account->uid && $account->uid == $user->uid ? FALSE : TRUE;
+
+  switch ($form_state['values']['action']) {
+    case 'subscribe':
+      simplenews_subscribe_user($form_state['values']['mail'], $tid, $confirm);
+      if ($confirm) {
+      	
+        drupal_set_message(t('Thank you! You will receive a confirmation email shortly with instructions on how to complete your subscription.'));
+      }
+      else {
+        drupal_set_message(t('You have been subscribed.'));
+      }
+      break;
+    case 'unsubscribe':
+      simplenews_unsubscribe_user($form_state['values']['mail'], $tid, $confirm);
+      if ($confirm) {
+        drupal_set_message(t('You will receive a confirmation email shortly containing further instructions on how to complete the unsubscription process.'));
+      }
+      else {
+        drupal_set_message(t('You have been unsubscribed.'));
+      }
+      break;
+  }
+}
+/**
+	*function teligence_guyspyalter_subscribe_success_block_alter($vars, $form, $form_state, $form_id){
+	*
+	*	$block = $vars['block'];
+	*
+	*	if ($form_id == 'simplenews_block_form_1'){
+	*		if ($form_state['values']['action'] == 'subscribe' ){
+	*			drupal_set_message('This is a test');
+	*			$block['content'] = 'New Content';
+	*		}
+	*	}
+	*	
+	*}
+	*
+**/
+
+
+
+
+

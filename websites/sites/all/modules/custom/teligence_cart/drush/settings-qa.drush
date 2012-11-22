@@ -1,0 +1,24 @@
+#!/usr/bin/env drush php-script
+
+<?php
+
+if(module_exists('teligence_cart'))
+{
+	// $items['cart/find-packages']		// Provisioning; GetPackagesByBrandAni
+	variable_set('wsdl_url', 'http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/Provisioning.svc?WSDL');
+	
+	// old values for rest of calls
+	variable_set('wsdl_url_2', 'http://vvanwcfbiz01.alldir.net/WebsiteServices/MemberManagement.svc?WSDL');
+	variable_set('wsdl_url_3', 'http://vvanwcfbiz01.alldir.net/WebsiteServices/MemberCredentials.svc?WSDL');
+	variable_set('wsdl_url_4', 'http://vvanwcfbiz01.alldir.net/WebsiteServices/IvrRtm.svc?WSDL');
+	variable_set('wsdl_url_5', 'http://vvanwcfbiz01.alldir.net/WebsiteServices/OrderManagement.svc?WSDL');
+	
+	// $items['cart/getlocalnumber']	// Localization; GetLocalAccessNumberByAreaCode
+	variable_set('wsdl_url_6', 'http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/Localization.svc?wsdl');
+	
+	drupal_set_message('WSDLs variables for QA were set successfully.');
+}
+else 
+{
+	drupal_set_message('WSDLs were not set because the module "teligence_cart" is not enbled.');
+}

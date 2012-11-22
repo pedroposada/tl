@@ -1,0 +1,7 @@
+; $Id$ 
+name = "Teligence Click to Call Administration"
+description = "This module should only be enabled in ctc.teligence.net page."
+package = "Teligence"
+version = "6.0"
+core = "6.x"
+dependencies[] = teligence_ctc

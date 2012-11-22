@@ -1,0 +1,43 @@
+/*
+ * Global Settings Screen
+ */
+.global-settings-list
+{
+	float:left;
+	width:50%;
+}
+
+/*
+ * Automator Override Screen
+ */
+#edit-multiple-delete
+{
+	float:right;
+}
+
+/*
+ * Review result override rules screen
+ */
+table.configurations-table td,
+table.configurations-table th
+{
+	vertical-align:top;
+}
+
+table.review-result-override select
+{
+	width:100px;
+}
+
+/*
+ * Further Analysis Screen
+ */
+table.review-result-analysis td,
+table.review-result-analysis th
+{
+	vertical-align:top;
+}
+table.review-result-analysis select
+{
+	width:70px;
+}

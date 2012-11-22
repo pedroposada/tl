@@ -1,0 +1,385 @@
+<?php
+
+/**
+ * DRUPAL HOOKS
+ */
+
+/**
+ * Implements hook_boot()
+ */
+function teligence_alter_boot()
+{
+	if(teligence_alter_isMobileDevice())
+	{
+		// find host		
+		$host = $_SERVER['HTTP_HOST']; 
+		$host = strstr($host, 'www.') ? substr($host, strlen('www.')) : $host;
+		$host = strstr($host, 'secure.') ? substr($host, strlen('secure.')) : $host;
+		
+		// find uri arguments
+		$args = array();
+		$args = explode('/',$_GET['q']);
+		if($args[0] == 'node' && ctype_digit($args[1]))
+		{
+			if(db_table_exists('content_field_map_to_mobile'))
+			{
+				$mtm = db_result(db_query("SELECT field_map_to_mobile_value FROM {content_field_map_to_mobile} WHERE nid = '%d'",$args[1]));
+			}
+		}
+		elseif($path = db_result(db_query("SELECT src FROM {url_alias} WHERE dst = '%s'",$_GET['q'])))
+		{
+			$args = array();
+			$args = explode('/',$path);
+			if($args[0] == 'node' && ctype_digit($args[1]))
+			{
+				if(db_table_exists('content_field_map_to_mobile'))
+				{
+					$mtm = db_result(db_query("SELECT field_map_to_mobile_value FROM {content_field_map_to_mobile} WHERE nid = '%d'",$args[1]));
+				}
+			}	
+		}
+		
+		// do not do any redirection if map to mobile is set and it says <none>
+		if($mtm == "<none>")
+		{
+			return;
+		}
+	
+		$params = (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], "?") ? 
+			substr($_SERVER['REQUEST_URI'], strpos($_SERVER['REQUEST_URI'], "?")+1, strlen($_SERVER['REQUEST_URI'])) : '');
+		
+		// quickbase task #748
+		if(strstr($host.$_SERVER['REQUEST_URI'], 'vibeline.com'))
+		{
+			header('Location: ' . 'http://m.livelinks.com/oc/aa/' . '?' . $params, TRUE, 302);
+			exit();
+		}
+		
+		// redirect to page stored in map_to_mobile field for this node
+		if(strlen($mtm))
+		{
+			header('Location: ' . $mtm . '?' . $params, TRUE, 302);
+			exit();
+		}
+		
+		// email campaign not redirect to mobile
+		if($_GET['q'] == 'email')
+		{
+			header('Location: ' . 'http://' . $host . '/email/mobile' . '?' . $params, TRUE, 302);
+			exit();
+		}
+		
+		// email campaign not redirect to mobile
+		if($_GET['q'] == 'email/mobile')
+		{
+			return;
+		}
+		
+  		header('Location: ' . 'http://m.' . $host . '?' . $params, TRUE, 302); 
+  		exit();
+  	}
+}
+ 
+/**
+ * Implementation of hook_menu()
+ */
+function teligence_alter_menu()
+{
+	$items['admin/alter'] = array (
+	    'title'=>'Teligence Alter',
+	    'page callback'=>'drupal_get_form',
+	    'page arguments'=> array ('teligence_alter_settings_form'),
+	    'access arguments'=> array ('access alter settings'),
+    );
+
+    $items['admin/alter/settings'] = array (
+	    'title'=>'Settings',
+	    'type'=>MENU_DEFAULT_LOCAL_TASK,
+    	'weight'=> -10,
+    );
+	
+	return $items;
+}
+ 
+ 
+/**
+ * Implementation of hook_form_alter()
+ * @return 
+ */
+function teligence_alter_form_alter(&$form, $form_state, $form_id)
+{	
+	if($form_id == 'webform_client_form_116')
+	{
+		//drupal_set_message('<pre>'.print_r($form,true).'</pre>');
+		
+		$form['submitted']['topic']['#options'][''] = 'Please select...';
+		//$form['submit']['#value'] = '';
+	}
+
+	if($form_id == 'black_list_number_node_form')
+	{
+		//drupal_set_message('<pre>'.print_r($form,true).'</pre>');
+		
+		$form['buttons']['preview']['#type'] = 'hidden';
+		$form['#redirect'] = $_GET['q'];
+	}
+	
+	if($form_id == 'ctc_landing_page_node_form')
+	{
+		// drupal_set_message('<pre>'.print_r($form['field_map_to_mobile'],true).'</pre>');
+		if(isset($form['field_map_to_mobile'][0]['#description']))
+		$form['field_map_to_mobile'][0]['#description'] .= '<br />' . t('To stop redirection, enter "<!none>" in this field. Without the double quotes.', array('!none' => '<b>none</b>'));
+	}
+	
+}
+
+/*
+ * Implementation of hook_nodeapi() 
+ */
+function teligence_alter_nodeapi(&$node, $op, $a3, $a4)
+{
+	//global $user;
+	switch($op){
+		case 'validate':
+			
+			if($node->type == 'black_list_number')
+			{
+				// check if phone number is in valid format
+				if(!teligence_alter_valid_phone_number($node->field_phone_number[0]['value']))
+				{
+					form_set_error('field_phone_number_0_value', 'Invalid phone number');
+				}
+				
+				// check for duplicates
+				$view = views_get_view('ctc_blacklist');
+				$view->set_items_per_page(0);
+				$view->execute();
+				foreach((array)$view->result as $phonenumber)
+				{
+					if($phonenumber->node_data_field_phone_number_field_phone_number_value == teligence_alter_format_phonenumber($node->field_phone_number[0]['value']))
+					{
+						form_set_error('field_phone_number_0_value', 'Duplicated phone number');
+					}
+				}	 
+			}
+			
+		break;
+		case 'presave':
+			
+			if($node->type == 'black_list_number')
+			{
+				// format phone number, remove any non-numeric character, before saving it.
+				$node->field_phone_number[0]['value'] = teligence_alter_format_phonenumber($node->field_phone_number[0]['value']);	
+			}
+			
+		break;
+	}
+}
+
+/*
+ * Implementation of MODULENAME_preprocess_hook()
+ * alter vars when rendering a page
+ */
+function teligence_alter_preprocess_page(&$vars)
+{	
+	$host = ltrim($_SERVER['HTTP_HOST'],'www.');
+	$host = $_SERVER['HTTP_HOST']; 
+	$host = strstr($host, 'www.') ? substr($host, strlen('www.')) : $host;
+	$host = strstr($host, 'secure.') ? substr($host, strlen('secure.')) : $host;
+	
+	if(teligence_alter_isMobileDevice())
+	{	
+		// do not do any redirection if map to mobile is set and it says <none>
+		if($vars['node']->field_map_to_mobile[0]['value'] == "<none>")
+		{
+			return;
+		}
+	
+		$params = (strpos(request_uri(), "?") ? substr(request_uri(), strpos(request_uri(), "?")+1, strlen(request_uri())) : '');
+		
+		// quickbase task #748
+		if(strstr($host.request_uri(), 'vibeline.com'))
+		{
+			header('Location: ' . 'http://m.livelinks.com/oc/aa/' . '?' . $params, TRUE, 302);
+			exit();
+		}
+		
+		// redirect to page stored in map_to_mobile field for this node
+		if(strlen($vars['node']->field_map_to_mobile[0]['value']))
+		{
+			header('Location: ' . $vars['node']->field_map_to_mobile[0]['value'] . '?' . $params, TRUE, 302);
+			exit();
+		}
+		
+		// email campaign not redirect to mobile
+		if(drupal_get_path_alias($_GET['q']) == 'email')
+		{
+			header('Location: ' . 'http://' . $host . '/email/mobile' . '?' . $params, TRUE, 302);
+			exit();
+		}
+		// email campaign not redirect to mobile
+		if(drupal_get_path_alias($_GET['q']) == 'email/mobile')
+		{
+			return;
+		}
+		
+  		header('Location: ' . 'http://m.' . $host . '?' . $params, TRUE, 302); 
+  		exit();
+  	}
+}
+
+/*****************************************
+ * HELPER FUNCTIONS
+ */
+
+/**
+ * settings form
+ */
+function teligence_alter_settings_form($form_state)
+{
+	$form = array();
+	
+	return $form;
+}
+ 
+/**
+ * settings form
+ * create list of non redirects or customa redirects for mobile devices
+ */
+function teligence_alter_managemobileredirects($form_state)
+{
+	$form['addedit'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Add/Edit Redirection'),
+	);
+	
+	
+	return $form;
+}
+ 
+ 
+/**
+ * new version of mobile redirection checking function sent by Steven Reimer on Tuesday, October 19, 2010 6:32 PM
+ */
+function teligence_alter_isMobileDevice() 
+{
+	// Filter out explicitly non-mobile devices (false positives)
+	$nonMobileKeywords = array('iPad');
+	foreach ($nonMobileKeywords as $keyword) 
+	{
+		if (isset($_SERVER['HTTP_USER_AGENT']) && strpos($_SERVER['HTTP_USER_AGENT'], $keyword) !== false)
+		{
+			return false;
+		} 
+	}
+	 
+	// X-WAP-Profile & HTTP-Profile are mobile indicators
+	if (isset($_SERVER['HTTP_X_WAP_PROFILE']) || isset($_SERVER['HTTP_PROFILE']))
+	{
+		return true;
+	} 
+	
+	// Search for mobile device user agents
+	$mobileKeywords = array(
+		'Samsung', 'Motorola', 'LG', 'BlackBerry',
+		'RIM', 'Research in Motion', 'iPhone', ' Pre/', 'Android',
+		'IEMobile', 'Windows CE', 'Ericsson', 'Nokia', 'Palm',
+		'HTC', 'Pantech', 'Kyocera', 'Sanyo', 'Ustar', 'Audiovox',
+		'Handspring', 'Opera Mobi', 'Mobile', 'Smartphone', 'iPod',
+		'HipTop', 'Sec-', 'Mot-', 'Sie-', 'AvantGo', 'up.b', 'up/',
+		'Opera Mini', 'Samu'
+	);
+	foreach ($mobileKeywords as $keyword) 
+	{
+		if (isset($_SERVER['HTTP_USER_AGENT']) && strpos($_SERVER['HTTP_USER_AGENT'], $keyword) !== false)
+		{
+			return true;
+		} 
+	}
+	
+	// Search for mobile-specific MIME type support 
+	$mobileMIMEtypes = array(
+		'application/vnd.wap.xhtml+xml', 
+		'text/vnd.wap.wml'
+	);
+	foreach ($mobileMIMEtypes as $mimeType) 
+	{
+		if (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], $mimeType) !== false) 
+		{
+			return true;
+		}
+	}
+	
+	// Device failed all checks, assume non-mobile
+	return false;
+}
+
+
+
+
+
+/*
+ * format phone number
+ */
+function teligence_alter_format_phonenumber($phonenumber)
+{	
+	$phonenumber = trim($phonenumber);
+	
+	if(empty($phonenumber)){
+		return '';
+	}
+	
+	// define regular expression   
+  	$regex = "/
+    ^\D*          # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    ([02-9]\d{2}) # capture area code       
+    \D*           # optional separator
+    (\d{3})       # capture 3-digit prefix
+    \D*           # optional separator
+    (\d{4})       # capture 4-digit line number                       
+    \D*           # optional separator
+    (\d*)         # capture optional extension                       
+    \D*$          # ignore trailing non-digits
+  	/x"; 
+    
+  	// get digits of phone number
+  	preg_match($regex, $phonenumber, $matches);
+    
+  	//drupal_set_message($matches[1].$matches[2].$matches[3]);
+    return $matches[1].$matches[2].$matches[3];
+}
+
+
+/**  
+ * Verifies that $phonenumber is a valid ten-digit North American phone number
+ *
+ * @param string $phonenumber
+ * @return boolean Returns boolean FALSE if the phone number is not valid. 
+ */
+
+function teligence_alter_valid_phone_number($phonenumber)
+{   	
+  $phonenumber = trim($phonenumber);
+   
+  if(empty($phonenumber)){
+	return '';
+  }
+  // define regular expression
+  $regex = "/
+    \D*           # ignore non-digits
+    1?            # an optional 1
+    \D*           # optional separator 
+    [02-9]\d{2}   # area code (can't start with 1)
+    \D*           # optional separator
+    [02-9]\d{2}   # 3-digit prefix (can't start with 1)    
+    \D*           # optional separator
+    \d{4}         # 4-digit line number
+    \D*           # optional separator
+    \d*           # optional extension
+    \D*           # ignore trailing non-digits
+    /x";
+  // return true if valid, false otherwise
+  return (bool) preg_match($regex, $phonenumber); 
+}

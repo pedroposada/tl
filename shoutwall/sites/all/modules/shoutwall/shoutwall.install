@@ -1,0 +1,143 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the shoutwall module.
+ */
+
+/**
+ * Implements hook_schema()
+ */
+function shoutwall_schema()
+{
+	$schema['shoutwall_shouts'] = array(
+		'description' => 'The base table for shouts',
+		'fields' => array(
+			'Id' => array(
+				'type' => 'int',
+				'not null' => TRUE,
+				'unsigned' => TRUE,
+				'default' => 1,
+			),
+			'Status' => array(
+				'type' => 'char',
+				'not null' => TRUE,
+				'default' => 'A',
+			),
+			'CreateDate' => array(
+				'type' => 'int',
+			),
+			'CategoryName' => array(
+				'type' => 'varchar',
+				'length' => 80,
+			),
+			'HeadlineText' => array(
+				'type' => 'text',
+			),
+			'ShoutText' => array(
+				'type' => 'text',
+			),
+			'AudioFilename' => array(
+				'type' => 'varchar',
+				'length' => 80,
+			),
+		),
+		'primary key' => array('ID'),
+	);
+	
+	return $schema;
+	
+	// 'DROP TABLE IF EXISTS `Shouts`;
+	// /*!40101 SET @saved_cs_client     = @@character_set_client */;
+	// /*!40101 SET character_set_client = utf8 */;
+	// CREATE TABLE `Shouts` (
+	  // `ID` int(10) unsigned NOT NULL AUTO_INCREMENT,
+	  // `Status` char(1) NOT NULL,
+	  // `CreateDate` datetime NOT NULL,
+	  // `CategoryName` varchar(80) NOT NULL,
+	  // `HeadlineText` text NOT NULL,
+	  // `ShoutText` text NOT NULL,
+	  // `AudioFilename` varchar(40) NOT NULL,
+	  // PRIMARY KEY (`ID`),
+	  // KEY `CategoryName` (`CategoryName`)
+	// ) ENGINE=MyISAM AUTO_INCREMENT=9 DEFAULT CHARSET=latin1;
+	// /*!40101 SET character_set_client = @saved_cs_client */;';
+}
+
+/**
+ * Implements hook_install()
+ */
+function shoutwall_install()
+{
+	// drupal_install_schema('shoutwall');
+	drupal_set_message("Table 'shoutwall_shouts' was created successfully.");
+}
+/**
+ * Implements hook_uninstall()
+ */
+function shoutwall_uninstall()
+{
+	// drupal_uninstall_schema('shoutwall');
+	drupal_set_message("Table 'shoutwall_shouts' was deleted successfully.");
+}
+
+/**
+ * Implements hook_requirements($phase)
+ */
+function shoutwall_requirements($phase)
+{
+	$requirements = array();
+	
+	if($phase == 'install')
+	{
+	}
+	
+	return $requirements;
+}
+
+/**
+ * Implements hook_enable()
+ */
+function shoutwall_enable()
+{
+	// make shoutwall/frontpage the front page of this site
+	variable_set('site_frontpage','shoutwall/frontpage');
+	
+	// set secret 
+	variable_set('shoutwall_secret','teligence');
+	
+	// make dir for shouts
+	$uri = file_build_uri('shoutwall');
+	if(drupal_mkdir($uri))
+	{
+		file_create_htaccess($uri);
+		drupal_set_message(t('Directory !uri was created successfully',array('!uri'=>$uri)));
+	}
+	else
+	{
+		drupal_set_message(t('Error creating directory !uri. Please create it manually.',array('!uri'=>$uri)),'error');
+	}
+}
+
+/**
+ * Implements hook_disable()
+ */
+function shoutwall_disable()
+{
+	// make shoutwall/frontpage the front page of this site
+	variable_set('site_frontpage','');
+	
+	// remove custom variable
+	variable_del('shoutwall_secret');
+	
+	// remove dir
+	$uri = file_build_uri('shoutwall');
+	if(file_unmanaged_delete_recursive($uri))
+	{
+		drupal_set_message(t('Directory !uri was removed successfully',array('!uri'=>$uri)));
+	}
+	else
+	{
+		drupal_set_message(t('Error removing directory !uri. Please remove it manually.',array('!uri'=>$uri)),'error');
+	}
+}

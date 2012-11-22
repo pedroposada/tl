@@ -1,0 +1,16 @@
+; $Id$ 
+name = "Teligence Blog"
+description = "Handle Blogs"
+package = "Teligence"
+version = "6.0"
+core = "6.x"
+dependencies[] = menu
+dependencies[] = content
+dependencies[] = content_copy
+dependencies[] = views
+dependencies[] = search
+dependencies[] = ajax_comments
+dependencies[] = fckeditor
+dependencies[] = taxonomy
+dependencies[] = vppr
+dependencies[] = pathauto

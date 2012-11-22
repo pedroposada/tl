@@ -1,0 +1,128 @@
+#!/usr/bin/env drush php-script
+
+<?php
+
+function paypal_settingsTables($VendorIDs, $VendorASU, $VendorSR)
+{
+	$sql = " UPDATE {%s} SET URL = '%s' WHERE VendorID = '%s' ";
+	foreach ($VendorIDs as $VendorID) 
+	{
+		if(substr($VendorID,-3) == 'ASU')
+		{
+			foreach ($VendorASU as $k=>$v) 
+			{
+				if(db_query($sql,$k,$v['url'].$v['qstr'],$VendorID))
+				{
+					drupal_set_message(t('!vendor table !tbl was modified with R54 changes',array('!vendor'=>$VendorID, '!tbl'=>$k)));
+				}
+				// print_r(array($sql,$k,$v['url'].$v['qstr'],$VendorID));
+			}
+		}
+		if(substr($VendorID,-2) == 'SR')
+		{
+			foreach ($VendorSR as $k=>$v) 
+			{
+				if(db_query($sql,$k,$v['url'].$v['qstr'],$VendorID))
+				{
+					drupal_set_message(t('!vendor table !tbl was modified with R54 changes',array('!vendor'=>$VendorID, '!tbl'=>$k)));
+				}
+			}
+		}
+	}
+}
+
+if(module_exists('paypal'))
+{
+	$VendorASU = array(
+		'pp_Function_GetPackageDetails' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/GetPackageDetails.ashx',
+			'qstr'=> '?SequenceId=%%&PackageId=%%',
+		),
+		'pp_Function_ValidateResponse' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ValidateAsuPurchase.ashx',
+			'qstr'=> '?SequenceId=%%&LASTNAME=%%&FIRSTNAME=%%&Ani=%%&PackageId=%%&PAYERID=%%',
+		),
+		'pp_Function_OrderFulFillment' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessPayment.ashx',
+			'qstr'=> '?SequenceId=%%&OrderId=%%&TRANSACTIONID=%%&PAYMENTTYPE=%%',
+		),
+		'pp_Function_IPN' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessNotification.ashx',
+			'qstr'=> '?SequenceId=%%&PayPalTransactionId=%%&NotificationType=%%',
+		),
+	);
+	$VendorSR = array(
+		'pp_Function_GetPackageDetails' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/GetPackageDetails.ashx',
+			'qstr'=> '?SequenceId=%%&PackageId=%%',
+		),
+		'pp_Function_ValidateResponse' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ValidateSrPurchase.ashx',
+			'qstr'=> '?SequenceId=%%&PackageId=%%&PAYERID=%%&EmsMembershipId=%%',
+		),
+		'pp_Function_OrderFulFillment' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessPayment.ashx',
+			'qstr'=> '?SequenceId=%%&OrderId=%%&TRANSACTIONID=%%&PAYMENTTYPE=%%',
+		),
+		'pp_Function_IPN' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessNotification.ashx',
+			'qstr'=> '?SequenceId=%%&PayPalTransactionId=%%&NotificationType=%%',
+		),
+	);
+	$VendorIDs = array(
+		'IMLASU',
+		'IMLSR',
+		'RDLASU',
+		'RDLSR',
+		'LBLASU',
+		'LBLSR',
+		'VBLASU',
+		'VBLSR',
+		'TGOASU',
+		'TGOSR',
+	);
+	paypal_settingsTables($VendorIDs, $VendorASU, $VendorSR);
+	
+	
+	$VendorASU = array(
+		'pp_Function_GetPackageDetails' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/GetPackageDetails.ashx',
+			'qstr'=> '?SequenceId=%%&PackageId=%%',
+		),
+		'pp_Function_ValidateResponse' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ValidateAsuPurchase.ashx',
+			'qstr'=> '?SequenceId=%%&LASTNAME=%%&FIRSTNAME=%%&Ani=%%&PackageId=%%&PAYERID=%%&IvrBrandId=%%&Email=%%&Password=%%&WebMemberId=%%',
+		),
+		'pp_Function_OrderFulFillment' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessPayment.ashx',
+			'qstr'=> '?SequenceId=%%&OrderId=%%&TRANSACTIONID=%%&PAYMENTTYPE=%%&Email=%%&Password=%%',
+		),
+		'pp_Function_IPN' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessNotification.ashx',
+			'qstr'=> '?SequenceId=%%&PayPalTransactionId=%%&NotificationType=%%',
+		),
+	);
+	$VendorSR = array(
+		'pp_Function_GetPackageDetails' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/GetPackageDetails.ashx',
+			'qstr'=> '?SequenceId=%%&PackageId=%%',
+		),
+		'pp_Function_ValidateResponse' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ValidateSrPurchase.ashx',
+			'qstr'=> '?SequenceId=%%&PackageId=%%&PAYERID=%%&EmsMembershipId=%%',
+		),
+		'pp_Function_OrderFulFillment' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessPayment.ashx',
+			'qstr'=> '?SequenceId=%%&OrderId=%%&TRANSACTIONID=%%&PAYMENTTYPE=%%&Email=%%&Password=%%',
+		),
+		'pp_Function_IPN' => array(
+			'url' => 'http://ws.wspaypalgatewayhost.alldir.net/PayPalPayment/ProcessNotification.ashx',
+			'qstr'=> '?SequenceId=%%&PayPalTransactionId=%%&NotificationType=%%',
+		),
+	);
+	$VendorIDs = array(
+		'LLKASU',
+		'LLKSR',
+	);
+	paypal_settingsTables($VendorIDs, $VendorASU, $VendorSR);
+}

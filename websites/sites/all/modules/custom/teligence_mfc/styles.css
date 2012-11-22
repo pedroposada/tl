@@ -1,0 +1,35 @@
+h1.pageTitle {
+	color:#0000ff;
+}
+
+.mfcContent {
+	width:900px;
+	margin:auto;
+}
+
+.mfcLinks {
+	text-align:right;
+}
+
+.lookupSection {
+	margin-bottom:1000px;
+}
+
+.last {
+	margin-bottom:200px;
+}
+
+.center {
+	text-align:center;
+}
+
+#edit-area-code {
+	text-align:center;
+	font-size:24px;
+}
+#local-access-numbers-body table{
+	width:500px;
+}
+#local-access-numbers-body {
+	font-size:18px;
+}

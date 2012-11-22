@@ -1,0 +1,24 @@
+.clearer {
+	clear: both;
+}
+
+#audioPlayerControls {
+}
+.playerControl {
+	cursor:pointer;
+	margin-right:3px;
+	float:left;
+	padding:3px;
+	border: 1px solid #000;
+	width:100px;
+	text-align:center;
+}
+.frontPagetab {
+	cursor:pointer;
+}
+.tabContent {
+	display:none;
+}
+#tabsWrapper div.active {
+	display:block;
+}

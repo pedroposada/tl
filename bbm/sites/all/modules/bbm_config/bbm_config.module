@@ -1,0 +1,2636 @@
+<?php 
+
+// include the database connection
+include_once(drupal_get_path('module', 'bbm_agent') . '/inc/mssql.inc');
+
+/*********************************************
+ ************************** DRUPAL HOOKS *****
+ *********************************************/
+
+/*
+ * implementation of hook_perm()
+ */
+function bbm_config_perm()
+{
+	return array(
+				'access system settings',
+				'access configuration screens'
+			);
+}
+
+/*
+ * Implementation of hook_menu()
+ */
+function bbm_config_menu()
+{
+	$items = array();
+
+	$items['admin/settings/bbm/config'] = array(
+		'title' => 'BBM Web Config',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_settings_form'),
+		'access arguments' => array('access system settings'),
+		'type' => MENU_LOCAL_TASK
+	);
+	
+	/***************************/
+	$items['bbm/rules'] = array(
+		'title' => 'BBM Configuration Rules',
+		'page callback'=>'drupal_goto',
+		'page arguments'=> array ('bbm-rules/global-settings'),
+		'access arguments' => array('access configuration screens'),
+		'menu_name'=>'menu-bbm-tabs',
+		'weight' => 29,
+	);
+	$items['bbm-rules/global-settings'] = array(
+		'title' => 'Global Settings',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_global_settings_form'),
+		'access arguments' => array('access configuration screens'),
+		'menu_name'=>'menu-bbm-config-tabs',
+		'weight' => 0,
+	);
+	$items['bbm-rules/automator-override'] = array(
+		'title' => 'Automator Override',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_automator_override_form'),
+		'access arguments' => array('access configuration screens'),
+		'menu_name'=>'menu-bbm-config-tabs',
+		'weight' => 1,
+	);
+	$items['bbm-rules/%/edit-rule'] = array(
+		'title' => 'Edit Automator Override Rule',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_automator_override_edit_form', 1),
+		'access arguments' => array('access configuration screens'),
+		'type'=>MENU_CALLBACK,
+	);
+	$items['bbm-rules/review-result'] = array(
+		'title' => 'Review Result Type',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_review_result_type_form'),
+		'access arguments' => array('access configuration screens'),
+		'menu_name'=>'menu-bbm-config-tabs',
+		'weight' => 2,
+	);
+	$items['bbm-rules/review-override'] = array(
+		'title' => 'Review Result Override',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_review_override_form'),
+		'access arguments' => array('access configuration screens'),
+		'menu_name'=>'menu-bbm-config-tabs',
+		'weight' => 3,
+	);
+	$items['bbm-rules/%/edit-override-rule'] = array(
+		'title' => 'Edit Result Override Rule',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_review_override_edit_form', 1),
+		'access arguments' => array('access configuration screens'),
+		'type'=>MENU_CALLBACK,
+	);
+	$items['bbm-rules/further-analysis'] = array(
+		'title' => 'Further Analysis',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_further_analysis_form'),
+		'access arguments' => array('access configuration screens'),
+		'menu_name'=>'menu-bbm-config-tabs',
+		'weight' => 4,
+	);
+	$items['bbm-rules/%/edit-analysis-rule'] = array(
+		'title' => 'Edit Further Analysis Rule',
+		'page callback'=>'drupal_get_form',
+		'page arguments'=> array ('bbm_config_further_analysis_edit_form', 1),
+		'access arguments' => array('access configuration screens'),
+		'type'=>MENU_CALLBACK,
+	);
+
+	return $items;
+}
+
+/*
+ * Implementation of hook_theme()
+ */
+function bbm_config_theme($existing, $type, $theme, $path)
+{
+	return array (
+	    'bbm_config_forms'=> array (
+	    	'arguments'=> array ('form'=>null),
+    		'template' => 'bbm_config-forms',
+			),
+	    'bbm_config_rectype_order'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+	    'bbm_config_reason_order'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+	    'bbm_config_automator_override_rules'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+	    'bbm_config_review_result_type_page'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+	    'bbm_configure_override_rules'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+	    'bbm_configure_analysis_rules'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+	    'bbm_config_modal_window'=> array (
+	    	'arguments'=> array ('form'=>null),
+			),
+		);
+}
+
+/*
+ * Implementation of MODULENAME_preprocess_hook()
+ */
+function bbm_config_preprocess_bbm_config_forms(&$vars)
+{
+	$vars['menu_user'] = array();
+
+	if(!empty($_SESSION['userlongname']))
+	{
+		$vars['userlongname'] = 'Logged in as ' . $_SESSION['userlongname'];
+		$vars['menu_user'][] = array('title' => $vars['userlongname'], 'attributes' => array('class' => 'user-name'));
+	}
+
+	$vars['menu_user'] += menu_navigation_links('menu-bbm-login');
+	$vars['menu_tabs'] = menu_navigation_links('menu-bbm-tabs');
+	$vars['menu_config_tabs'] = menu_navigation_links('menu-bbm-config-tabs');
+	$vars['content'] = theme_bbm_config_forms($vars['form']);
+	
+	// make parent tab active all the time
+	foreach($vars['menu_tabs'] as $key => $tab)
+	{
+		if($vars['menu_tabs'][$key]['title'] == 'BBM Configuration Rules')
+		{
+			$vars['menu_tabs'][$key]['attributes'] = array('class' => 'active');	
+			$vars['menu_tabs'][$key]['href'] = $_GET['q'];	
+		}
+	}
+	
+	if(request_uri() == '/bbm-rules/global-settings')
+	{
+		//unset($vars['form']['rec_reason_priority']);
+		//$vars['content'] = '<pre>' . print_r($vars['form'], true) . '</pre>';
+	}	
+}
+
+/*************************************************************
+ *********************** HELPER FUNCTIONS ********************
+ *************************************************************/
+
+
+/*
+ * settings form screen
+ */
+function bbm_config_settings_form($form_state)
+{
+	$form = array();
+	
+	return system_settings_form($form); 
+}
+
+
+
+/*****************************************************************************************************************************
+ * Global Settings
+ * global settings screen form
+ */
+function bbm_config_global_settings_form($form_state)
+{
+	$form = array();
+	$form['#theme'] = 'bbm_config_forms';
+	$form['#pre_render'] = array('bbm_config_global_settings_form_pre_render');
+	
+	//$form['global_settings_page'] = array();
+	//$form['global_settings_page']['#type'] = 'fieldset';
+	//$form['global_settings_page']['#theme'] = 'bbm_config_global_settings_page';
+	
+	/*
+	 * types
+	 */
+	$form['rec_type_priority'] = array(
+		'#prefix' => '<div class="global-settings-list">',
+		'#suffix' => '</div>',
+		'#type' => 'fieldset',
+		'#title' => t('Recording Type Priorities'),
+		'#theme' => 'bbm_config_rectype_order',	
+		'#tree' => true,
+	);
+	
+	$result = bbm_agent_db_query(null, "dbo.bbmsp_get_RecordingTypes");
+	$i = 1;
+	while($rectype = mssql_fetch_array($result))
+	{
+		$form['rec_type_priority'][$rectype['RecordingTypeId']]['order_' . $rectype['RecordingTypeId']] = array(
+			'#type' => 'hidden',
+			'#value' => $i,
+		);
+		$form['rec_type_priority'][$rectype['RecordingTypeId']]['priority_' . $rectype['RecordingTypeId']] = array(
+			'#type' => 'hidden',
+			'#value' => $rectype['RecordingTypePriority'],
+		);
+		$form['rec_type_priority'][$rectype['RecordingTypeId']]['title'] = array(
+			'#value' => $rectype['RecordingTypeDescription'],
+		);
+		$form['rec_type_priority'][$rectype['RecordingTypeId']]['id'] = array(
+			'#type' => 'hidden',
+			'#value' => $rectype['RecordingTypeId'],
+		);
+		$i++;
+	}
+	
+	$form['rec_type_priority']['button_save_recording_priorities'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save Recording Type Priorities'),
+	);
+	
+	/*
+	 * reasons
+	 */
+	$form['rec_reason_priority'] = array(
+		'#prefix' => '<div class="global-settings-list">',
+		'#suffix' => '</div>',
+		'#type' => 'fieldset',
+		'#title' => t('Reason Priorities'),
+		'#theme' => 'bbm_config_reason_order',	
+		'#tree' => true,
+	);
+	
+	$result = bbm_agent_db_query(null, "dbo.bbmsp_get_ReviewResultTypeGroup");
+	while($reason = mssql_fetch_array($result))
+	{
+		$form['rec_reason_priority'][$reason['ReviewResultTypeGroupId']]['order_' . $reason['ReviewResultTypeGroupId']] = array(
+			'#type' => 'hidden',
+			'#value' => $i,
+		);
+		$form['rec_reason_priority'][$reason['ReviewResultTypeGroupId']]['priority_' . $reason['ReviewResultTypeGroupId']] = array(
+			'#type' => 'hidden',
+			'#value' => $reason['ReviewResultTypePriority'],
+		);
+		$form['rec_reason_priority'][$reason['ReviewResultTypeGroupId']]['title'] = array(
+			'#value' => $reason['ReviewResultTypeGroupDescription'],
+		);
+		$form['rec_reason_priority'][$reason['ReviewResultTypeGroupId']]['id'] = array(
+			'#type' => 'hidden',
+			'#value' => $reason['ReviewResultTypeGroupId'],
+		);
+		$i++;
+	}
+	
+	$form['rec_reason_priority']['button_save_reason_priorities'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save Recording Reason Priorities'),
+	);
+	
+	return $form;
+}
+
+/*
+ * pre render for global settings form
+ */
+function bbm_config_global_settings_form_pre_render($form)
+{
+	//$form['global_settings_page'] += (array)$form['rec_type_priority'];
+	//$form['global_settings_page'] += (array)$form['rec_reason_priority'];	
+
+	return $form;
+}
+
+/*
+ * submit global settings
+ */
+function bbm_config_global_settings_form_submit($form, &$form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-rec-type-priority-button-save-recording-priorities')
+	{
+		//drupal_set_message('<pre>' . print_r($form_state['clicked_button']['#post']['rec_type_priority'], true) . '</pre>');
+		$order = array();
+		$ids = array();
+		foreach($form_state['clicked_button']['#post']['rec_type_priority'] as $key => $value)
+		{
+			is_numeric($key) ? $order[] = $value['priority_' . $key] : null;
+			is_numeric($key) ? $ids[] = $key : null;
+		}
+		sort($order);
+		$final = array_combine($ids, $order);
+		foreach($final as $key => $value)
+		{
+			$sp_params = array();
+			$sp_params['RecordingTypeId'] = array(
+				'name' => 'RecordingTypeId', 
+				'value' => $key,
+				'type' => SQLINT1,
+				'length' => 1,
+			);
+			$sp_params['RecordingTypePriority'] = array(
+				'name' => 'RecordingTypePriority', 
+				'value' => $value,
+				'type' => SQLINT2,
+				'length' => 2,
+			);
+			$result = bbm_agent_db_query(null, 'bbmsp_upd_RecordingTypePriority', $sp_params);
+		}
+		//drupal_set_message('<pre>' . print_r($final, true) . '</pre>');
+		$result ? drupal_set_message('Successfully changed Recording Type Priorities') : drupal_set_message('Failed to change Recording Type Priorities', 'error');
+		
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-rec-reason-priority-button-save-reason-priorities')
+	{
+		//drupal_set_message('<pre>' . print_r($form_state['values']['rec_reason_priority'], true) . '</pre>');
+		$order = array();
+		$ids = array();
+		foreach($form_state['clicked_button']['#post']['rec_reason_priority'] as $key => $value)
+		{
+			is_numeric($key) ? $order[] = $value['priority_' . $key] : null;
+			is_numeric($key) ? $ids[] = $key : null;
+		}
+		sort($order);
+		$final = array_combine($ids, $order);
+		foreach($final as $key => $value)
+		{
+			$sp_params = array();
+			$sp_params['ReviewResultTypeGroupId'] = array(
+				'name' => 'ReviewResultTypeGroupId', 
+				'value' => $key,
+				'type' => SQLINT1,
+				'length' => 1,
+			);
+			$sp_params['ReviewResultTypePriority'] = array(
+				'name' => 'ReviewResultTypePriority', 
+				'value' => $value,
+				'type' => SQLINT2,
+				'length' => 2,
+			);
+			$result = bbm_agent_db_query(null, 'bbmsp_upd_ReviewResultTypePriority', $sp_params);
+		}
+		//drupal_set_message('<pre>' . print_r($final, true) . '</pre>');
+		$result ? drupal_set_message('Successfully changed Reason Priorities') : drupal_set_message('Failed to change Reason Priorities', 'error');
+	}
+}
+
+
+
+
+
+/********************************************************************************************************************************
+ * Automator Override
+ * form automator override rules screen
+ */
+function bbm_config_automator_override_form($form_state)
+{
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.css');
+	
+	$form = array();
+	$form['#theme'] = 'bbm_config_forms';
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#theme' => 'bbm_config_automator_override_rules',
+		'#title' => t('Manage Automator Override Rules'),
+	);
+	
+	/*
+	 * create new rules
+	 */
+	$result = bbm_agent_db_query(null, "bbmsp_get_RecordingTypes");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['RecordingTypeId']] = $item['RecordingTypeDescription'];
+	}
+	$form['group']['record_type'] = array(
+		'#type' => 'select',
+		'#options' => $options,
+	);
+	
+	$form['group']['description'] = array(
+		'#type' => 'textfield',
+		'#size' => 30,
+	);
+	
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRHubs");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRHubId']] = $item['IVRHubFullName'];
+	}
+	$form['group']['hubid'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRBrandBehaviours");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRBrandBehaviourId']] = $item['IVRBrandBehaviourFullName'];
+	}
+	$form['group']['brand'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRTreatments");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRTreatmentId']] = $item['IVRTreatmentName'];
+	}
+	$form['group']['room'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_BBMCallerTypes");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['BBMCallerTypeId']] = $item['BBMCallerTypeDescription'];
+	}
+	$form['group']['caller_type'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	$form['group']['action'] = array(
+		'#type' => 'select',
+		'#options' => $options,
+	);
+	
+	$form['group']['add'] = array(
+		'#type' => 'submit',
+		'#value' => t('Add new rule'),
+	);
+	
+	/*
+	 * display existing rules
+	 * bbmsp_get_AutomatorOverrideForConfig
+	 */
+	$result = bbm_agent_db_query(null, 'bbmsp_get_AutomatorOverrideForConfig');
+	while($row = mssql_fetch_array($result))
+	{
+		$form['group'][$row['AutomatorOverrideID']]['record_type']['#value'] = $row['RecordingTypeDescription'];
+		$form['group'][$row['AutomatorOverrideID']]['description']['#value'] = $row['AutomatorOverrideDescription'];
+		$form['group'][$row['AutomatorOverrideID']]['hubid']['#value'] = $row['IVRHubFullName'];
+		$form['group'][$row['AutomatorOverrideID']]['brand']['#value'] = $row['IVRBrandBehaviourFullName'];
+		$form['group'][$row['AutomatorOverrideID']]['room']['#value'] = $row['IVRTreatmentName'];
+		$form['group'][$row['AutomatorOverrideID']]['caller_type']['#value'] = $row['BBMCallerTypeDescription'];
+		$form['group'][$row['AutomatorOverrideID']]['action']['#value'] = $row['ActionDescription'];
+		
+		$form['group'][$row['AutomatorOverrideID']]['edit_' . $row['AutomatorOverrideID']] = array(
+			'#type' => 'submit',
+			'#value' => t('Edit'),
+			'#attributes' => array(
+				'class' => 'thickbox', 
+				'alt' => '/bbm-rules/' . $row['AutomatorOverrideID'] . '/edit-rule?height=500&width=600',
+				'title' => t('Edit %title rule', array('%title' => $row['RecordingTypeDescription'])),
+			),
+		);
+		$form['group'][$row['AutomatorOverrideID']]['delete_' . $row['AutomatorOverrideID']] = array(
+			'#type' => 'checkbox',
+			//'#value' => 'delete_' . $row['AutomatorOverrideID'],
+		);
+	}
+	
+	$form['group']['multiple_delete'] = array(
+		'#type' => 'submit',
+		'#value' => t('Delete Selected'),
+	);
+	
+	return $form;
+}
+
+/*
+ * validate bbm_config_automator_override_form
+ */
+function bbm_config_automator_override_form_validate($form, &$form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-add')
+	{
+		if(!strlen($form_state['values']['description']))
+		{
+			form_error($form['group']['description'], 'Description is required');
+		}
+	}
+}
+
+/*
+ * submit bbm_config_automator_override_form
+ */
+function bbm_config_automator_override_form_submit($form, &$form_state)
+{
+	//drupal_set_message('<pre>' . print_r($form_state, true) . '</pre>');
+	
+	if($form_state['clicked_button']['#id'] == 'edit-add')
+	{
+		$sp_params = array();
+		$sp_params['AutomatorOverrideDescription'] = array(
+			'name' => 'AutomatorOverrideDescription', 
+			'value' => $form_state['values']['description'],
+			'type' => SQLVARCHAR,
+			'length' => 120,
+		);
+		$sp_params['AutomatorOverrideCriteriaWeight'] = array(
+			'name' => 'AutomatorOverrideCriteriaWeight', 
+			'value' => 0,
+			'type' => SQLINT1,
+			'length' => 1,
+		);
+		$sp_params['RecordingTypeId'] = array(
+			'name' => 'RecordingTypeId', 
+			'value' => $form_state['values']['record_type'],
+			'type' => SQLINT2,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['brand']))
+		$sp_params['IVRBrandBehaviourId'] = array(
+			'name' => 'IVRBrandBehaviourId', 
+			'value' => $form_state['values']['brand'],
+			'type' => SQLINT2,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['room']))
+		$sp_params['IVRTreatmentId'] = array(
+			'name' => 'IVRTreatmentId', 
+			'value' => $form_state['values']['room'],
+			'type' => SQLINT2,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['hubid']))
+		$sp_params['IVRHubId'] = array(
+			'name' => 'IVRHubId', 
+			'value' => $form_state['values']['hubid'],
+			'type' => SQLINT2,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['caller_type']))
+		$sp_params['BBMCallerTypeId'] = array(
+			'name' => 'BBMCallerTypeId', 
+			'value' => $form_state['values']['caller_type'],
+			'type' => SQLINT2,
+			'length' => 2,
+		);
+		$sp_params['ActionCd'] = array(
+			'name' => 'ActionCd', 
+			'value' => $form_state['values']['action'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$result = bbm_agent_db_query(null, 'bbmsp_ins_AutomatorOverride', $sp_params);
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-multiple-delete')
+	{
+		$i = 0;
+		foreach((array)$form_state['values'] as $key => $value)
+		{
+			if(strstr($key, 'delete_') && $value)
+			{
+				$i++;
+				$AutomatorOverrideID = substr($key,strlen('delete_'));
+				$sp_params = array();
+				$sp_params['AutomatorOverrideID'] = array(
+					'name' => 'AutomatorOverrideID', 
+					'value' => $AutomatorOverrideID,
+					'type' => SQLINT1,
+					'length' => 2,
+				);
+				bbm_agent_db_query(null, "bbmsp_del_AutomatorOverride", $sp_params);
+			}
+		}
+		if($i)
+		{
+			drupal_set_message(t('%Rule deleted successfully', array('%Rule' => format_plural($i, '1 rule', '@count rules'))));
+		}
+	}
+}
+
+
+/*
+ * edit single automator override rule page
+ */
+function bbm_config_automator_override_edit_form($form_state, $AutomatorOverrideID = null)
+{
+	$form = array();
+	$form_state['storage']['values']['AutomatorOverrideID'] = $AutomatorOverrideID;
+
+	$sp_params = array();
+	$sp_params['AutomatorOverrideID'] = array(
+		'name' => 'AutomatorOverrideID', 
+		'value' => $AutomatorOverrideID,
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_AutomatorOverrideForConfig", $sp_params);
+	$rule = mssql_fetch_array($result);
+	
+	$form['group'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Edit Automator Override Rule Id %id', array('%id' => $AutomatorOverrideID)),
+		//'#attributes' => array('class' => 'left-label'),
+		'#theme' => 'bbm_config_modal_window',
+	);
+	
+	/*
+	 * edit existing rule
+	 */
+	$result = bbm_agent_db_query(null, "bbmsp_get_RecordingTypes");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['RecordingTypeId']] = $item['RecordingTypeDescription'];
+	}
+	$form['group']['record_type'] = array(
+		'#title' => t('Record Type'),
+		'#type' => 'select',
+		'#options' => $options,
+		'#default_value' => $rule['RecordingTypeId'],
+	);
+	
+	$form['group']['description'] = array(
+		'#title' => t('Description'),
+		'#type' => 'textfield',
+		'#default_value' => $rule['AutomatorOverrideDescription'],
+	);
+	
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRHubs");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRHubId']] = $item['IVRHubFullName'];
+	}
+	$form['group']['hubid'] = array(
+		'#title' => t('Hub'),
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+		'#default_value' => $rule['IVRHubId'],
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRBrandBehaviours");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRBrandBehaviourId']] = $item['IVRBrandBehaviourFullName'];
+	}
+	$form['group']['brand'] = array(
+		'#title' => t('Brand'),
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+		'#default_value' => $rule['IVRBrandBehaviourId'],
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRTreatments");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRTreatmentId']] = $item['IVRTreatmentName'];
+	}
+	$form['group']['room'] = array(
+		'#title' => t('Room'),
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+		'#default_value' => $rule['IVRTreatmentId'],
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_BBMCallerTypes");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['BBMCallerTypeId']] = $item['BBMCallerTypeDescription'];
+	}
+	$form['group']['caller_type'] = array(
+		'#title' => t('Caller Type'),
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options,
+		'#default_value' => $rule['BBMCallerTypeId'],
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	$form['group']['action'] = array(
+		'#title' => t('Action'),
+		'#type' => 'select',
+		'#options' => $options,
+		'#default_value' => $rule['ActionCd'],
+	);
+	
+	$form['cancel'] = array(
+		'#type' => 'submit',
+		'#value' => t('Cancel'),
+		'#attributes' => array('onclick' => 'tb_remove(); return false;'),
+	);
+	$form['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+		'#attributes' => array('onclick' => 'tb_remove();'),
+	);
+	
+	return $form;
+}
+
+/*
+ * submit form bbm_config_automator_override_edit_form
+ */
+function bbm_config_automator_override_edit_form_submit($form, &$form_state)
+{	$sp_params = array();
+	$sp_params['AutomatorOverrideID'] = array(
+		'name' => 'AutomatorOverrideID', 
+		'value' => $form_state['storage']['values']['AutomatorOverrideID'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$sp_params['AutomatorOverrideDescription'] = array(
+		'name' => 'AutomatorOverrideDescription', 
+		'value' => $form_state['values']['description'],
+		'type' => SQLVARCHAR,
+		'length' => 120,
+	);
+	$sp_params['AutomatorOverrideCriteriaWeight'] = array(
+		'name' => 'AutomatorOverrideCriteriaWeight', 
+		'value' => 0,
+		'type' => SQLINT1,
+		'length' => 1,
+	);
+	$sp_params['RecordingTypeId'] = array(
+		'name' => 'RecordingTypeId', 
+		'value' => $form_state['values']['record_type'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['brand']))
+	$sp_params['IVRBrandBehaviourId'] = array(
+		'name' => 'IVRBrandBehaviourId', 
+		'value' => $form_state['values']['brand'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['room']))
+	$sp_params['IVRTreatmentId'] = array(
+		'name' => 'IVRTreatmentId', 
+		'value' => $form_state['values']['room'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['hubid']))
+	$sp_params['IVRHubId'] = array(
+		'name' => 'IVRHubId', 
+		'value' => $form_state['values']['hubid'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['caller_type']))
+	$sp_params['BBMCallerTypeId'] = array(
+		'name' => 'BBMCallerTypeId', 
+		'value' => $form_state['values']['caller_type'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$sp_params['ActionCd'] = array(
+		'name' => 'ActionCd', 
+		'value' => $form_state['values']['action'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+
+	$result = bbm_agent_db_query(null, 'bbmsp_upd_AutomatorOverride', $sp_params);
+	//drupal_set_message('<pre>' . print_r($form_state, true) . '</pre>');
+	(bool)$result ? drupal_set_message("Values were saved successfully") : drupal_set_message("There was a problem processing this request.");
+	drupal_goto('bbm-rules/automator-override');
+}
+
+
+
+
+
+
+/******************************************************************************************************************************
+ * Review Result Type
+ * review result rules screen
+ */
+function bbm_config_review_result_type_form($form_state)
+{
+	$form = array();
+	$form['#theme'] = 'bbm_config_forms';
+	
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	$options = array();
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	
+	$form['maingroup'] = array(
+		'#type' => 'fieldset',
+		'#theme' => 'bbm_config_review_result_type_page',
+	);
+
+    $result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultTypeForConfig");
+	while($item = mssql_fetch_array($result))
+	{
+		//$form['maingroup'][$item['ReviewResultTypeId']] = array(
+			//'#type' => 'fieldset',
+		//);
+		$key = $item['ReviewResultTypeId'];
+		$form['maingroup'][$key][$key.'Result'] = array(
+			'#type' => 'item',
+			'#value' => $item['ReviewResultTypeDescription'],
+		);
+		$form['maingroup'][$key][$key.'AutomatorLow'] = array(
+			'#type' => 'select',
+			'#options' => $options,
+			'#default_value' => $item['ActionCd_AutomatorLowScore'],
+		);
+		$form['maingroup'][$key][$key.'AutomatorHigh'] = array(
+			'#type' => 'select',
+			'#options' => $options,
+			'#default_value' => $item['ActionCd_AutomatorHighScore'],
+		);
+		$form['maingroup'][$key][$key.'Agent'] = array(
+			'#type' => 'select',
+			'#options' => $options,
+			'#default_value' => $item['ActionCd_Agent'],
+		);
+		$form['maingroup'][$key][$key.'BlockDuration'] = array(
+			'#type' => 'textfield',
+			'#size' => 3,
+			'#maxlength' => 3,
+			'#default_value' => $item['BlockCustomerDurationDays'],
+			'#element_validate' => array('ReviewResultType_BlockDuration_validate'),
+		);
+		$form['maingroup'][$key][$key.'Threshold'] = array(
+			'#type' => 'textfield',
+			'#size' => 5,
+			'#maxlength' => 5,
+			'#default_value' => number_format($item['ReviewResultTypeScoreThreshold'],2),
+			'#element_validate' => array('ReviewResultType_Threshold_validate'),
+		);
+		$form['maingroup'][$key][$key.'ReviewResultTypeGroupId'] = array(
+			'#type' => 'hidden',
+			'#value' => $item['ReviewResultTypeGroupId'],
+		);
+		$form['maingroup'][$key][$key.'IVRReasonCd'] = array(
+			'#type' => 'hidden',
+			'#value' => $item['IVRReasonCd'],
+		);
+		$form['maingroup'][$key][$key.'ReviewResultTypeDescription'] = array(
+			'#type' => 'hidden',
+			'#value' => $item['ReviewResultTypeDescription'],
+		);
+		$form['maingroup'][$key][$key.'ReviewResultTypePriority'] = array(
+			'#type' => 'hidden',
+			'#value' => $item['ReviewResultTypePriority'],
+		);
+		$form['maingroup'][$key][$key.'ValidAgentResultYNFlag'] = array(
+			'#type' => 'hidden',
+			'#value' => $item['ValidAgentResultYNFlag'],
+		);
+		$form['maingroup'][$key][$key.'AutomatorQueryFileName'] = array(
+			'#type' => 'hidden',
+			'#value' => $item['AutomatorQueryFileName'],
+		);
+		
+		//if(!in_array($item['ReviewResultTypeId'], array(3,4,5,6)))
+		//{
+			$form['maingroup'][$key][$key.'RecordMax'] = array(
+				'#type' => 'textfield',
+				'#size' => 2,
+				'#maxlength' => 2,
+				'#default_value' => $item['RerecordLimit'],
+				'#element_validate' => array('ReviewResultType_RecordMax_validate'),
+			);
+			$form['maingroup'][$key][$key.'AutomatorAlt'] = array(
+				'#type' => 'select',
+				'#options' => $options,
+				'#default_value' => $item['RerecordActionAutomatorCd'],
+			);
+			$form['maingroup'][$key][$key.'AgentAlt'] = array(
+				'#type' => 'select',
+				'#options' => $options,
+				'#default_value' => $item['RerecordActionAgentCd'],
+			);
+		//}
+	}
+	
+	$form['submit'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+	);
+	
+	return $form;
+}
+
+/*
+ * ReviewResultType element validation functions 
+ */
+function ReviewResultType_BlockDuration_validate($form)
+{
+	if(!empty($form['#value']) && !is_numeric($form['#value']))
+	{
+		form_error($form, "Value must be a number");
+	}
+	if((int)$form['#value'] > 730 || (float)$form['#value'] < 0)
+	{
+		form_error($form, "Value must be smaller or equals to 730");
+	}
+}
+function ReviewResultType_Threshold_validate($form)
+{
+	if(!empty($form['#value']) && !is_numeric($form['#value']))
+	{
+		form_error($form, "Value must be a number");
+	}
+	if((float)$form['#value'] > 1 || (float)$form['#value'] < 0)
+	{
+		form_error($form, "Value must be between 0 and 1");
+	}
+}
+function ReviewResultType_RecordMax_validate($form)
+{
+	if(!empty($form['#value']) && !is_numeric($form['#value']))
+	{
+		form_error($form, "Value must be a number");
+	}
+	if((int)$form['#value'] > 10 || (int)$form['#value'] < 0)
+	{
+		form_error($form, "Value must be smaller or equals to 10");
+	}
+}
+
+/*
+ * ReviewResultType submit function
+ */
+function bbm_config_review_result_type_form_submit($form, &$form_state)
+{
+	//drupal_set_message("<pre>" .print_r($form_state['values'], true). "</pre>");
+	
+	foreach(element_children($form['maingroup']) as $key)
+	{
+		$sp_params = array();
+		
+		$sp_params['ReviewResultTypeId'] = array(
+			'name' => 'ReviewResultTypeId', 
+			'value' => $key,
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		$sp_params['ActionCd_Agent'] = array(
+			'name' => 'ActionCd_Agent', 
+			'value' => $form_state['values'][$key.'Agent'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['ActionCd_AutomatorHighScore'] = array(
+			'name' => 'ActionCd_AutomatorHighScore', 
+			'value' => $form_state['values'][$key.'AutomatorHigh'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['ActionCd_AutomatorLowScore'] = array(
+			'name' => 'ActionCd_AutomatorLowScore', 
+			'value' => $form_state['values'][$key.'AutomatorLow'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['ReviewResultTypeGroupId'] = array(
+			'name' => 'ReviewResultTypeGroupId', 
+			'value' => $form_state['values'][$key.'ReviewResultTypeGroupId'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['IVRReasonCd'] = array(
+			'name' => 'IVRReasonCd', 
+			'value' => $form_state['values'][$key.'IVRReasonCd'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		$sp_params['ReviewResultTypeDescription'] = array(
+			'name' => 'ReviewResultTypeDescription', 
+			'value' => $form_state['values'][$key.'ReviewResultTypeDescription'],
+			'type' => SQLVARCHAR,
+			'length' => 55,
+		);
+		$sp_params['ReviewResultTypePriority'] = array(
+			'name' => 'ReviewResultTypePriority', 
+			'value' => $form_state['values'][$key.'ReviewResultTypePriority'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		$sp_params['ReviewResultTypeScoreThreshold'] = array(
+			'name' => 'ReviewResultTypeScoreThreshold', 
+			'value' => $form_state['values'][$key.'Threshold'],
+			'type' => SQLFLT8,
+			'length' => 4,
+		);
+		$sp_params['ValidAgentResultYNFlag'] = array(
+			'name' => 'ValidAgentResultYNFlag', 
+			'value' => $form_state['values'][$key.'ValidAgentResultYNFlag'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['AutomatorQueryFileName'] = array(
+			'name' => 'AutomatorQueryFileName', 
+			'value' => $form_state['values'][$key.'AutomatorQueryFileName'],
+			'type' => SQLVARCHAR,
+			'length' => 400,
+		);
+		$sp_params['BlockCustomerDurationDays'] = array(
+			'name' => 'BlockCustomerDurationDays', 
+			'value' => $form_state['values'][$key.'BlockDuration'],
+			'type' => SQLINT2,
+			'length' => 3,
+		);
+		$sp_params['RerecordLimit'] = array(
+			'name' => 'RerecordLimit', 
+			'value' => $form_state['values'][$key.'RecordMax'],
+			'type' => SQLINT1,
+			'length' => 3,
+		);
+		$sp_params['RerecordActionAgentCd'] = array(
+			'name' => 'RerecordActionAgentCd', 
+			'value' => $form_state['values'][$key.'AgentAlt'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['RerecordActionAutomatorCd'] = array(
+			'name' => 'RerecordActionAutomatorCd', 
+			'value' => $form_state['values'][$key.'AutomatorAlt'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$result = bbm_agent_db_query(null, "bbmsp_upd_ReviewResultType", $sp_params);
+	}
+	//drupal_set_message('<pre>'.print_r($sp_params, true).'</pre>');
+	(bool)$result ? drupal_set_message("Values were saved successfully") : drupal_set_message("There was a problem processing this request.");
+}
+
+
+
+
+
+/*************************************************************************************************************************************
+ * Review Result Override
+ * review result override rules screen
+ */
+function bbm_config_review_override_form($form_state)
+{
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.css');
+
+	$form = array();
+	$form['#theme'] = 'bbm_config_forms';
+	
+	$form['maingroup'] = array(
+		'#type' => 'fieldset',
+		'#theme' => 'bbm_configure_override_rules',
+	);
+	
+	$form['maingroup']['AddRule']['Description'] = array(
+		'#type' => 'textarea',
+		'#cols' => 20, 
+  		'#rows' => 2,
+		'#resizable' => false,
+	);
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultTypesByPriority");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ReviewResultTypeId']] = $item['ReviewResultTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['Result'] = array('#type' => 'select','#options' => $options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_RecordingTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['RecordingTypeId']] = $item['RecordingTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['RecordType'] = array('#type' => 'select','#options' => $options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewerType");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ReviewerTypeCd']] = $item['ReviewerTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['Reviewer'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ScoreType");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ScoreTypeCd']] = $item['ScoreTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['AutomatorConfidence'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRHubs");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRHubId']] = $item['IVRHubFullName'];
+	}
+	$form['maingroup']['AddRule']['Hub'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRBrandBehaviours");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRBrandBehaviourId']] = $item['IVRBrandBehaviourFullName'];
+	}
+	$form['maingroup']['AddRule']['Brand'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRTreatments");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRTreatmentId']] = $item['IVRTreatmentName'];
+	}
+	$form['maingroup']['AddRule']['Room'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_BBMCallerTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['BBMCallerTypeId']] = $item['BBMCallerTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['CallerType'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	$form['maingroup']['AddRule']['Action'] = array('#type' => 'select','#options' => $options);
+	
+	$form['maingroup']['AddRule']['BlockDuration'] = array(
+		'#type' => 'select',
+		//'#size' => 3,
+		//'#maxlength' => 3,
+		'#options' => range(0,730),
+		//'#element_validate' => array('ReviewResultType_BlockDuration_validate'),
+	);
+	$form['maingroup']['AddRule']['CriteriaWeight'] = array(
+		'#type' => 'select',
+		//'#size' => 3,
+		//'#maxlength' => 3,
+		'#options' => array_combine(range(1,100), range(1,100)),
+		//'#element_validate' => array('ReviewResultOverride_CriteriaWeight_validate'),
+	);
+	$form['maingroup']['AddRule']['add'] = array(
+		'#type' => 'submit',
+		'#value' => t('Add new rule'),
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultOverrideForConfig");
+	while($item = mssql_fetch_array($result))
+	{
+		$key = $item['ReviewResultOverrideID'];
+		$form['maingroup']['OverrideRule'][$key]['Description'] = array('#value' => $item['ReviewResultOverrideDescription']);
+		$form['maingroup']['OverrideRule'][$key]['Result'] = array('#value' => $item['ReviewResultTypeDescription']);
+		$form['maingroup']['OverrideRule'][$key]['RecordType'] = array('#value' => $item['RecordingTypeDescription']);
+		$form['maingroup']['OverrideRule'][$key]['Reviewer'] = array('#value' => $item['ReviewerTypeDescription']);
+		$form['maingroup']['OverrideRule'][$key]['AutomatorConfidence'] = array('#value' => $item['ScoreTypeDescription']);
+		$form['maingroup']['OverrideRule'][$key]['Hub'] = array('#value' => $item['IVRHubFullName']);
+		$form['maingroup']['OverrideRule'][$key]['Brand'] = array('#value' => $item['IVRBrandBehaviourFullName']);
+		$form['maingroup']['OverrideRule'][$key]['Room'] = array('#value' => $item['IVRTreatmentName']);
+		$form['maingroup']['OverrideRule'][$key]['CallerType'] = array('#value' => $item['BBMCallerTypeDescription']);
+		$form['maingroup']['OverrideRule'][$key]['Action'] = array('#value' => $item['ActionDescription']);
+		$form['maingroup']['OverrideRule'][$key]['BlockDuration'] = array('#value' => $item['BlockCustomerDurationDays']);
+		$form['maingroup']['OverrideRule'][$key]['CriteriaWeight'] = array('#value' => $item['ReviewResultOverrideCriteriaWeight']);
+		$form['maingroup']['OverrideRule'][$key]['edit'] = array(
+			'#type' => 'submit',
+			'#value' => t('Edit'),
+			'#attributes' => array(
+				'alt' => '/bbm-rules/'.$key.'/edit-override-rule?height=600&width=600',
+				'title' => t('Edit Review Override Rule !id', array('!id' => $key)),
+				'class' => 'thickbox',
+			),
+		);
+		$form['maingroup']['OverrideRule'][$key]['delete_'.$key] = array(
+			'#type' => 'checkbox',
+		);
+	}
+	
+	$form['maingroup']['multiple_delete'] = array(
+		'#type' => 'submit',
+		'#value' => t('Delete Selected'),
+	);
+	
+	return $form;
+}
+
+/*
+ * edit single ReviewResultOverride rule screen
+ */
+function bbm_config_review_override_edit_form($form_state, $ReviewResultOverrideID = null)
+{
+	$sp_params = array();
+	$sp_params['ReviewResultOverrideID'] = array(
+		'name' => 'ReviewResultOverrideID', 
+		'value' => $ReviewResultOverrideID,
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultOverrideForConfig", $sp_params);
+	$rule = mssql_fetch_array($result);
+
+	$form['EditRule'] = array(
+		'#type' => 'fieldset',
+		//'#attributes' => array('class' => 'left-label'),
+		'#theme' => 'bbm_config_modal_window',
+	);
+
+	$form['EditRule']['Description'] = array(
+		'#type' => 'textarea',
+		'#cols' => 20, 
+  		'#rows' => 2,
+		'#resizable' => false,
+		'#title' => t('Description'),
+		'#default_value' => $rule['ReviewResultOverrideDescription'],
+	);
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultTypesByPriority");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ReviewResultTypeId']] = $item['ReviewResultTypeDescription'];
+	}
+	$form['EditRule']['Result'] = array(
+		'#type' => 'select',
+		'#options' => $options, 
+		'#title' => t('Result'),
+		'#default_value' => $rule['ReviewResultTypeId'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_RecordingTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['RecordingTypeId']] = $item['RecordingTypeDescription'];
+	}
+	$form['EditRule']['RecordType'] = array(
+		'#type' => 'select',
+		'#options' => $options, 
+		'#title' => t('Record Type'),
+		'#default_value' => $rule['RecordingTypeId'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewerType");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ReviewerTypeCd']] = $item['ReviewerTypeDescription'];
+	}
+	$form['EditRule']['Reviewer'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options, 
+		'#title' => t('Reviewer'),
+		'#default_value' => $rule['ReviewerTypeCd'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ScoreType");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ScoreTypeCd']] = $item['ScoreTypeDescription'];
+	}
+	$form['EditRule']['AutomatorConfidence'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options, 
+		'#title' => t('Automator Confidence'),
+		'#default_value' => $rule['ScoreTypeCd'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRHubs");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRHubId']] = $item['IVRHubFullName'];
+	}
+	$form['EditRule']['Hub'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options, 
+		'#title' => t('Hub'),
+		'#default_value' => $rule['IVRHubId'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRBrandBehaviours");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRBrandBehaviourId']] = $item['IVRBrandBehaviourFullName'];
+	}
+	$form['EditRule']['Brand'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options, 
+		'#title' => t('Brand'),
+		'#default_value' => $rule['IVRBrandBehaviourId'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRTreatments");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRTreatmentId']] = $item['IVRTreatmentName'];
+	}
+	$form['EditRule']['Room'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options, 
+		'#title' => t('Room'),
+		'#default_value' => $rule['IVRTreatmentId'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_BBMCallerTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['BBMCallerTypeId']] = $item['BBMCallerTypeDescription'];
+	}
+	$form['EditRule']['CallerType'] = array(
+		'#type' => 'select',
+		'#options' => array(''=>'Null') + (array)$options, 
+		'#title' => t('Caller Type'),
+		'#default_value' => $rule['BBMCallerTypeId'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	$form['EditRule']['Action'] = array(
+		'#type' => 'select',
+		'#options' => $options, 
+		'#title' => t('Action'),
+		'#default_value' => $rule['ActionCd'],
+	);
+	
+	$form['EditRule']['BlockDuration'] = array(
+		'#type' => 'select',
+		//'#size' => 3,
+		//'#maxlength' => 3,
+		//'#element_validate' => array('ReviewResultType_BlockDuration_validate'),
+		'#title' => t('Block Duration (0-730)'),
+		'#options' => range(0,730),
+		'#default_value' => $rule['BlockCustomerDurationDays'],
+	);
+	$form['EditRule']['CriteriaWeight'] = array(
+		'#type' => 'select',
+		'#options' => array_combine(range(1,100), range(1,100)),
+		'#title' => t('Criteria Weight (1-100)'),
+		'#default_value' => $rule['ReviewResultOverrideCriteriaWeight'],
+	);
+	
+	$form['cancel'] = array(
+		'#type' => 'submit',
+		'#value' => t('Cancel'),
+		'#attributes' => array('onclick' => 'tb_remove(); return false;'),
+	);
+	
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.css');
+	
+	$form['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+		'#attributes' => array(
+			'onclick' => 'tb_remove();',
+		),
+	);
+	
+	$form['ReviewResultOverrideID'] = array('#type' => 'hidden', '#value' => $ReviewResultOverrideID);
+	
+	return $form;
+}
+
+/*
+ * update Review Result Override rules
+ */
+function bbm_config_review_override_edit_form_submit($form, &$form_state)
+{
+	$sp_params = array();
+	$sp_params['ReviewResultOverrideID'] = array(
+		'name' => 'ReviewResultOverrideID', 
+		'value' => $form_state['values']['ReviewResultOverrideID'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$sp_params['ReviewResultOverrideDescription'] = array(
+		'name' => 'ReviewResultOverrideDescription', 
+		'value' => $form_state['values']['Description'],
+		'type' => SQLVARCHAR,
+		'length' => 120,
+	);
+	$sp_params['ReviewResultTypeId'] = array(
+		'name' => 'ReviewResultTypeId', 
+		'value' => $form_state['values']['Result'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['Reviewer']) || isset($form_state['values']['Reviewer']))
+	$sp_params['ReviewerTypeCd'] = array(
+		'name' => 'ReviewerTypeCd', 
+		'value' => $form_state['values']['Reviewer'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	if(!empty($form_state['values']['AutomatorConfidence']))
+	$sp_params['ScoreTypeCd'] = array(
+		'name' => 'ScoreTypeCd', 
+		'value' => $form_state['values']['AutomatorConfidence'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	if(!empty($form_state['values']['Hub']))
+	$sp_params['IVRHubId'] = array(
+		'name' => 'IVRHubId', 
+		'value' => $form_state['values']['Hub'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['Brand']))
+	$sp_params['IVRBrandBehaviourId'] = array(
+		'name' => 'IVRBrandBehaviourId', 
+		'value' => $form_state['values']['Brand'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['Room']))
+	$sp_params['IVRTreatmentId'] = array(
+		'name' => 'IVRTreatmentId', 
+		'value' => $form_state['values']['Room'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['CallerType']))
+	$sp_params['BBMCallerTypeId'] = array(
+		'name' => 'BBMCallerTypeId', 
+		'value' => $form_state['values']['CallerType'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$sp_params['RecordingTypeId'] = array(
+		'name' => 'RecordingTypeId', 
+		'value' => $form_state['values']['RecordType'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$sp_params['ActionCd'] = array(
+		'name' => 'ActionCd', 
+		'value' => $form_state['values']['Action'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params['BlockCustomerDurationDays'] = array(
+		'name' => 'BlockCustomerDurationDays', 
+		'value' => $form_state['values']['BlockDuration'],
+		'type' => SQLINT2,
+		'length' => 3,
+	);
+	$sp_params['ReviewResultOverrideCriteriaWeight'] = array(
+		'name' => 'ReviewResultOverrideCriteriaWeight', 
+		'value' => $form_state['values']['CriteriaWeight'],
+		'type' => SQLINT2,
+		'length' => 3,
+	);
+
+	if($result = bbm_agent_db_query(null, "bbmsp_upd_ReviewResultOverride", $sp_params))
+	{
+		drupal_set_message(t('Rule ID # %id saved successfully.', array('%id' => $form_state['values']['ReviewResultOverrideID'])));
+	}
+	else
+	{
+		drupal_set_message(t('Failed to save Rule ID # %id .', array('%id' => $form_state['values']['ReviewResultOverrideID'])));
+	}
+		
+	//drupal_set_message('<pre>' . print_r($sql, true) . '</pre>');
+
+	drupal_goto('bbm-rules/review-override');
+}
+
+/*
+ * submit Review Result Override delete rules
+ */
+function bbm_config_review_override_form_submit($form, &$form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-add')
+	{		
+		$sp_params = array();
+
+		$sp_params['ReviewResultOverrideDescription'] = array(
+			'name' => 'ReviewResultOverrideDescription', 
+			'value' => $form_state['values']['Description'],
+			'type' => SQLVARCHAR,
+			'length' => 120,
+		);
+		$sp_params['ReviewResultTypeId'] = array(
+			'name' => 'ReviewResultTypeId', 
+			'value' => $form_state['values']['Result'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['Reviewer']) || isset($form_state['values']['Reviewer']))
+		$sp_params['ReviewerTypeCd'] = array(
+			'name' => 'ReviewerTypeCd', 
+			'value' => $form_state['values']['Reviewer'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		if(!empty($form_state['values']['AutomatorConfidence']))
+		$sp_params['ScoreTypeCd'] = array(
+			'name' => 'ScoreTypeCd', 
+			'value' => $form_state['values']['AutomatorConfidence'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		if(!empty($form_state['values']['Hub']))
+		$sp_params['IVRHubId'] = array(
+			'name' => 'IVRHubId', 
+			'value' => $form_state['values']['Hub'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['Brand']))
+		$sp_params['IVRBrandBehaviourId'] = array(
+			'name' => 'IVRBrandBehaviourId', 
+			'value' => $form_state['values']['Brand'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['Room']))
+		$sp_params['IVRTreatmentId'] = array(
+			'name' => 'IVRTreatmentId', 
+			'value' => $form_state['values']['Room'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['CallerType']))
+		$sp_params['BBMCallerTypeId'] = array(
+			'name' => 'BBMCallerTypeId', 
+			'value' => $form_state['values']['CallerType'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		$sp_params['RecordingTypeId'] = array(
+			'name' => 'RecordingTypeId', 
+			'value' => $form_state['values']['RecordType'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		$sp_params['ActionCd'] = array(
+			'name' => 'ActionCd', 
+			'value' => $form_state['values']['Action'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['BlockCustomerDurationDays'] = array(
+			'name' => 'BlockCustomerDurationDays', 
+			'value' => $form_state['values']['BlockDuration'],
+			'type' => SQLINT2,
+			'length' => 3,
+		);
+		$sp_params['ReviewResultOverrideCriteriaWeight'] = array(
+			'name' => 'ReviewResultOverrideCriteriaWeight', 
+			'value' => $form_state['values']['CriteriaWeight'],
+			'type' => SQLINT2,
+			'length' => 3,
+		);
+	
+		$result = bbm_agent_db_query(null, "bbmsp_ins_ReviewResultOverride", $sp_params) ? drupal_set_message(t('Rule added successfully')) : drupal_set_message(t('Failed adding rule'));	
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-multiple-delete')
+	{
+		//drupal_set_message('<pre>' . print_r($form_state, true) . '</pre>');
+		
+		$i = 0;
+		foreach((array)$form_state['values'] as $key => $value)
+		{
+			if(strstr($key, 'delete_') && $value)
+			{
+				$i++;
+				$ReviewResultOverrideID = substr($key,strlen('delete_'));
+				$sp_params = array();
+				$sp_params['ReviewResultOverrideID'] = array(
+					'name' => 'ReviewResultOverrideID', 
+					'value' => $ReviewResultOverrideID,
+					'type' => SQLINT1,
+					'length' => 2,
+				);
+				bbm_agent_db_query(null, "bbmsp_del_ReviewResultOverride", $sp_params);
+			}
+		}
+		if($i)
+		{
+			drupal_set_message(t('%Rule deleted successfully', array('%Rule' => format_plural($i, '1 rule', '@count rules'))));
+		}
+		
+	}
+}
+
+
+
+
+/***********************************************************************************************************************************
+ * Further Analysis
+ * further analysis screen form
+ */
+function bbm_config_further_analysis_form($form_state)
+{
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.css');
+
+	$form = array();
+	$form['#theme'] = 'bbm_config_forms';
+	
+	$form['maingroup'] = array(
+		'#type' => 'fieldset',
+		'#theme' => 'bbm_configure_analysis_rules',
+	);
+	
+	$form['maingroup']['AddRule']['FurtherAnalysisCriteriaDescription'] = array(
+		'#type' => 'textarea',
+		'#cols' => 15, 
+  		'#rows' => 2,
+		'#resizable' => false,
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultTypesByPriority");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRReasonCd']] = $item['ReviewResultTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['IVRReasonCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_RecordingTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['RecordingTypeId']] = $item['RecordingTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['RecordingTypeId'] = array('#type' => 'select','#options' => $options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewerType");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ReviewerTypeCd']] = $item['ReviewerTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['ReviewerTypeCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRHubs");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRHubId']] = $item['IVRHubFullName'];
+	}
+	$form['maingroup']['AddRule']['IVRHubId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRBrandBehaviours");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRBrandBehaviourId']] = $item['IVRBrandBehaviourFullName'];
+	}
+	$form['maingroup']['AddRule']['IVRBrandBehaviourId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRTreatments");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRTreatmentId']] = $item['IVRTreatmentName'];
+	}
+	$form['maingroup']['AddRule']['IVRTreatmentId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_BBMCallerTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['BBMCallerTypeId']] = $item['BBMCallerTypeDescription'];
+	}
+	$form['maingroup']['AddRule']['BBMCallerTypeId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	$form['maingroup']['AddRule']['HubAction'] = array('#type' => 'select','#options' => $options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Gender");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['GenderCd']] = $item['GenderDescription'];
+	}
+	$form['maingroup']['AddRule']['GenderCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Languages");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['LanguageCd']] = $item['LanguageName'];
+	}
+	$form['maingroup']['AddRule']['LanguageCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$form['maingroup']['AddRule']['IVRPreviousOffenderYNFlag'] = array('#type' => 'select','#options' => array(''=> 'Null', 'Y' => 'Yes', 'N' => 'No'));
+
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_AgentsForConfig");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['AgentID']] = $item['AgentLogin'];
+	}
+	$form['maingroup']['AddRule']['AgentID'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options);
+	
+	$form['maingroup']['AddRule']['FurtherAnalysisCriteriaSampleFrequency'] = array('#type' => 'select','#options' => range(0,999));
+	$form['maingroup']['AddRule']['SelectForESIYNFlag'] = array('#type' => 'select','#options' => array('Y' => 'Yes', 'N' => 'No'));
+	$form['maingroup']['AddRule']['SelectForAuditYNFlag'] = array('#type' => 'select','#options' => array('Y' => 'Yes', 'N' => 'No'));
+	$form['maingroup']['AddRule']['FurtherAnalysisCriteriaWeight'] = array('#type' => 'select','#options' => array_combine(range(1,100), range(1,100)));
+	
+	$form['maingroup']['AddRule']['add'] = array(
+		'#type' => 'submit',
+		'#value' => t('Add new rule'),
+	);
+
+	$result = bbm_agent_db_query(null, "bbmsp_get_FurtherAnalysisCriteriaForConfig");
+	while($item = mssql_fetch_array($result))
+	{
+		$key = $item['FurtherAnalysisCriteriaID'];
+		$form['maingroup']['AnalysisRule'][$key]['FurtherAnalysisCriteriaDescription'] = array('#value' => $item['FurtherAnalysisCriteriaDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['ReviewResultTypeDescription'] = array('#value' => $item['ReviewResultTypeDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['RecordingTypeDescription'] = array('#value' => $item['RecordingTypeDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['ReviewerTypeDescription'] = array('#value' => $item['ReviewerTypeDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['IVRHubFullName'] = array('#value' => $item['IVRHubFullName']);
+		$form['maingroup']['AnalysisRule'][$key]['IVRBrandBehaviourFullName'] = array('#value' => $item['IVRBrandBehaviourFullName']);
+		$form['maingroup']['AnalysisRule'][$key]['IVRTreatmentName'] = array('#value' => $item['IVRTreatmentName']);
+		$form['maingroup']['AnalysisRule'][$key]['BBMCallerTypeDescription'] = array('#value' => $item['BBMCallerTypeDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['ActionDescription'] = array('#value' => $item['ActionDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['GenderDescription'] = array('#value' => $item['GenderDescription']);
+		$form['maingroup']['AnalysisRule'][$key]['LanguageName'] = array('#value' => $item['LanguageName']);
+		$form['maingroup']['AnalysisRule'][$key]['IVRPreviousOffenderYNFlag'] = array('#value' => $item['IVRPreviousOffenderYNFlag']);
+		$form['maingroup']['AnalysisRule'][$key]['AgentID'] = array('#value' => $item['AgentID']);
+		$form['maingroup']['AnalysisRule'][$key]['FurtherAnalysisCriteriaSampleFrequency'] = array('#value' => $item['FurtherAnalysisCriteriaSampleFrequency']);
+		$form['maingroup']['AnalysisRule'][$key]['SelectForESIYNFlag'] = array('#value' => $item['SelectForESIYNFlag']);
+		$form['maingroup']['AnalysisRule'][$key]['SelectForAuditYNFlag'] = array('#value' => $item['SelectForAuditYNFlag']);
+		$form['maingroup']['AnalysisRule'][$key]['FurtherAnalysisCriteriaWeight'] = array('#value' => $item['FurtherAnalysisCriteriaWeight']);
+		
+		$form['maingroup']['AnalysisRule'][$key]['edit'] = array(
+			'#type' => 'submit',
+			'#value' => t('Edit'),
+			'#attributes' => array(
+				'alt' => '/bbm-rules/'.$key.'/edit-analysis-rule?height=700&width=600',
+				'title' => t('Edit Further Analysis Rule !id', array('!id' => $key)),
+				'class' => 'thickbox',
+			),
+		);
+		$form['maingroup']['AnalysisRule'][$key]['delete_'.$key] = array(
+			'#type' => 'checkbox',
+		);
+	}
+	
+	$form['maingroup']['multiple_delete'] = array(
+		'#type' => 'submit',
+		'#value' => t('Delete Selected'),
+	);
+	
+	return $form;
+}
+
+/*
+ * edit single further anlaysis rule
+ */
+function bbm_config_further_analysis_edit_form($form_state, $FurtherAnalysisCriteriaID = null)
+{
+	$sp_params = array();
+
+	$sp_params['FurtherAnalysisCriteriaID'] = array(
+		'name' => 'FurtherAnalysisCriteriaID', 
+		'value' => $FurtherAnalysisCriteriaID,
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$result = bbm_agent_db_query(null, "bbmsp_get_FurtherAnalysisCriteriaForConfig", $sp_params);
+	$rule = mssql_fetch_array($result);
+
+	$form = array();
+	$form['maingroup'] = array(
+		'#type' => 'fieldset',
+		//'#attributes' => array('class' => 'left-label'),
+		'#pre_render' => array('bbm_config_analysis_edit_prerender'),
+		'#theme' => 'bbm_config_modal_window',
+	);
+	
+	$form['maingroup']['FurtherAnalysisCriteriaDescription'] = array(
+		'#type' => 'textarea',
+		'#cols' => 20, 
+  		'#rows' => 2,
+		'#resizable' => false,
+		'#default_value' => $rule['FurtherAnalysisCriteriaDescription'],
+	);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewResultTypesByPriority");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRReasonCd']] = $item['ReviewResultTypeDescription'];
+	}
+	$form['maingroup']['IVRReasonCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['ReviewResultTypeId'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_RecordingTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['RecordingTypeId']] = $item['RecordingTypeDescription'];
+	}
+	$form['maingroup']['RecordingTypeId'] = array('#type' => 'select','#options' => $options, '#default_value' => $rule['RecordingTypeId'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_ReviewerType");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ReviewerTypeCd']] = $item['ReviewerTypeDescription'];
+	}
+	$form['maingroup']['ReviewerTypeCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['ReviewerTypeCd'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRHubs");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRHubId']] = $item['IVRHubFullName'];
+	}
+	$form['maingroup']['IVRHubId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['IVRHubId'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRBrandBehaviours");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRBrandBehaviourId']] = $item['IVRBrandBehaviourFullName'];
+	}
+	$form['maingroup']['IVRBrandBehaviourId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['IVRBrandBehaviourId'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_IVRTreatments");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['IVRTreatmentId']] = $item['IVRTreatmentName'];
+	}
+	$form['maingroup']['IVRTreatmentId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['IVRTreatmentId'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_BBMCallerTypes");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['BBMCallerTypeId']] = $item['BBMCallerTypeDescription'];
+	}
+	$form['maingroup']['BBMCallerTypeId'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['BBMCallerTypeId'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Actions");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['ActionCd']] = $item['ActionDescription'];
+	}
+	$form['maingroup']['HubAction'] = array('#type' => 'select','#options' => $options, '#default_value' => $rule['HubAction'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Gender");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['GenderCd']] = $item['GenderDescription'];
+	}
+	$form['maingroup']['GenderCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['GenderCd'],);
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_Languages");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['LanguageCd']] = $item['LanguageName'];
+	}
+	$form['maingroup']['LanguageCd'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['LanguageCd'],);
+	
+	$form['maingroup']['IVRPreviousOffenderYNFlag'] = array('#type' => 'select','#options' => array(''=>'Null','Y' => 'Yes', 'N' => 'No'), '#default_value' => $rule['IVRPreviousOffenderYNFlag'],);	
+	
+	$options = array();
+	$result = bbm_agent_db_query(null, "bbmsp_get_AgentsForConfig");
+	while($item = mssql_fetch_array($result))
+	{
+		$options[$item['AgentID']] = $item['AgentLogin'];
+	}
+	$form['maingroup']['AgentID'] = array('#type' => 'select','#options' => array(''=>'Null') + (array)$options, '#default_value' => $rule['AgentID'],);
+	
+	$form['maingroup']['FurtherAnalysisCriteriaSampleFrequency'] = array('#type' => 'select','#options' => range(0,999), '#default_value' => $rule['FurtherAnalysisCriteriaSampleFrequency'],);
+	$form['maingroup']['SelectForESIYNFlag'] = array('#type' => 'select','#options' => array('Y' => 'Yes', 'N' => 'No'), '#default_value' => $rule['SelectForESIYNFlag'],);
+	$form['maingroup']['SelectForAuditYNFlag'] = array('#type' => 'select','#options' => array('Y' => 'Yes', 'N' => 'No'), '#default_value' => $rule['SelectForAuditYNFlag'],);
+	$form['maingroup']['FurtherAnalysisCriteriaWeight'] = array('#type' => 'select','#options' => array_combine(range(1,100), range(1,100)), '#default_value' => $rule['FurtherAnalysisCriteriaWeight'],);
+	
+	$form['cancel'] = array(
+		'#type' => 'submit',
+		'#value' => t('Cancel'),
+		'#attributes' => array('onclick' => 'tb_remove(); return false;'),
+	);
+	
+	drupal_add_js(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.js');
+	drupal_add_css(drupal_get_path('module', 'bbm_agent') . '/js/thickbox.css');
+	
+	$form['save'] = array(
+		'#type' => 'submit',
+		'#value' => t('Save'),
+		'#attributes' => array(
+			'onclick' => 'tb_remove();',
+		),
+	);
+	
+	$form['FurtherAnalysisCriteriaID'] = array('#type' => 'hidden', '#value' => $FurtherAnalysisCriteriaID);
+	
+	return $form;
+}
+
+/*
+ * pre render edit further analysis rule
+ */
+function bbm_config_analysis_edit_prerender($element)
+{
+	$headers = array(
+		'Description',
+		'Result',
+		'Record Type',
+		'Reviewer',
+		'Hub',
+		'Brand',
+		'Room',
+		'Caller Type',
+		'Action',
+		'Gender',
+		'Language',
+		'Previous Offender',
+		'Agent',
+		'Sample Frequency (0-999)',
+		'Select for ESI',
+		'Select for Audit',
+		'Criteria Weight (1-100)',
+	);
+
+	$i = 0;
+	foreach(element_children($element) as $key)
+	{
+		$element[$key]['#title'] = $headers[$i];
+		$i++;
+	}
+	
+	return $element;
+}
+
+/*
+ * submit function for edit analysis rule
+ */
+function bbm_config_further_analysis_edit_form_submit($form, &$form_state)
+{	
+	$sp_params = array();
+
+	$sp_params['FurtherAnalysisCriteriaID'] = array(
+		'name' => 'FurtherAnalysisCriteriaID', 
+		'value' => $form_state['values']['FurtherAnalysisCriteriaID'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	$sp_params['FurtherAnalysisCriteriaDescription'] = array(
+		'name' => 'FurtherAnalysisCriteriaDescription', 
+		'value' => $form_state['values']['FurtherAnalysisCriteriaDescription'],
+		'type' => SQLVARCHAR,
+		'length' => 120,
+	);
+	$sp_params['RecordingTypeId'] = array(
+		'name' => 'RecordingTypeId', 
+		'value' => $form_state['values']['RecordingTypeId'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['IVRHubId']))
+	$sp_params['IVRHubId'] = array(
+		'name' => 'IVRHubId', 
+		'value' => $form_state['values']['IVRHubId'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['IVRBrandBehaviourId']))
+	$sp_params['IVRBrandBehaviourId'] = array(
+		'name' => 'IVRBrandBehaviourId', 
+		'value' => $form_state['values']['IVRBrandBehaviourId'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['IVRTreatmentId']))
+	$sp_params['IVRTreatmentId'] = array(
+		'name' => 'IVRTreatmentId', 
+		'value' => $form_state['values']['IVRTreatmentId'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['LanguageCd']))
+	$sp_params['LanguageCd'] = array(
+		'name' => 'LanguageCd', 
+		'value' => $form_state['values']['LanguageCd'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	if(!empty($form_state['values']['ReviewerTypeCd']) || is_numeric($form_state['values']['ReviewerTypeCd']))
+	$sp_params['ReviewerTypeCd'] = array(
+		'name' => 'ReviewerTypeCd', 
+		'value' => $form_state['values']['ReviewerTypeCd'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	if(!empty($form_state['values']['AgentID']))
+	$sp_params['AgentID'] = array(
+		'name' => 'AgentID', 
+		'value' => $form_state['values']['AgentID'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['GenderCD']))
+	$sp_params['GenderCd'] = array(
+		'name' => 'GenderCd', 
+		'value' => $form_state['values']['GenderCd'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params['HubAction'] = array(
+		'name' => 'HubAction', 
+		'value' => $form_state['values']['HubAction'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	if(!empty($form_state['values']['BBMCallerTypeId']))
+	$sp_params['BBMCallerTypeId'] = array(
+		'name' => 'BBMCallerTypeId', 
+		'value' => $form_state['values']['BBMCallerTypeId'],
+		'type' => SQLINT1,
+		'length' => 2,
+	);
+	if(!empty($form_state['values']['IVRReasonCd']))
+	$sp_params['IVRReasonCd'] = array(
+		'name' => 'IVRReasonCd', 
+		'value' => $form_state['values']['IVRReasonCd'],
+		'type' => SQLINT1,
+		'length' => 3,
+	);
+	if(!empty($form_state['values']['IVRPreviousOffenderYNFlag']))
+	$sp_params['IVRPreviousOffenderYNFlag'] = array(
+		'name' => 'IVRPreviousOffenderYNFlag', 
+		'value' => $form_state['values']['IVRPreviousOffenderYNFlag'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params['FurtherAnalysisCriteriaWeight'] = array(
+		'name' => 'FurtherAnalysisCriteriaWeight', 
+		'value' => $form_state['values']['FurtherAnalysisCriteriaWeight'],
+		'type' => SQLINT1,
+		'length' => 3,
+	);
+	$sp_params['FurtherAnalysisCriteriaSampleFrequency'] = array(
+		'name' => 'FurtherAnalysisCriteriaSampleFrequency', 
+		'value' => $form_state['values']['FurtherAnalysisCriteriaSampleFrequency'],
+		'type' => SQLINT1,
+		'length' => 3,
+	);
+	$sp_params['SelectForESIYNFlag'] = array(
+		'name' => 'SelectForESIYNFlag', 
+		'value' => $form_state['values']['SelectForESIYNFlag'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	$sp_params['SelectForAuditYNFlag'] = array(
+		'name' => 'SelectForAuditYNFlag', 
+		'value' => $form_state['values']['SelectForAuditYNFlag'],
+		'type' => SQLCHAR,
+		'length' => 1,
+	);
+	
+	if($result = bbm_agent_db_query(null, "bbmsp_upd_FurtherAnalysisCriteria", $sp_params))
+	{
+		drupal_set_message(t('Rule ID # %id saved successfully.', array('%id' => $form_state['values']['FurtherAnalysisCriteriaID'])));
+	}
+	else
+	{
+		drupal_set_message(t('Failed to save Rule ID # %id .', array('%id' => $form_state['values']['FurtherAnalysisCriteriaID'])));
+	}
+		
+	//drupal_set_message('<pre>' . print_r($sql, true) . '</pre>');
+
+	drupal_goto('bbm-rules/further-analysis');
+}
+
+
+/*
+ * submit Further analysis delete/add rules
+ */
+function bbm_config_further_analysis_form_submit($form, &$form_state)
+{
+	if($form_state['clicked_button']['#id'] == 'edit-add')
+	{		
+		$sp_params = array();
+
+		$sp_params['FurtherAnalysisCriteriaDescription'] = array(
+			'name' => 'FurtherAnalysisCriteriaDescription', 
+			'value' => $form_state['values']['FurtherAnalysisCriteriaDescription'],
+			'type' => SQLVARCHAR,
+			'length' => 120,
+		);
+		$sp_params['RecordingTypeId'] = array(
+			'name' => 'RecordingTypeId', 
+			'value' => $form_state['values']['RecordingTypeId'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['IVRHubId']))
+		$sp_params['IVRHubId'] = array(
+			'name' => 'IVRHubId', 
+			'value' => $form_state['values']['IVRHubId'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['IVRBrandBehaviourId']))
+		$sp_params['IVRBrandBehaviourId'] = array(
+			'name' => 'IVRBrandBehaviourId', 
+			'value' => $form_state['values']['IVRBrandBehaviourId'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['IVRTreatmentId']))
+		$sp_params['IVRTreatmentId'] = array(
+			'name' => 'IVRTreatmentId', 
+			'value' => $form_state['values']['IVRTreatmentId'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['LanguageCd']))
+		$sp_params['LanguageCd'] = array(
+			'name' => 'LanguageCd', 
+			'value' => $form_state['values']['LanguageCd'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		if(!empty($form_state['values']['ReviewerTypeCd']) || is_numeric($form_state['values']['ReviewerTypeCd']))
+		$sp_params['ReviewerTypeCd'] = array(
+			'name' => 'ReviewerTypeCd', 
+			'value' => $form_state['values']['ReviewerTypeCd'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		if(!empty($form_state['values']['AgentID']))
+		$sp_params['AgentID'] = array(
+			'name' => 'AgentID', 
+			'value' => $form_state['values']['AgentID'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['GenderCD']))
+		$sp_params['GenderCd'] = array(
+			'name' => 'GenderCd', 
+			'value' => $form_state['values']['GenderCd'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['HubAction'] = array(
+			'name' => 'HubAction', 
+			'value' => $form_state['values']['HubAction'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		if(!empty($form_state['values']['BBMCallerTypeId']))
+		$sp_params['BBMCallerTypeId'] = array(
+			'name' => 'BBMCallerTypeId', 
+			'value' => $form_state['values']['BBMCallerTypeId'],
+			'type' => SQLINT1,
+			'length' => 2,
+		);
+		if(!empty($form_state['values']['IVRReasonCd']))
+		$sp_params['IVRReasonCd'] = array(
+			'name' => 'IVRReasonCd', 
+			'value' => $form_state['values']['IVRReasonCd'],
+			'type' => SQLINT1,
+			'length' => 3,
+		);
+		if(!empty($form_state['values']['IVRPreviousOffenderYNFlag']))
+		$sp_params['IVRPreviousOffenderYNFlag'] = array(
+			'name' => 'IVRPreviousOffenderYNFlag', 
+			'value' => $form_state['values']['IVRPreviousOffenderYNFlag'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['FurtherAnalysisCriteriaWeight'] = array(
+			'name' => 'FurtherAnalysisCriteriaWeight', 
+			'value' => $form_state['values']['FurtherAnalysisCriteriaWeight'],
+			'type' => SQLINT1,
+			'length' => 3,
+		);
+		$sp_params['FurtherAnalysisCriteriaSampleFrequency'] = array(
+			'name' => 'FurtherAnalysisCriteriaSampleFrequency', 
+			'value' => $form_state['values']['FurtherAnalysisCriteriaSampleFrequency'],
+			'type' => SQLINT1,
+			'length' => 3,
+		);
+		$sp_params['SelectForESIYNFlag'] = array(
+			'name' => 'SelectForESIYNFlag', 
+			'value' => $form_state['values']['SelectForESIYNFlag'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$sp_params['SelectForAuditYNFlag'] = array(
+			'name' => 'SelectForAuditYNFlag', 
+			'value' => $form_state['values']['SelectForAuditYNFlag'],
+			'type' => SQLCHAR,
+			'length' => 1,
+		);
+		$result = bbm_agent_db_query(null, "bbmsp_ins_FurtherAnalysisCriteria", $sp_params) ? drupal_set_message(t('Rule added successfully')) : drupal_set_message(t('Failed adding rule'));	
+	}
+	
+	if($form_state['clicked_button']['#id'] == 'edit-multiple-delete')
+	{
+		$i = 0;
+		foreach((array)$form_state['values'] as $key => $value)
+		{
+			if(strstr($key, 'delete_') && $value)
+			{
+				$i++;
+				$FurtherAnalysisCriteriaID = substr($key,strlen('delete_'));
+				$sp_params = array();
+
+				$sp_params['FurtherAnalysisCriteriaID'] = array(
+					'name' => 'FurtherAnalysisCriteriaID', 
+					'value' => $FurtherAnalysisCriteriaID,
+					'type' => SQLINT1,
+					'length' => 2,
+				);
+				
+				bbm_agent_db_query(null, "bbmsp_del_FurtherAnalysisCriteria", $sp_params);
+			}
+		}
+		if($i)
+		{
+			drupal_set_message(t('%Rule deleted successfully', array('%Rule' => format_plural($i, '1 rule', '@count rules'))));
+		}
+		
+	}
+}
+
+/*************************
+ **** THEME FUNCTIONS ****
+ *************************/
+
+/************************************************************************
+ ***************************** THEME FUNCTIONS **************************
+ ***********************************************************************/
+
+/*
+ * theme bbm_config_analysis_edit
+ */
+function theme_bbm_config_modal_window($form)
+{
+	$output = '';
+	
+	foreach(element_children($form) as $key)
+	{
+		$title = $form[$key]['#title'];
+		$form[$key]['#title'] = '';
+		$rows[] = array($title, drupal_render($form[$key]));
+	}
+	$output .= theme('table', array('',''), $rows, array('width' => '100%'));
+	$output .= drupal_render($form);
+	return $output;
+}
+
+/*
+ * theme for bbm_configure_analysis_rules
+ */
+function theme_bbm_configure_analysis_rules($form)
+{
+	$output = '';
+	
+	$rows[] = array(
+		drupal_render($form['AddRule']['FurtherAnalysisCriteriaDescription']),
+		drupal_render($form['AddRule']['IVRReasonCd']),
+		drupal_render($form['AddRule']['RecordingTypeId']),
+		drupal_render($form['AddRule']['ReviewerTypeCd']),
+		drupal_render($form['AddRule']['IVRHubId']),
+		drupal_render($form['AddRule']['IVRBrandBehaviourId']),
+		drupal_render($form['AddRule']['IVRTreatmentId']),
+		drupal_render($form['AddRule']['BBMCallerTypeId']),
+		drupal_render($form['AddRule']['HubAction']),
+		drupal_render($form['AddRule']['GenderCd']),
+		drupal_render($form['AddRule']['LanguageCd']),
+		drupal_render($form['AddRule']['IVRPreviousOffenderYNFlag']),
+		drupal_render($form['AddRule']['AgentID']),
+		drupal_render($form['AddRule']['FurtherAnalysisCriteriaSampleFrequency']),
+		drupal_render($form['AddRule']['SelectForESIYNFlag']),
+		drupal_render($form['AddRule']['SelectForAuditYNFlag']),
+		drupal_render($form['AddRule']['FurtherAnalysisCriteriaWeight']),
+		drupal_render($form['AddRule']['add']),
+		'',
+	);
+	
+	//drupal_set_message('<pre>'.print_r($form['OverrideRule'], true).'</pre>');
+	
+	foreach(element_children($form['AnalysisRule']) as $key)
+	{
+		$rows[] = array(
+			drupal_render($form['AnalysisRule'][$key]['FurtherAnalysisCriteriaDescription']),
+			drupal_render($form['AnalysisRule'][$key]['ReviewResultTypeDescription']),
+			drupal_render($form['AnalysisRule'][$key]['RecordingTypeDescription']),
+			drupal_render($form['AnalysisRule'][$key]['ReviewerTypeDescription']),
+			drupal_render($form['AnalysisRule'][$key]['IVRHubFullName']),
+			drupal_render($form['AnalysisRule'][$key]['IVRBrandBehaviourFullName']),
+			drupal_render($form['AnalysisRule'][$key]['IVRTreatmentName']),
+			drupal_render($form['AnalysisRule'][$key]['BBMCallerTypeDescription']),
+			drupal_render($form['AnalysisRule'][$key]['ActionDescription']),
+			drupal_render($form['AnalysisRule'][$key]['GenderDescription']),
+			drupal_render($form['AnalysisRule'][$key]['LanguageName']),
+			drupal_render($form['AnalysisRule'][$key]['IVRPreviousOffenderYNFlag']),
+			drupal_render($form['AnalysisRule'][$key]['AgentID']),
+			drupal_render($form['AnalysisRule'][$key]['FurtherAnalysisCriteriaSampleFrequency']),
+			drupal_render($form['AnalysisRule'][$key]['SelectForESIYNFlag']),
+			drupal_render($form['AnalysisRule'][$key]['SelectForAuditYNFlag']),
+			drupal_render($form['AnalysisRule'][$key]['FurtherAnalysisCriteriaWeight']),
+			drupal_render($form['AnalysisRule'][$key]['edit']),
+			drupal_render($form['AnalysisRule'][$key]['delete_'.$key]),
+		);
+	}
+	
+	$headers = array(
+		'Description',
+		'Result',
+		'Record Type',
+		'Reviewer',
+		'Hub',
+		'Brand',
+		'Room',
+		'Caller Type',
+		'Action',
+		'Gender',
+		'Language',
+		'Previous Offender',
+		'Agent',
+		'Sample Frequency (0-999)',
+		'Select for ESI',
+		'Select for Audit',
+		'Criteria Weight (1-100)',
+		'',
+		'',
+	);
+	$output .= theme('table', $headers, $rows, array('class' => 'configurations-table review-result-analysis'));
+	$output .= drupal_render($form);
+	return $output;
+}
+/*
+ * theme for bbm_config_review_override_form
+ */
+function theme_bbm_configure_override_rules($form)
+{
+	$output = '';
+	
+	$rows[] = array(
+		drupal_render($form['AddRule']['Description']),
+		drupal_render($form['AddRule']['Result']),
+		drupal_render($form['AddRule']['RecordType']),
+		drupal_render($form['AddRule']['Reviewer']),
+		drupal_render($form['AddRule']['AutomatorConfidence']),
+		drupal_render($form['AddRule']['Hub']),
+		drupal_render($form['AddRule']['Brand']),
+		drupal_render($form['AddRule']['Room']),
+		drupal_render($form['AddRule']['CallerType']),
+		drupal_render($form['AddRule']['Action']),
+		drupal_render($form['AddRule']['BlockDuration']),
+		drupal_render($form['AddRule']['CriteriaWeight']),
+		drupal_render($form['AddRule']['add']),
+		'',
+	);
+	
+	//drupal_set_message('<pre>'.print_r($form['OverrideRule'], true).'</pre>');
+	
+	foreach(element_children($form['OverrideRule']) as $key)
+	{
+		$rows[] = array(
+			drupal_render($form['OverrideRule'][$key]['Description']),
+			drupal_render($form['OverrideRule'][$key]['Result']),
+			drupal_render($form['OverrideRule'][$key]['RecordType']),
+			drupal_render($form['OverrideRule'][$key]['Reviewer']),
+			drupal_render($form['OverrideRule'][$key]['AutomatorConfidence']),
+			drupal_render($form['OverrideRule'][$key]['Hub']),
+			drupal_render($form['OverrideRule'][$key]['Brand']),
+			drupal_render($form['OverrideRule'][$key]['Room']),
+			drupal_render($form['OverrideRule'][$key]['CallerType']),
+			drupal_render($form['OverrideRule'][$key]['Action']),
+			drupal_render($form['OverrideRule'][$key]['BlockDuration']),
+			drupal_render($form['OverrideRule'][$key]['CriteriaWeight']),
+			drupal_render($form['OverrideRule'][$key]['edit']),
+			drupal_render($form['OverrideRule'][$key]['delete_'.$key]),
+		);
+	}
+	
+	$headers = array(
+		'Description',
+		'Result',
+		'Record Type',
+		'Reviewer',
+		'Automator Confidence',
+		'Hub',
+		'Brand',
+		'Room',
+		'Caller Type',
+		'Action',
+		'Block Duration (0-730)',
+		'Criteria Weight (1-100)',
+		'',
+		'',
+	);
+	$output .= theme('table', $headers, $rows, array('class' => 'configurations-table review-result-override'));
+	$output .= drupal_render($form);
+	return $output;
+}
+
+/*
+ * theme 
+ */
+function theme_bbm_config_review_result_type_page($form)
+{
+	$output = '';
+	
+	//drupal_set_message('<pre>' . print_r(element_children($form), true) . '</pre>');
+	
+	$rows = array();
+	foreach(element_children($form) as $key)
+	{
+		if(in_array($key, array(3,4,5,6)))
+		{
+			$form[$key][$key.'RecordMax']['#type'] = 'hidden';
+			$form[$key][$key.'AutomatorAlt']['#type'] = 'hidden';
+			$form[$key][$key.'AgentAlt']['#type'] = 'hidden';
+		}
+	
+		$rows[] = array(
+			drupal_render($form[$key][$key.'Result']),
+			drupal_render($form[$key][$key.'AutomatorLow']),
+			drupal_render($form[$key][$key.'AutomatorHigh']),
+			drupal_render($form[$key][$key.'Agent']),
+			drupal_render($form[$key][$key.'BlockDuration']),
+			drupal_render($form[$key][$key.'Threshold']),
+			drupal_render($form[$key][$key.'RecordMax']),
+			drupal_render($form[$key][$key.'AutomatorAlt']),
+			drupal_render($form[$key][$key.'AgentAlt']),
+		);
+		//unset($form[$key]);
+	}
+	$headers = array(
+		'Result', 
+		'Automator Low', 
+		'Automator High', 
+		'Agent', 
+		'Block Duration (0-730)', 
+		'Threshold (0-1)', 
+		'Record Max (1-10)', 
+		'Automator Alt', 
+		'Agent Alt'
+	);
+	$output .= theme('table', $headers, $rows, array("width" => "100%"));
+	
+	$output .= drupal_render($form);
+	
+	return $output;
+}
+
+/*
+ * default theme function for all screens
+ */
+function theme_bbm_config_forms($form)
+{
+	// add styles to forms
+	drupal_add_css(drupal_get_path('module', 'bbm_config') . '/bbm_config-style.css');
+
+	return drupal_render($form);
+}	
+
+/*
+ * theme bbm_config_rectype_order
+ */
+function theme_bbm_config_rectype_order($form)
+{
+	drupal_add_tabledrag('bbm-config-order', 'order', 'sibling', 'bbm-config-weight', null, null, false);
+	$rows = array();
+	foreach((array)$form as $key => $value)
+ 	{
+ 		if(!strstr($key, '#') && $key != 'button_save_recording_priorities')
+ 		{
+ 			$form[$key]['order_' . $key]['#attributes']['class'] = 'bbm-config-weight';
+ 			//$form[$key]['title']['#attributes']['class'] = 'bbm-config-weight';
+ 			//$form[$key]['id']['#attributes']['class'] = 'bbm-config-weight';
+ 			$rows[] = array(
+	 			'data' => array(
+	 				drupal_render($form[$key]['order_' . $key]) . drupal_render($form[$key]['priority_' . $key]) . drupal_render($form[$key]['id']),
+	 				drupal_render($form[$key]['title']), 
+	 				$form[$key]['priority_' . $key]['#value'],
+	 			),
+	 			'class' => 'draggable'
+ 			);
+ 		}		
+ 	}
+ 	$headers = array(' ', t('Recording Type'), t('Priority'));
+ 	$output  = '<div class="global-settings-list">';
+ 	$output .= theme('table', $headers, $rows, array('id' => 'bbm-config-order', 'width' => '100%'));
+ 	$output .= drupal_render($form);
+ 	$output .= '</div>';
+ 	
+ 	//drupal_set_message('<pre>' . print_r($form, true) . '</pre>');
+ 	return $output;
+}
+
+/*
+ * theme bbm_config_rectype_order
+ */
+function theme_bbm_config_reason_order($form)
+{
+	drupal_add_tabledrag('bbm-reason-order', 'order', 'sibling', 'bbm-reason-weight', null, null, false);
+	$rows = array();
+	foreach((array)$form as $key => $value)
+ 	{
+ 		if(!strstr($key, '#') && $key != 'button_save_reason_priorities')
+ 		{
+ 			$form[$key]['order_' . $key]['#attributes']['class'] = 'bbm-reason-weight';
+ 			//$form[$key]['title']['#attributes']['class'] = 'bbm-config-weight';
+ 			//$form[$key]['id']['#attributes']['class'] = 'bbm-config-weight';
+ 			$rows[] = array(
+	 			'data' => array(
+	 				drupal_render($form[$key]['order_' . $key]) . drupal_render($form[$key]['priority_' . $key]) . drupal_render($form[$key]['id']),
+	 				drupal_render($form[$key]['title']), 
+	 				$form[$key]['priority_' . $key]['#value'],
+	 			),
+	 			'class' => 'draggable'
+ 			);
+ 		}	
+ 	}
+ 	
+ 	$headers = array(' ', t('Reason'), t('Priority'));
+ 	$output  = '<div class="global-settings-list">';
+ 	$output  = theme('table', $headers, $rows, array('id' => 'bbm-reason-order', 'width' => '100%'));
+ 	$output .= drupal_render($form);
+ 	$output .= '</div>';
+ 	
+ 	//drupal_set_message('<pre>' . print_r($form, true) . '</pre>');
+ 	return $output;
+}
+
+/*
+ * theme bbm_config_automator_override_rules
+ */
+function theme_bbm_config_automator_override_rules($form)
+{
+	$header = array('Record Type', 'Description', 'Hub', 'Brand', 'Room', 'Caller Type', 'Action', 'Options', 'Delete');
+	$rows = array();
+	
+	$rows[] = array(
+		'data' => array(
+			drupal_render($form['record_type']), 
+			drupal_render($form['description']), 
+			drupal_render($form['hubid']),
+			drupal_render($form['brand']),
+			drupal_render($form['room']),
+			drupal_render($form['caller_type']),
+			drupal_render($form['action']),
+			drupal_render($form['add']),
+			'',
+		),
+	);
+	
+	
+	foreach((array)$form as $key => $value)
+	{
+		if(is_numeric($key))
+		{
+			$rows[] = array(
+				'data' => array(
+					drupal_render($form[$key]['record_type']), 
+					drupal_render($form[$key]['description']), 
+					drupal_render($form[$key]['hubid']),
+					drupal_render($form[$key]['brand']),
+					drupal_render($form[$key]['room']),
+					drupal_render($form[$key]['caller_type']),
+					drupal_render($form[$key]['action']),
+					drupal_render($form[$key]['edit_' . $key]),
+					drupal_render($form[$key]['delete_' . $key]),
+				),
+			);
+		}
+	}
+	
+	$output  = theme('table', $header, $rows, array("width" => "100%"));
+	$output .= drupal_render($form);
+	
+	return $output;
+}

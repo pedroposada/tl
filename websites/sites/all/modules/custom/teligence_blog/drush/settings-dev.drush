@@ -1,0 +1,153 @@
+#!/usr/bin/env drush php-script
+
+
+<?php
+
+if(module_exists('teligence_blog'))
+{
+	
+	
+	/**
+	 * Import blog content type
+	 */
+	// $form_state = array();
+	// $form_values['values']['type_name'] = '<create>';
+	// $form_state['values']['macro'] = file_get_contents(drupal_get_path('module','teligence_blog').'drush/blog.content_type');
+	// content_copy_import_form_submit(array(), $form_state);
+	
+	
+	/**
+	 * Import view
+	 */
+	// module_load_include('inc', 'views', 'includes/admin.inc');
+	// $form_state = array();
+	// $form_state['values']['view'] = file_get_contents(drupal_get_path('module','teligence_blog').'drush/archive_blog.view');
+	// $form = views_ui_import_page($form_state);
+	// views_ui_import_validate($form, $form_state);
+	// views_ui_edit_view_form_submit($form, $form_state)
+	
+	
+	/**
+ 	 * Configure blocks 
+ 	 */
+	module_load_include('inc', 'block', 'block.admin');
+ 	$form_state = array();
+	$form_state['values'][] = array(
+		'status' => 1,
+		'region' => 'right',
+		'module' => 'teligence_blog',
+		'delta' => 'teligence_blogAdminLinks',
+		'theme' => 'new_livelinks',
+		'weight' => -11,
+		'custom' => 0,
+		'visibility' => 1, 
+		'pages' => 'comment/*' ."\n". 'node/add/blog' . "\n" . 'blog' . "\n" . 'blog/*',
+		'roles' => array(),
+	);
+	$form_state['values'][] = array(
+		'status' => 1,
+		'region' => 'right',
+		'module' => 'teligence_blog',
+		'delta' => 'teligence_blogSearch',
+		'theme' => 'new_livelinks',
+		'weight' => -10,
+		'custom' => 0,
+		'visibility' => 1,
+		'pages' => 'blog' . "\n" . 'blog/*',
+		'roles' => array(),
+	);
+	$form_state['values'][] = array(
+		'status' => 1,
+		'region' => 'right',
+		'module' => 'views',
+		'delta' => 'archive_blog-block_2',
+		'theme' => 'new_livelinks',
+		'weight' => -9,
+		'custom' => 0,
+		'visibility' => 1,
+		'pages' => 'blog' . "\n" . 'blog/*',
+		'roles' => array(),
+	);
+	$form_state['values'][] = array(
+		'status' => 1,
+		'region' => 'right',
+		'module' => 'views',
+		'delta' => 'archive_blog-block_3',
+		'theme' => 'new_livelinks',
+		'weight' => -8,
+		'custom' => 0,
+		'visibility' => 1,
+		'pages' => 'blog' . "\n" . 'blog/*',
+		'roles' => array(),
+	);
+	$form_state['values'][] = array(
+		'status' => 1,
+		'region' => 'right',
+		'module' => 'views',
+		'delta' => 'archive_blog-block_1',
+		'theme' => 'new_livelinks',
+		'weight' => -7,
+		'custom' => 0,
+		'visibility' => 1,
+		'pages' => 'blog' . "\n" . 'blog/*',
+		'roles' => array(),
+	);
+	$form_state['values'][] = array(
+		'status' => 1,
+		'region' => 'right',
+		'module' => 'views',
+		'delta' => 'archive_blog-block',
+		'theme' => 'new_livelinks',
+		'weight' => -6,
+		'custom' => 0,
+		'visibility' => 1,
+		'pages' => 'blog' . "\n" . 'blog/*',
+		'roles' => array(),
+	);
+	block_admin_display_form_submit(array(), $form_state);
+	foreach ($form_state['values'] as $block) 
+	{
+		$formstate['values'] = $block;
+		block_admin_configure_submit(array(), $formstate);
+	}
+	
+	
+	/**
+	 * Create role and add permissions
+	 */
+	$roles = array('blog_admin');
+	foreach((array)$roles as $role)
+	{
+		if(!db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", $role)))
+		{
+			db_query("INSERT INTO {role} (name) VALUES ('%s')", $role);
+			drupal_set_message(t('The role "!s" has been added.', array('!s' => $role)));
+		}
+		if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", $role)))
+		{
+			// set permissions to roles
+			$oldperms = db_result(db_query("SELECT perm FROM {permission} WHERE rid = %d", $rid));
+			$oldperms = explode(', ', $oldperms);
+			if($role == 'blog_admin')
+			{
+				$newperms = array(
+					// blog administrator
+					'access blog comment moderation page',
+					'create blog content',
+					'delete any blog content',
+					'edit any blog content',
+					'post comments',
+					'administer comments',
+				);
+				// vppr permissions settings
+				// vppr_form_admin_settings_vppr_submit(array(), $form_state);
+			}
+			$perms = array_merge($oldperms,$newperms);
+			db_query('DELETE FROM {permission} WHERE rid = %d', $rid);
+			db_query("INSERT INTO {permission} (rid, perm) VALUES (%d, '%s')", $rid, implode(', ', $perms));
+			
+			
+			drupal_set_message(t('Permissions for role "!s" were set.', array('!s' => $role)));
+		}
+	}
+}

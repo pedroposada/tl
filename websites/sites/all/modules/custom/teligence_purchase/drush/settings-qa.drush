@@ -1,0 +1,128 @@
+#!/usr/bin/env drush php-script
+
+<?php
+
+if(module_exists('teligence_purchase'))
+{
+	# extract arguments
+	$args = array();
+	array_walk($_SERVER['argv'],function(&$item,$key) use(&$args){
+		if(strstr($item,'=')){
+			list($name,$val) = explode('=',$item,2);
+			$args[$name] = $val;
+		}
+	});
+	
+	# set permissions for roles 'ivr_user' and 'web_user'
+	$roles = array('ivr_user', 'web_user');
+	foreach((array)$roles as $role)
+	{
+		if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", $role)))
+		{
+			// set permissions to roles
+			$oldperms = db_result(db_query("SELECT perm FROM {permission} WHERE rid = %d", $rid));
+			$oldperms = explode(', ', $oldperms);
+			if($role == 'ivr_user')
+			{
+				$newperms = array(
+					// ivr account pages
+					'access change passcode page',
+					'access add credit card page',
+					'access show balance page',
+					'access order history page',
+					'access manage subscriptions page',
+					'access buy package 3.3 page',
+					'access profile page',
+					'access change email page',
+					'access change password page',
+					'access linkivrtoweb page',
+				);
+			}
+			if($role == 'web_user')
+			{
+				$newperms = array(
+					// web account pages
+					'access manage subscriptions page',
+					'access profile page',
+					'access change email page',
+					'access change password page',
+					'access linkivrtoweb page',
+					'access buy package 3.2 page',
+				);
+			}
+			$perms = array_merge($oldperms,$newperms);
+			db_query('DELETE FROM {permission} WHERE rid = %d', $rid);
+			db_query("INSERT INTO {permission} (rid, perm) VALUES (%d, '%s')", $rid, implode(', ', $perms));
+			
+			drupal_set_message(t('Permissions for role "!s" were set.', array('!s' => $role)));
+		}
+	}
+	
+	/**
+	 * configure settings variables
+	 */
+	// brandid
+	variable_set('teligence_purchase_brandid', 1);
+	if(isset($args['teligence_purchase_brandid']) && !is_null($args['teligence_purchase_brandid']))
+		variable_set('teligence_purchase_brandid', $args['teligence_purchase_brandid']);
+
+	// customer service message
+	variable_set('teligence_purchase_customerservice', 'We could not complete your request at this moment. Please call customer service at 1-800-984-6889');
+	if(isset($args['teligence_purchase_customerservice_number']) && !is_null($args['teligence_purchase_customerservice_number']))
+		variable_set('teligence_purchase_customerservice', 'We could not complete your request at this moment. Please call customer service at ' . $args['teligence_purchase_customerservice_number']);
+
+	// debug mode
+	variable_set('teligence_purchase_debug', 0);
+	
+	// WSDLs
+	variable_set('teligence_purchase_wsdl_membermanagement','http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/MemberManagement.svc?wsdl');
+	variable_set('teligence_purchase_wsdl_membercredentials','http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/MemberCredentials.svc?wsdl');
+	variable_set('teligence_purchase_wsdl_ivrrtm','http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/IvrRtm.svc?wsdl');
+	variable_set('teligence_purchase_wsdl_provisioning','http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/Provisioning.svc?wsdl');
+	variable_set('teligence_purchase_wsdl_localization','http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/Localization.svc?wsdl');
+	variable_set('teligence_purchase_wsdl_ordermanagement','http://ws.wsBrandWebSiteHost.alldir.net/BrandWebSite/OrderManagement.svc?wsdl');
+	
+	// EMAILS
+	variable_set('teligence_purchase_emailValidateAccount_subject', 'Action required - Validate your account' );
+	variable_set('teligence_purchase_emailValidateAccount', '
+<div class="item-list">Thanks for signing up with us.<br />
+<br />
+Please validate your email account by going to the link below:<br />
+[url]<br />
+<br />
+For your reference, we have included your account login credentials below:<br />
+Email: [email]<br />
+Password: [password]<br />
+<br />
+Thanks<br />
+</div>
+');
+
+	variable_set('teligence_purchase_emailPasswordRecovery_subject', 'Action required - Reset your password' );
+	variable_set('teligence_purchase_emailPasswordRecovery', '
+<div class="item-list">Hi,<br />
+<br />
+Please reset your web account password by going to the link below:<br />
+[url]<br />
+<br />
+Thanks<br />
+</div>
+');
+
+	variable_set('teligence_purchase_emailResetEmailId_subject', 'Action required - Activate your new email address' );
+	variable_set('teligence_purchase_emailResetEmailId', 'Hi,<br />
+<br />
+Please activate your new email address by going to the link below:<br />
+[url]<br />
+<br />
+Thanks<br />
+');
+
+	// secure pages
+	variable_set('teligence_secure_pages', "cart/*" . "\n" . "purchase/*");
+
+	// cache the WSDL
+	variable_set('teligence_purchase_cachewsdl', 1);
+
+	drupal_set_message('Settings Variables were set successfully.');
+}

@@ -1,0 +1,132 @@
+body {
+	
+}
+
+#edit-next 
+{
+	float:right;
+}
+
+table.step-indicator 
+{
+	width:100%;
+}
+
+table.step-indicator td 
+{
+	text-align:center;
+}
+
+table.step-indicator td.active 
+{
+	font-weight:bold;
+	font-size:16px;
+}
+
+.left-label label
+{
+    float:left;
+    width:200px
+}
+
+.left-label .form-text 
+{
+	width:200px;	
+}
+
+fieldset table 
+{
+	width:100%;
+}
+
+
+
+/*
+#edit-area-code
+{
+	width:47px;
+	float:left;
+	margin:0;
+}
+*/
+/*
+#edit-area-code-wrapper input,
+#edit-phone-number-wrapper input
+{
+	text-align:center;
+}
+
+#edit-phone-number 
+{
+	width:60px;
+}
+*/
+tr.highlighted 
+{
+	font-weight: bold;
+}
+
+/******************************
+ * *********** BUY NOW ********
+ ******************************/
+div.ani div.parenthesys 
+{
+	float:left;
+	width:10px;
+	font-size:20px;
+	padding-top:1px;
+	margin-top:2px;
+}
+
+#edit-area-code-wrapper,
+#edit-phone-number-wrapper
+{
+	float:left;
+	margin:2px 0 0 0;
+	text-align:center;
+}
+#edit-area-code-wrapper input,
+#edit-phone-number-wrapper input
+{
+	text-align:center;
+}
+th.left-table-header
+{
+	text-align:left;
+}
+table#selection-boxes-table,
+table#selection-boxes-table tr,
+table#selection-boxes-table td
+{
+	background:none;
+	border:none;
+	padding:0;
+	margin:0;
+}
+
+
+/*****************
+ * SIGN UP FOR WEB ACCOUNT
+ ****************/
+.left-label #edit-area-code-wrapper
+{
+	float:none;
+	text-align:left;
+}
+
+/*****************
+ * GET LOCAL ACCESS NUMBERS
+ *****************/
+#teligence-cart-aera-code-form label
+{
+	float:left;
+}
+
+/****************
+ * EMAIL CAMPAIGN
+ ****************/
+#teligence-cart-email-campaign  .left-label div.ani .form-text 
+{
+	width:auto;
+	float:left;
+}

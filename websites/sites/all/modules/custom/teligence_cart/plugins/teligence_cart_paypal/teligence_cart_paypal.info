@@ -1,0 +1,8 @@
+; $Id$ 
+name = "Teligence Cart Paypal"
+description = "Add PAYPAL option to Teligence Cart module."
+package = "Teligence"
+core = 6.x
+version = "6.x-1.0"
+core = "6.x"
+dependencies[] = teligence_cart

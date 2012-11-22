@@ -1,0 +1,8 @@
+; $Id$ 
+name = "Teligence Localization"
+description = "Ouputs tokens like city name and state name for localization specific content like CTC landing pages"
+package = "Teligence"
+version = "6.0"
+core = "6.x"
+dependencies[] = menu
+dependencies[] = content

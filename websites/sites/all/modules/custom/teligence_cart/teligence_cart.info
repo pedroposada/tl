@@ -1,0 +1,8 @@
+; $Id$ 
+name = "Teligence Cart"
+description = "Allows purchase of packages through internal IVR API."
+package = "Teligence"
+core = 6.x
+version = "6.x-1.0"
+core = "6.x"
+dependencies[] = menu

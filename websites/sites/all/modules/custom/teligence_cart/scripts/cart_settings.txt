@@ -1,0 +1,133 @@
+$settings = array();
+
+$settings["teligence_cart_asu"] = '<div style=\"border: 1px solid #333333; width: 600px; font-family:Arial, Helvetica, sans-serif;\"><table width=\"600\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tbody><tr><td height=\"114\" colspan=\"3\"><img src=\"http://livelinks.com/sites/all/files/images/llk/llk_email_banner_bg_600x114.jpg\" alt=\"\" /></td></tr><tr><td width=\"20\">&nbsp;</td><td width=\"560\"><h2 style=\"color: rgb(0, 0, 0); font-size: 28px;\">Livelinks Purchase Confirmation</h2><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Your purchase has been approved. Here are your recent transaction details:</p><ul style=\"color: rgb(0, 0, 0); font-size: 13px;\"><li>Package Selected: <strong>[minutes-purchased] Minutes</strong></li><li>Package Price: <strong>[package-price]</strong></li><li>Tax: <strong>[package-tax]</strong></li>   <li>Total Price: <strong>[package-total-price]</strong></li></ul><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Ready to have some fun? Call Now! <strong>[customer-access-number]</strong></p><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Thanks!<br />The [brand-name] Team</p><br /><p style=\"color: rgb(76, 76, 76); font-size: 11px;\">This message was sent to [user-email]. If you have any questions about your account, please check our <a href=\"http://www.livelinks.com/about-us/faq\" style=\"color: rgb(231, 33, 46); font-size: 11px; text-decoration: none;\">FAQ,</a> or contact our friendly customer service team toll-free at 1.800.984.6899.</p><br/></td><td width=\"20\">&nbsp;</td></tr><tr style=\"padding: 4px 0px; background-color: #BEBEBE;\"><td height=\"25\" colspan=\"3\"><p style=\"color: rgb(0, 0, 0); margin-left: 20px; font-size: 11px;\">[brand-name] &bull; 1685 H Street 615 &bull; Blaine, WA &bull; 98230</p></td></tr></tbody></table></div>';
+
+$settings["teligence_cart_asu_screen"] = '<div id=\"llk_step7_complete\">
+<h2>Thank you for your order!</h2>
+<div id=\"llk_wrapper_step7\">
+<p class=\"memNum\">Membership #: <strong>[ivr-number]</strong></p>
+<p class=\"passCode\">Passcode: <strong>[ivr-passcode]</strong></p>
+</div>
+<p>An email has been sent to [user-email] containing this information.</p>
+<p>Please click the link in that email to verify your account information.</p>
+</div>';
+
+$settings["teligence_cart_asu_sucess"] = '<div style=\"width: 740px; margin: 0px auto;\" id=\"llk_purchase_success\">
+<h2 style=\"text-align: center;\">Thank you for your order!</h2>
+<div style=\"width: 740px; height: 357px; background: url(&quot;/sites/all/themes/new_livelinks/css/images/theme_imgs/llk_purchaseSuccess_BG_740x357.jpg&quot;) no-repeat scroll 0% 0% rgb(255, 255, 255);\" id=\"llk_succ_container\">
+<p style=\"color: rgb(255, 255, 255); font-size: 52px; font-weight: bold; position: relative; top: 75px; left: 300px;\">778-xxx-xxxx</p>
+<p style=\"color: rgb(255, 255, 255); position: relative; top: 50px; left: 345px; width: 250px; text-align: center;\"><strong>Memebership Number: [ivr_number]</strong></p>
+<p style=\"color: rgb(255, 255, 255); position: relative; top: 65px; left: 345px; width: 250px; text-align: center;\"><strong>Passcode: [ivr_passcode]</strong></p>
+</div>
+<p>An email has been sent out to [email] containing this information.</p>
+<p>Please click the link in that email to verify your account information.</p>
+</div>';
+
+$settings["teligence_cart_brand"] = '1';
+
+$settings["teligence_cart_cache_wsdl"] = '0';
+
+$settings["teligence_cart_country_list"] = 'sites/all/modules/teligence_cart/countries.txt';
+
+$settings["teligence_cart_customer_access_phone"] = '1-800-916-1090';
+
+$settings["teligence_cart_customer_service_phone"] = '1-800-984-6889';
+
+$settings["teligence_cart_debug_mode"] = '1';
+
+$settings["teligence_cart_error_call_cs"] = 'Please call our customer service: 1-800-984-6889';
+
+$settings["teligence_cart_error_existing_account"] = 'You already have an account with us. Did you forget your password?';
+
+$settings["teligence_cart_error_invalid_csc"] = 'Invalid security code. Please re-enter your security code.';
+
+$settings["teligence_cart_error_link_expired"] = 'This link has expired. Please visit the Livelinks website to obtain a new link.';
+
+$settings["teligence_cart_error_new_account"] = 'Your new web account has been created. Further instructions have been sent to your e-mail address.';
+
+$settings["teligence_cart_error_password_match"] = 'Passwords don\'t match. Please re-enter your password.';
+
+$settings["teligence_cart_error_phone_number"] = 'Phone number is required. Please enter your phone number.';
+
+$settings["teligence_cart_error_valid_account"] = 'Your account has been validated. You can now login to your account.';
+
+$settings["teligence_cart_forgot_pass_email"] = '<div style=\"border: 1px solid #333333; width: 600px;font-family:Arial, Helvetica, sans-serif;\"><table width=\"600\" border=\"0\" cellpadding=\"0\" cellspacing=\"0\" style=\"background-color: #ffffff;\"><tbody><tr><td height=\"114\" colspan=\"3\"><img src=\"http://livelinks.com/sites/all/files/images/llk/llk_email_banner_bg_600x114.jpg\" alt=\"\" /></td></tr><tr><td width=\"20\">&nbsp;</td><td width=\"560\"><h2 style=\"color: rgb(0, 0, 0); font-size: 28px; magrin:0px; padding:0px; \">Livelinks Password Reset</h2><p style=\"color: rgb(0, 0, 0); font-size: 13px; magrin:0px; padding:0px; \">To reset your Livelinks password, please click on the link below or copy and paste the link into your browser: </p><p style=\"color: rgb(0, 0, 0); font-size: 13px; magrin:0px; padding:0px; \"><a href=\"[url]\" style=\"color: rgb(231, 33, 46); font-size: 13px; text-decoration: underline;\">[url]</a></p> <p style=\"color: rgb(0, 0, 0); font-size: 13px; magrin:0px; padding:0px; \">This will take you to a screen where you can change your password and log in to your account.</p><p style=\"color: rgb(0, 0, 0); font-size: 13px; magrin:0px; padding:0px; \">This is a one-time link that will expire after one day. If you do not reset your password within that time, you will need to request a new link.</p><p style=\"color: rgb(0, 0, 0); font-size: 13px; magrin:0px; padding:0px; \">Happy Chatting!<br />The [brand-name] Team</p><br /><p style=\"color: rgb(76, 76, 76); font-size: 11px; magrin:0px; padding:0px; \">This message was sent to [user-email]. If you have any questions about your account, please check our <a href=\"http://www.livelinks.com/about-us/faq\" style=\"color: rgb(231, 33, 46); font-size: 11px; text-decoration: none;\">FAQ,</a> or contact our friendly customer service team toll-free at 1.800.984.6899.</p><br/></td><td width=\"20\">&nbsp;</td></tr><tr style=\"padding: 4px 0px; background-color: #BEBEBE;\"><td height=\"25\" colspan=\"3\"><p style=\"color: rgb(0, 0, 0); margin: 0 0 0 20px; font-size: 11px;\">Livelinks &bull; 1685 H Street 615 &bull; Blaine, WA &bull; 98230</p></td></tr></tbody></table></div>';
+
+$settings["teligence_cart_free_minutes"] = '10';
+
+$settings["teligence_cart_free_trial_code"] = '9101';
+
+$settings["teligence_cart_paypal_failure_screen"] = '<p style=\"text-align: center;\">We\'re sorry! Your transaction cannot be completed at the time.</p>
+<p style=\"text-align: center;\">Please try again later or contact our customer service at <strong>[customer-service-number]</strong></p>';
+
+$settings["teligence_cart_paypal_gateway_url"] = 'http://paypal.integration';
+
+$settings["teligence_cart_paypal_price_confirmation_screen"] = '<div style=\"font-size:16px; font-weight:bold; margin:20px 20px 20px 0; font-family:Helvetica;\">Join Livelinks: Confirm Order Details</div>
+<div style=\"font-size:13px; margin:0; font-family:Helvetica;\">
+<table style=\"background:#f5f5f5;\" border=\"0\" cellspacing=\"0\" cellpadding=\"0\" width=\"558px\">
+<tbody style=\"border:none;\">
+<tr>
+<td style=\"background: url(/table-header.jpg) left top no-repeat #000; padding:10px; color:#fff; font-size:14px; font-weight:bold;\" colspan=\"2\">Confirm Order</td>
+</tr>
+<tr>
+<td style=\"padding:20px 0 0 20px;\">E-mail:</td>
+<td style=\"padding:20px 0 0 20px;\"><strong>Email</strong></td>
+</tr>
+<tr>
+<td style=\"padding:20px 0 0 20px;\" valign=\"top\">Order Details:</td>
+<td style=\"padding:20px 0 0 20px;\">
+<table border=\"0\" cellspacing=\"0\" cellpadding=\"0\" width=\"90%\">
+<tbody style=\"border:none;\">
+<tr>
+<td style=\"padding:0 0 0 0;\" align=\"left\">Package:</td>
+<td style=\"padding:0 0 0 0;\"><strong>PackageMinutes minutes</strong></td>
+</tr>
+<tr>
+<td style=\"padding:20px 0 0 0;\" align=\"left\">Cost:</td>
+<td style=\"padding:20px 0 0 0;\"><strong>$PackageAmountDollars</strong></td>
+</tr>
+<tr>
+<td style=\"padding:20px 0 10px 0;\" align=\"left\">Tax:</td>
+<td style=\"padding:20px 0 10px 0;\"><strong>$TaxesAmountDollars</strong></td>
+</tr>
+<tr>
+<td style=\"border-top:solid #000 2px; padding:10px 0 0 0;\" align=\"left\">Total:</td>
+<td style=\"border-top:solid #000 2px; padding:10px 0 0 0;\"><strong>$TotalAmountDollars Currency</strong></td>
+</tr>
+</tbody>
+</table>
+</td>
+</tr>
+<tr>
+<td style=\"background:url(/table-bottom.jpg) left bottom #f5f5f5 no-repeat; padding-top:10px;\" colspan=\"2\"></td>
+</tr>
+</tbody>
+</table>
+</div>';
+
+$settings["teligence_cart_paypal_vendor_id_asu"] = 'LLKASU';
+
+$settings["teligence_cart_paypal_vendor_id_sr"] = 'LLKSR';
+
+$settings["teligence_cart_paypal_vendor_pass_asu"] = '123456';
+
+$settings["teligence_cart_paypal_vendor_pass_sr"] = '654321';
+
+$settings["teligence_cart_returning_member"] = 'If you already have a web account with us please login. If you don\'t have a web account with us, please <a href=\"/cart/signup\">sign up</a>';
+
+$settings["teligence_cart_sr"] = '<div style=\"border: 1px solid #333333; width: 600px; font-family:Arial, Helvetica, sans-serif;\"><table width=\"600\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tbody><tr><td height=\"114\" colspan=\"3\"><img src=\"http://livelinks.com/sites/all/files/images/llk/llk_email_banner_bg_600x114.jpg\" alt=\"\" /></td></tr><tr><td width=\"20\">&nbsp;</td><td width=\"560\"><h2 style=\"color: rgb(0, 0, 0); font-size: 28px;\">Livelinks Account Sign Up</h2><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Sign up successful!</p><p style=\"color: rgb(0, 0, 0); font-size: 13px;\"><strong><u>Remember</u></strong> you need to validate your web account before you can <a href=\"[url]\" style=\"color: rgb(231, 33, 46); font-size: 13px; text-decoration: none;\">login</a> to your on-line account.</p><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Here are your account details:</p><ul style=\"color: rgb(0, 0, 0); font-size: 13px;\"><li>Membership Number: <strong>[ivr-number]</strong></li><li>Passcode: <strong>[ivr-passcode]</strong></li><li>Email: <strong>[user-email]</strong></li><li>Password: <strong>[web-password]</strong></li></ul><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Ready to have some fun? Call Now!<strong> [customer-access-number]</strong></p><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Thanks!<br />The [brand-name] team</p><br /><p style=\"color: rgb(76, 76, 76); font-size: 11px;\">This message was sent to [user-email]. If you have any questions about your account, please check our <a href=\"http://www.livelinks.com/about-us/faq\" style=\"color: rgb(231, 33, 46); font-size: 11px; text-decoration: none;\">FAQ,</a> or contact our friendly customer service team toll-free at 1.800.984.6899.</p><br/></td><td width=\"20\">&nbsp;</td></tr><tr style=\"padding: 4px 0px; background-color: #BEBEBE;\"><td height=\"25\" colspan=\"3\"><p style=\"color: rgb(0, 0, 0); margin-left: 20px; font-size: 11px;\">[brand-name] &bull; 1685 H Street 615 &bull; Blaine, WA &bull; 98230</p></td></tr></tbody></table></div>';
+
+$settings["teligence_cart_subscriptions"] = 'sites/all/modules/teligence_cart/subscriptions/unsubscribed.txt';
+
+$settings["teligence_cart_validate_account"] = '<div style=\"border: 1px solid #333333; width: 600px; font-family:Arial, Helvetica, sans-serif;\"><table width=\"600\" cellspacing=\"0\" cellpadding=\"0\" border=\"0\"><tbody><tr><td height=\"114\" colspan=\"3\"><img src=\"http://livelinks.com/sites/all/files/images/llk/llk_email_banner_bg_600x114.jpg\" alt=\"\" /></td></tr><tr><td width=\"20\">&nbsp;</td><td width=\"560\"><h2 style=\"color: rgb(0, 0, 0); font-size: 28px;\">Livelinks Account Validation</h2><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">In order to complete the registration process, you need to validate your account. <a href=\"[url]\" style=\"color: rgb(231, 33, 46); font-size: 13px; text-decoration: none;\">Click here</a> to validate your account.</p><p style=\"color: rgb(0, 0, 0); font-size: 13px; magrin:0px; padding:0px; \">If the link above doesn\'t work for you, please try copying this link to your browser window [url].</p><p style=\"color: rgb(0, 0, 0); font-size: 13px;\">Thanks!<br />The [brand-name] team</p><br /><p style=\"color: rgb(76, 76, 76); font-size: 11px;\">This message was sent to [user-email]. If you have any questions about your account, please check our <a href=\"http://www.livelinks.com/about-us/faq\" style=\"color: rgb(231, 33, 46); font-size: 11px; text-decoration: none;\">FAQ,</a> or contact our friendly customer service team toll-free at 1.800.984.6899.</p><br/></td><td width=\"20\">&nbsp;</td></tr><tr style=\"padding: 4px 0px; background-color: rgb(153, 153, 153);\"><td height=\"25\" colspan=\"3\"><p style=\"color: rgb(0, 0, 0); margin-left: 20px; font-size: 11px;\">Livelinks &bull; 1685 H Street 615 &bull; Blaine, WA &bull; 98230</p></td></tr></tbody></table></div>';
+
+$settings["wsdl_url"] = 'http://192.168.198.242/Teligence/Website/Services/Host/Provisioning.svc?WSDL';
+
+$settings["wsdl_url_2"] = 'http://192.168.198.242/Teligence/WebSite/Services/Host/MemberManagement.svc?WSDL';
+
+$settings["wsdl_url_3"] = 'http://192.168.198.242/Teligence/Website/Services/Host/MemberCredentials.svc?WSDL';
+
+$settings["wsdl_url_4"] = 'http://192.168.198.242/Teligence/Website/Services/Host/IvrRtm.svc?WSDL';
+
+$settings["wsdl_url_5"] = 'http://192.168.198.242/Teligence/Website/Services/Host/OrderManagement.svc?WSDL';
+

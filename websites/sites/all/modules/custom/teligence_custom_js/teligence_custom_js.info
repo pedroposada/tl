@@ -1,0 +1,8 @@
+name = Teligence Custom JS
+description = Custom jQuery functions for Teligence brand websites. (You need jQuery installed, obviously)  
+core = 6.x
+package = "Teligence"
+version = "1.0"
+project = "Teligence_Custom_JS"
+
+

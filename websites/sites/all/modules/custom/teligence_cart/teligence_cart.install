@@ -1,0 +1,69 @@
+<?php
+
+function teligence_cart_install() {
+	
+	# create a new menu block
+  	$path = 'admin/build/menu-customize/';
+	// Add 'menu-' to the menu name to help avoid name-space conflicts.
+    $menu['menu_name'] = 'menu-teligence-cart';
+	$menu['description'] = t('Cart administration links');
+    $link['link_title'] = $menu['title'] = 'Cart';
+    $link['link_path'] = $path . $menu['menu_name'];
+    $link['router_path'] = $path .'%';
+    $link['module'] = 'menu';
+    $link['plid'] = db_result(db_query("SELECT mlid FROM {menu_links} WHERE link_path = '%s' AND module = '%s'", 'admin/build/menu', 'system'));
+    menu_link_save($link);
+    
+	# create a new menu block 
+	if (db_query("INSERT INTO {menu_custom} (menu_name, title, description) VALUES ('%s', '%s', '%s')", $menu['menu_name'], $menu['title'], $menu['description'])) {
+		drupal_set_message(t('The menu "Cart" has been added.'));
+	}
+	
+	# add a new role 'ivr_user'
+	if(db_query("INSERT INTO {role} (name) VALUES ('%s')", 'ivr_user')){
+		drupal_set_message(t('The role "ivr_user" has been added.'));
+	}
+	
+	# add a new role 'ivr_user_inactive'
+	if(db_query("INSERT INTO {role} (name) VALUES ('%s')", 'ivr_user_inactive')){
+		drupal_set_message(t('The role "ivr_user_inactive" has been added.'));
+	}
+	
+    drupal_set_message('DON\'T FORGET TO SET PERMISSIONS, ENABLE THE MENU BLOCK AND SAVE '.l('SYSTEM VARIABLES', 'admin/cart'), 'warning');
+
+}
+
+function teligence_cart_uninstall() {
+	
+	# delete menu
+	$path = 'admin/build/menu-customize/' . 'menu-teligence-cart';
+	$mlid = null;
+	menu_link_delete($mlid, $path);
+	if ($delete = db_result(db_query("SELECT menu_name FROM {menu_custom} WHERE menu_name = '%s'", 'menu-teligence-cart'))) {
+		db_query("DELETE FROM {menu_custom} WHERE menu_name = '%s'", 'menu-teligence-cart');
+		drupal_set_message(t('The menu "menu-teligence-cart" has been deleted.'));
+	}
+	
+	# delete role 'ivr_user'
+	if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'ivr_user'))) {
+		$result = db_query("DELETE FROM {role} WHERE rid = %d", $rid);
+	    $result = db_query("DELETE FROM {permission} WHERE rid = %d", $rid);
+	    // Update the users who have this role set:
+	    $result = db_query('DELETE FROM {users_roles} WHERE rid = %d', $rid);
+	    if($result){
+	    	drupal_set_message(t('The role "ivr_user" has been deleted.'));
+	    }
+	};
+	
+	# delete role 'ivr_user_inactive'
+	if ($rid = db_result(db_query("SELECT rid FROM {role} WHERE name = '%s'", 'ivr_user_inactive'))) {
+		$result = db_query("DELETE FROM {role} WHERE rid = %d", $rid);
+	    $result = db_query("DELETE FROM {permission} WHERE rid = %d", $rid);
+	    // Update the users who have this role set:
+	    $result = db_query('DELETE FROM {users_roles} WHERE rid = %d', $rid);
+	    if($result){
+	    	drupal_set_message(t('The role "ivr_user_inactive" has been deleted.'));
+	    }
+	};
+
+}
