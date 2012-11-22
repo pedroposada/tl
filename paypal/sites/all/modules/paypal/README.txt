@@ -17,8 +17,8 @@ There is a sample databse dump file to learn more details about the database str
  * 
  * Account Login 
  * https://developer.paypal.com/us/cgi-bin/devscr
- * pedro.posada@teligence.net
- * teligence
+ * ****
+ * ****
 
 
 
@@ -37,9 +37,6 @@ PAYPAL TELIGENCE BACK-END
 
 pp_Credential Table
 -------------------
-michael.krawchuk_api1.teligence.net
-WK5MW9STYVMZJPYP
-AigsxB6c-QWX93opip84lM6oUMjHABoVvgaNaUzte68UDab6x.TWqOIO
 USD
 http://www.BRANDNAME.com/cart/buy (ASU)
 http://www.BRANDNAME.com/cart/add-time (SR)
